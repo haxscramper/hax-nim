@@ -1,0 +1,13 @@
+* About
+
+Todo items for all feature brances in the repository.
+
+* Feature branches
+
+** argparse-improvements [0/5]
+*** TODO Test cases for argparse
+*** TODO Use enums instead of strings to check for options
+*** TODO Add support for subcommands
+*** TODO Add support for arguments in help menu
+*** TODO Refactor parsing routines, separate them into different files
+*** TODO mutally exclusive, required etc. settings for options/args
