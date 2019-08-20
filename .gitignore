@@ -10,4 +10,5 @@ nimcache/
 **/*.dot
 **/*.tmp.*
 **/*.tmp
+**/*.html
 
