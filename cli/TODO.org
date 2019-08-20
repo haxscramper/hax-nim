@@ -1,0 +1,504 @@
+* general
+
+** workflow description
+
++ Two types of workflow: on a single script or on the multi-file
+  project
+
+Setup script to genrate all project files: set execution permissions
+on watch scripts, generate main project files, setup build commands
+etc.
+
+*** Single-file projects
+
+Single script called ="start-coding.sh"= or something along those
+lines. It accepts single argument - name of the file you want to start
+working on.
+
++ If the file does not exist it will be created
++ Along with project files ~test.sh~ script will be created and
+  launched.
+
+This script is launched by ~start-coding.sh~ and re-executed when
+necessary. It contains several auto-generated functions, one for each
+script/binary you want to test in this directory together with build
+options for each of them.
+
+**** Workflow example:
+
+I want to write perl script called ~temp.pl~ and then launch it with
+some command line arguments for testing. My actions:
+
+1. Run ~start-coding.sh temp.pl~
+2. Open auto-generated ~test.sh~ and go to the body of the function
+   called ="run_temp_pl"= and put my testing code here.
+3. Open file ~temp.pl~ in text editor of choice and start writing
+   code.
+4. When I save ~temp.pl~ i should see new test being ran immediately
+   by ~test.sh~
+
+**** Questions
+
++ What if I don't want to pollute each of the directory with test
+  scripts
+  + Fsm-build can be used as standalone tool without any additional
+    shell scripts. In this case it has more limited capabilities (it
+    only supports building using predefined set of build commands (can
+    be configured using toml file) and running tested application with
+    certain parameters (can be configured)). It does _not_ support
+    running test for multiple files at the same time.
++ What if I want to watch for more files than already provided?
+  + You can create ~test_conf.toml~ and put list of the files you want
+    to monitor. Additional configuration file will not be generated
+    automatically but if you add it it will be automatically detected
+    and files from it would be added to watch list. Any subsequent
+    changes to configuration file will also be accounted for.
++ How to exclute files from watch list?
+  + Put them into ="excluded"= section in the ~test_conf.toml~
++ How to start working on new script in the same directory while not
+  losing all of the changes in test script?
+  + Run ~start-coding.sh~ again with different arguments. All changes
+    will be added to the test script automatically whithout destroying
+    your previous work.
++ How to deal with scripts that might take forever to complete? What
+  happens if I accidentally write script that has endless loop? Or I'm
+  intentionally writing script with async loop?
+  + Automatically generated testing function includes call to
+    ~killall~ for your script. For running script is forked so that it
+    does not block execution of the test script.
++ Do I need to write commands for building everything each time?
+  + No. fsm-builder allows you to write predefined configuration file
+    with common build commands and then use them to build/run things.
+
+*** For multi-file projects
+
+* CLI tools
+
+** Argparse
+
++ [ ] Help/man for passing more complex data structures as command
+  line arguments
++ [ ] Add support for passing custom strings to parser (use this for
+  testing)
++ [ ] Instead of creating variable named ~optParsed~ wrap everything in
+  ~block:~ that returns generated value (or macro should define proc
+  that does all of the parsing and returns result. This also allows to
+  implement #1 more easily)
++ [ ] Support for more debugging options for the ~parseArgs~ macro itself.
+  Write to file, more colorful debug messages etc. Is it possible to
+  use colecho at compile time?
++ [ ] Add errors on non-existant argument values. Add checking for
+  misspelled flag names (use string edit disance to generate list of
+  all possible flags)
++ [ ] Mutally exclusive argument checking - necessary
++ [ ] Requirement Rules: Arguments can define the following types
+  of requirement rules - interesting to implement
+  + [ ] Can be required by default
+  + [ ] Can be required only if certain arguments are present
+  + [ ] Can require other arguments to be present
+  + [ ] Can be required only if certain values of other arguments are used
++ [ ] Instead of supplying explicit range of values add support for using
+  proc for checking whether or not value is in range. Or do something
+  like ~mapIt~ - inject parsed value into scope and perform logical
+  operations on it.
++ [ ] Subcommands
++ [ ] Implement help generation using colecho. Show command argument
+  synopsis based on the vtype of accepted variable. I.e int should
+  generate <n>
++ [ ] Parse more complex structures (tuples of values). Help message
+  should show rule that is used for parsing. Ex: ~(int,int)~ should be
+  passed as ~"(1,2)"~ (for example (alternative parsing syntax such as
+  ~"(18 * 9)"~)) might also be used and
++ [ ] Short and long help
++ [ ] Show help for particular option
++ [ ] Check for file/folder existence. This requires support for
+  custom checking procs but this is relatively easy to implement.
++ [ ] Error on unknown option
++ [ ] ~writeErrors~ should accept either single errorEnum or
+  set/sequence of enums to allow for less verbose error messages -
+  instead of printing ch error on the separate message it mnighe be
+  more useful to combine them into one.
++ [ ] Generate parser code from toml/yaml if it is possible to do at
+  compile time (although it is possible to generate code at runtime
+  and then include it into any other program) - this can also be used
+  to generate code for other languages
++ [ ] Helper function for bash/perl to use ~argcheck~ to simplify
+  access to array.
++ [ ] Instead of compiling code in file each time main programm is
+  compiled it would be more useful to generate macro code, save it
+  into file and include the file instead of spending time on each
+  compilation (this might not be useful for multi-file projects
+  (compiler caching will probably help), but single file projects will
+  certainly win something (especially considering the fact that I plan
+  to implement a lot more interesting things that will generate even
+  more code)
++ [ ] Parse array of strings separated by comma and escaped with
+  single quote. I.e. parsing ="'hello',',,,,,','sdfs'"= should give
+  ~@["hello", ",,,,,", "sdfs"]~. (original string can be generated
+  using ~input.mapIt(&"'it'")).join(",")~
+  + [ ] Add support for nested/escaped quotes (quote decreases balance
+    if it is followed by comma and not preceded by escape (in case of
+    ~echo "'test','\''"~ this can be somewhat useful). Standalone
+    quote is not counted) ("',,,\'',"). Another possible solition:
+    make sequence of quotes increase balance if they are not followed
+    by comma or decrease otherwise. For example: ='''= will have
+    balance 3, and after encountering ='= we get to 4. To close the
+    sequence we need to either encounter ='''',= or ='#,=
+    (unconditional sequence ending?)
++ [ ] Rules for exclusion/inclusion:
+#+HEADERS: :noeval
+#+BEGIN_SRC nim
+  # TODO implement
+  global:
+    required:
+      at_least_one: ["t-ext", "f-ext"]
+    rules:
+      [if has "t-ext": then not %"f-ext"]
+      [if has "f-ext": then not %"t-ext"]
+#+END_SRC
++ [ ] Separate arguments into arguments and subcommands during parsing
+
+** Colecho
+
++ [ ] Macro for printing messages (similar to ~LOG~ in DebugMacro)
+  that does not require adding commas (instead of ~LOG "sdfsd",
+  "SDF"~ use ~LOG "sdf" DSF~)
++ [ ] Printing large terminal-wide separators with multiple lines
++ [ ] Generate headers like this (even though it is probably better to
+  use in =fmtecho=)
+#+HEADERS: :noeval
+#+BEGIN_SRC txt
+vvvvvvvvvvvvvvvvvvv
+>>>> SOme text <<<<
+>>>> goes here <<<<
+^^^^^^^^^^^^^^^^^^^
+#+END_SRC
+
+
+
+*** TODO Colecho [2/10]
+**** DONE #idea Implement support for "         ]" in colecho
+     CLOSED: [**** 2019-08-06 Tue 17:25]
+     Add option for omitting some parts of the prefix and only
+     printing last one: for example, for ~[ ERROR 3 ]:~ I would leave
+     only last two characters (~]:~) and coloring. When printing long
+     outputs (for example for ~git log --oneline --decorate --graph
+     -n10 --color=always | xargs -i colecho -v {}~) it might be
+     overkill to add ~[ LOG ...~ to each invocation.
+**** DONE #fix Uniform coloring does not work in colecho
+     CLOSED: [**** 2019-08-06 Tue 17:39]
+**** TODO #idea Read string from stdin [%]
+     * [ ] Read from stdin
+     * [ ] Automatically wrap long text and buffer output
+**** TODO prettier indentation for vebose mode
+     Instead of shifting output as a whole it would be much better to
+     separate it into two parts: one that stays still and one that will
+     be indented. For verbose log it might look better if I shift this
+     like this: ~[ LOG   0 ] -> [ LOG   0     ]~. Of course this requires
+     some tesing.
+**** TODO #fix multi-line printing loses color.
+     When ooutputting long string that gets wrapper around
+     automatically indentation prefix is added (for verbose mode it is
+     " |" with required number of spaces). The "|" part is not not
+     colored if used with info/warn/error modes.
+**** TODO #fix Broken automatic string wrapping for non-zero indentation
+**** TODO #idea --color=* support
+**** TODO #idea Write to files
+     + [ ] Add support for outputting everything into file
+     + [ ] Duplicate logging records (~--Log~ mode) into
+       ~~/.config/hax-local/log/~ by default (allow changing logging
+       directory)
+
+**** TODO #idea #emacs##highlighting highlighting for colecho log files
+**** TODO #idea save indentation level for "parser mode"
+     + Save indentation level
+     + Read system variable for setting indentation level, modify it
+       on each invocation
+     + Preserve indentation when recursively calling makefiles?
+     + [[https://www.google.com.ar/search?q=make%20export%20system%20variables][google]]
+**** TODO other [/]
+     + [ ] Use simple equation to calculcate right trim for each
+       invocation - this can be used to generate interesting patterns
+       in messages
+     + [ ] Replace part of the prefix with custom string of certain
+       length that will keep styling. Ex: if I use gtest style and
+       want to replace right part of the prefix with word ="parsing
+       :"= I should get ~[## parsing:~ as result. This is useful for
+       outputting colorful error messages that are not visually
+       cluttered and have keywords highlighted. Option name:
+       ~--rplace~, accepts string *or* tuple =(string,int)= when
+       second option indicates number of characters in prefix. This
+       might be used when printing long prefixes (such as
+       "Downloading" which is pretty common, but it is 11 characters
+       long and longer than even gtest prefix) that will eat up all of
+       the original prefix (and it might be not enough).
+     + [ ] ~Either~ or ~Variant~ type is necessary to parse values
+       that might have optional signatures. Parsing function should
+       return ~Option[Variant[A,B,C]]~ and end checking should switch
+       state on the type of variant (@idea[nim,patter-machin,
+       metaprogramming]: implement/find library for matching arbitrary
+       variant types;)
+     + [ ] Parsing of variant-typed objects should give meaningful
+       error messages: instead of saying ="Cannot parse to
+       'Variant[A,B,C]'"= It might be better to say ="Unable to parse
+       to any of the 'A', 'B' or 'C'"
+
+** Other
+
+*** TODO Generate help messages from toml files. [0/4]
+    + [ ] Read toml from file
+    + [ ] Use rst/org-mode formatting
+    + [ ] #!! Piple toml to help generator --- the most useful thing
+*** TODO Validate CLI options for scripts
+    Send all options and required options to colecho to check whether
+    or not they are valid.
+    + It is possible to create associative arrays in bash --- checking
+      for option correctness is relatively complicated in bash, but
+      when all checks are done it is only a matter of checking for keys
+      in dictionary
+#+HEADERS: :noeval
+#+BEGIN_SRC bash
+  declare -A arr=();
+  cat << EOF | argcheck -- "$@" | while read -r a b; do arr["$a"]="$b"; done
+  [[arg]]
+  name = "input-file"
+  type = "file:rw:er"
+  help = "Input file"
+  opt = ["+takes_value", "required"]
+  EOF
+
+  # If any arguments are wrong it meaningful error will be provided with
+  # full description of everything of what is expected + auto-generated
+  # help message without need to do any ugly ~if [[ -e "$1" ]]~ on
+  # script. Arguments will be placed (hopefully) in associative array
+
+  if [[ "${arr[input-file]}" == "hello.txt" ]]; then
+      # We are sure that this file exits, it has rw privileges (at
+      # least).
+      colecho -w "Required file is hello.txt, need special actions"
+      head "hello.txt" | cut -d' ' -f3 | sed 's/%/()/g'
+  fi
+
+#+END_SRC
+
+    @[is this correct org-mode syntax? I already ended paragraph but I
+    have the same indentation. This counts as new section or as old
+    one?] Is it possible to store arrays in values in associative
+    arrays?
+
+    Another interesting thing that comes out or ~argcheck~ is
+    automatic handling of =--help=, =--version= etc. -- I can simply
+    look for passed options and do some more actions based on them.
+*** TODO Runtime parse checking
+    Right now checking for each type is performed based on static type
+    passed to option definitions (@todo: need to change from `arg` to
+    `opt`;), but for parsing this for any toml file more complicated
+    checkings needs to be done
+    + [ ] Parse nim type definitions
+    + [ ] Parse type definitions used in codegen
+
+
+*** TODO moustache package fix [0/2]
+    + [ ] Remove case transition from objects
+    + [ ] Add support for using toml files
+
+** FSM build
+
++ [ ] Recursively search C++ files starting from main one to determine
+  list of files to watch.
++ [ ] Support outoutting file events in a form of json (for use in
+  elvish shell)
++ [ ] Rescan directory after each rebuild to check for new files
++ [ ] If file glob is missing search for all files with the same
+  extension (except for c++ files - in that case search for ~*.cpp~
+  and ~*.hpp~)
++ [ ] Pipe test data into build - read local test/configuration files
+  + [ ] Generate test input using bash scripts
++ [ ] Preset for debuggint graphviz files using sxiv image viewer.
+#+HEADERS: :noeval
+#+BEGIN_SRC bash
+echo "Updating"
+dot test.dot -Tpng > test.png
+cp test.png res.png # To avoid dying on missing file
+#+END_SRC
++ [ ] testing script in perl and not in bash
++ [ ] Buffer file changes and generate json output. - write simple
+  wrappper CLI tool to watch set of files/directories. This is
+  especially useful with elvish shell.
+
+
+** Script templating
+
++ [ ] Inotify watch script template with support for selecting files
+  to watch for (they will be added into ~if [[ "$file" == "file1" ] ]~
+  or extenstion matchers)
+
+** Fasnotes
+
+*** Inline source code blocks with highlighting
+
++ ~~nim||~ - first argument is the name of the language to use in
+  syntax highlight
+
+*** Import source code blocks using tags and not code ranges
+
+Right now I can do ~#+include: "<file-localtion>"
+
+*** Annotated templates for source code
+
+I have some piece of code that I want to annotate, but for some reason
+I don't want to put comments directly into the code. I can just add
+comments like this (assuming =C= code): ~/* <1> */~ and then add
+description list for each of them.
+
+#+HEADERS: :noeval
+#+BEGIN_SRC c
+int main(
+  int argc, // <1>
+  const char** argv // <2>
+) {
+
+}
+#+END_SRC
+
+#+HEADERS: :noeval
+#+BEGIN_SRC text
+- <1>{argument count} :: Number of items in argv
+- <2>{arguments} :: Array of pointers to argument strings
+#+END_SRC
+
+placeholders in code will be replaced by text in curly braces.
+
+This is useful when writing lots of comments for small piece of code
+and you dont want to have comment to code ratio of 3/1.
+
+#+HEADERS: :noeval
+#+BEGIN_SRC c++
+template <class T>
+T& /*1*/ scastp(void* arg) {
+    return * /*2*/ static_cast<T*>(arg);
+}
+
+namespace internal {
+struct C {
+    void member_method();
+};
+
+
+const size_t ptr_size = sizeof(/*3*/&C::member_method);
+using ptr_arr         = char[/*4*/sizeof(&C::member_method)];
+#+END_SRC
+
+or can even create simpler notation (~/*n*/~)
+
+#+CODE_COMMENT
+
+
+- <1> :: return reference because objects is already allocated
+         somewhere and we only need to change it's type
+- <2> :: Dereference pointer generated by static cast
+- <3> :: Size of pointer to class method
+- <4> :: ~sizeof~ is compile-time constant so we can create array of
+         chars (bytes) that can hold pointer.
+
+We need to search for next description list until the end so no
+closing opening is necessary?
+
+* TODO Nim todo list [0/9]
+** TODO #easy mapIt1/mapIt2 - same idea but inject ~it1~ and ~it2~
+   Sometimes it is necessary to have two nested iterations and get
+   access to both variables
+** TODO [#B] Implicitly import all modules required by template/macro
+** TODO macro for brace initialized list
+** TODO macro for defining structures with default arguments
+   (I need to define new* proc if I understand everything correctly)
+** TODO List comprehension
+** TODO Pipe-like function calls
+** TODO Command-line argument parser generator built on top of `parseopts`
+** TODO Utility functions for reading Toml files
+** TODO Colecho code generator and built-in function
+** TODO CL-like `loop` macro supportinhg most commonly used operators (and my own additions)
+   + minimizing
+   + finally
+   + collect (into)
+   + between
+** TODO [#C] shell-like pipes with support for running shell commands directly
+
+Example of useage:
+#+BEGIN_SRC nim
+# V Abbriveation from "shell pipe"
+shp![$(ls) # Run shell command
+     |> duplicate # Repeat each entry
+     |> dup!
+        ( # Put each item that passe through the pipe into two commands
+          >(... some command ...)
+          >(... another command ...))
+     |> merge! # Compine output of the two commands
+     |> filter![x => x % 2 == 0]] # Filter only entries that match predicate
+#+END_SRC
+
+After some modifications it looks like this
+
+#+HEADERS: :noeval
+#+BEGIN_SRC nim
+  shp:
+    sh! "ls -al" # Run shell command
+    |> duplicate! # Repeat each entry
+    |> multiplex!
+      ( # Put each item that passe through the pipe into two commands
+        >(it * 2), # Similar to ~mapIt~ template variable ~it~ is
+                   # injected
+        >(it)
+      )
+    |> merge! # Combine output of the two commands.
+    |> filter![x => x % 2 == 0] # Filter only entries that match
+                                # predicate
+#+END_SRC
+
+this does not cause compilation errors and is parsed into somewhat
+acceptable tree. Main issue is parsing deeply nested infix notations:
+
+#+HEADERS: :noeval
+#+BEGIN_SRC text
+  Infix
+    Ident "!"
+    Infix
+      Ident "!"
+      Prefix
+        Ident "|>"
+        Ident "merge"
+      Prefix
+        Ident "|>"
+        Ident "filter"
+    Bracket
+      Infix
+        Ident "=>"
+        Ident "x"
+        Infix
+          Ident "=="
+          Infix
+            Ident "%"
+            Ident "x"
+            IntLit 2
+          IntLit 0
+#+END_SRC
+
+** TODO Simplify passing down common options
+
+In some cases I don't want to have global variables for configuring
+state and want to pass options explicitly, even if it means that I
+have to add the same argument on each function call. This is very
+simple task, but it creates somewhat silly looking code like
+~myProc(opt = opt, opt1 = opt1)~ that looks like complete bolierplate.
+It might be easier to write some kind of macro to automate writing
+these ~a = a~ things and show that I'm simply passing options down for
+other proc.
+
+* Ideas
+
++ Is it possible (via some crazy hack) to replace built-in compiler
+  functions with something else? If i want to have prettier
+  stacktracing function. Something along the lines of hot-patching of
+  vtables in C++
++ Is it possible to /just/ print stack trace? Without any errors. Just
+  get list of current frames/names of called functions.
