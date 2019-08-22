@@ -51,3 +51,17 @@ proc find*[T, S](a: T, item: S): int {.inline.}=
 # possible to implement outside of the top-level, but things for
 # checking invariants on for loop execution are relatively useful)
 # Checking for concepts on macro arguments is also can be useful;
+
+
+
+# template mapIt*(optSeq: )
+#[ IMPLEMENT call option only if it is not none
+template callIt*[T](it: Option[T], op: untyped): untyped =
+  type outType = type((
+    block:
+      var it{.inject.}: type(items(s)); op))
+
+  var result: Option[outType] = none[outType]
+  if opt.isSome:
+    result = op(it.get)
+]#

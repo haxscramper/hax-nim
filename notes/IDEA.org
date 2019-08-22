@@ -1,0 +1,10 @@
+** CL-like loop macro [0/8]
++ [ ] Minimize
++ [ ] Maximize
++ [ ] for x in ...
++ [ ] finally
++ [ ] do
++ [ ] initially (or init for short)
++ [ ] better support for working with optional types
++ [ ] generate iterator instead of a sequence (so that `loop` can also
+  be used as body for closure/inline iterators)

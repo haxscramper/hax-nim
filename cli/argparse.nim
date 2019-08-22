@@ -61,6 +61,17 @@ proc toInt*(val: CmdArg): int = parseInt(val.vals[0])
 proc toStr*(val: CmdArg): string = val.vals[0]
 proc toBool*(val: CmdArg): bool = val.vals[0].toBool()
 
+proc cmdParseTo*(val: string, t: string): Option[string] =
+  some(val)
+
+proc cmdParseTo*(str: string, t: int): Option[int] =
+  try:
+    some(parseInt(str))
+  except ValueError:
+    none(int)
+
+
+
 proc parseTo*[int](val: CmdArg): int =
   parseInt(val.vals[0])
 

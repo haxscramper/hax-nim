@@ -17,6 +17,8 @@ nim c                             \
     --warning[CaseTransition]:off \
     "$file"
 
-./$bin
+./$bin "input.tmp.nim"
 dot test.dot -Tpng > test.png
 cp test.png res.png
+
+echo "Done"

@@ -15,6 +15,7 @@ nim c                             \
     test.nim
 
 #nim doc test
-./test.bin
-
-echo "done"
+if [[ "$?" = "0" ]]; then
+    echo "Running"
+  ./test.bin
+fi
