@@ -502,3 +502,8 @@ other proc.
   vtables in C++
 + Is it possible to /just/ print stack trace? Without any errors. Just
   get list of current frames/names of called functions.
++ Add support for auto-selecing of the script templates in all
+  occasions where this is needed (in functions and in CLI interfaces)
++ Parse string and expand any environmental variables found in it.
+  I.e. convert ~"$HOME/test/".exp()~ to correct directory path. Also
+  might expand tilde.

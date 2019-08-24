@@ -2,6 +2,21 @@ import parsetoml, sequtils, parseutils, strutils, os, macros
 import moustachu
 import argparse
 import helpers, uprompt
+import posix
+
+proc addUExec*(file: string): void =
+  ## Add user execution permission to file
+  let pathnames: cstringArray = allocCStringArray(@[file])
+  let pathname: cstring = pathnames[0]
+
+  var statRes: Stat
+  discard stat(pathname, statRes)
+  let newMode: Mode = statRes.stMode or S_IXUSR
+  discard chmod(file, newMode)
+
+  deallocCstringArray(pathnames)
+
+
 
 proc getContext*(): Context =
   newContext()
@@ -67,9 +82,13 @@ when isMainModule:
   Otherwise write to file. If option is missing write to stdout.
   """
 
+  let fileName = argParsed[0]
+
   let langExt =
     if "t-ext".kp: "t-ext".k.toStr()
-    else: "f-ext".k.toStr.getLastExt()
+    elif "f-ext".kp: "f-ext".k.toStr.getLastExt()
+    else: fileName.getLastExt()
 
   let templ = templateFromExt(langExt)
-  argParsed[0].writeFile(templ.body)
+  fileName.writeFile(templ.body)
+  fileName.addUExec()

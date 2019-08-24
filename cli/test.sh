@@ -100,8 +100,15 @@ function test_create_script {
         return 0
     fi
 
-    killall fsm-build
     test_file="test.tmp.pl"
+    echo -en "0\n" | create-script $test_file
+    colecho "Hello"
+    stat $test_file
+    rm -f $test_file
+
+    return 0
+
+    killall fsm-build
     rm -f "$test_file"
     start-coding.sh "$test_file" &
     coding_pid="$!"
@@ -132,8 +139,8 @@ function test_argparse {
 
 
 #test_builder
-#test_create_script
-test_argparse
+test_create_script
+#test_argparse
 
 inotifywait -e close_write,moved_to,create -m . |
     while read -r directory events f; do
@@ -142,8 +149,8 @@ inotifywait -e close_write,moved_to,create -m . |
                  [[ "$f" != "test1.sh" && "$f" == *".sh" ]]; then
             clear
             # test_builder
-            # test_create_script &
-            test_argparse
+            test_create_script
+            #test_argparse
           fi
         fi
     done

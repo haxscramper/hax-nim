@@ -320,15 +320,7 @@ proc runDev(opts: CmdParsed) =
     let templ = templateFromExt(inputFile.getLastExt())
     inputFile.writeFile(templ.body)
 
-    let pathnames: cstringArray = allocCStringArray(@[inputFile])
-    let pathname: cstring = pathnames[0]
-
-    var statRes: Stat
-    discard stat(pathname, statRes)
-    let newMode: Mode = statRes.stMode or S_IXUSR
-    discard chmod(inputFile, newMode)
-
-    deallocCstringArray(pathnames)
+    inputFile.addUExec()
 
     ceUserInfo2(fmt"Created file {inputFile} and added execution permission")
 
