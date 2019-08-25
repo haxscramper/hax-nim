@@ -1,0 +1,7 @@
+* Type notes
+
+
+
+* Todo list
+
+** TODO [#A] Remove case transition from the code

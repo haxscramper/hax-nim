@@ -20,7 +20,7 @@ include "system/inclrtl"
 const
   useUnicode = true ## change this to deactivate proper UTF-8 support
 
-import strutils, macros
+import strutils, macros, sequtils
 
 when useUnicode:
   import unicode
@@ -574,7 +574,7 @@ when not useUnicode:
   proc isTitle(a: char): bool {.inline.} = return false
   proc isWhiteSpace(a: char): bool {.inline.} = return a in {' ', '\9'..'\13'}
 
-template matchOrParse(mopProc: untyped): typed =
+template matchOrParse(mopProc: untyped): void =
   # Used to make the main matcher proc *rawMatch* as well as event parser
   # procs. For the former, *enter* and *leave* event handler code generators
   # are provided which just return *discard*.
@@ -1170,7 +1170,7 @@ proc findAll*(s: string, pattern: Peg, start = 0): seq[string] {.
   nosideEffect, rtl, extern: "npegs$1".} =
   ## returns all matching *substrings* of `s` that match `pattern`.
   ## If it does not match, @[] is returned.
-  accumulateResult(findAll(s, pattern, start))
+  toSeq(findAll(s, pattern, start))
 
 when not defined(nimhygiene):
   {.pragma: inject.}
@@ -1388,7 +1388,7 @@ iterator split*(s: string, sep: Peg): string =
 proc split*(s: string, sep: Peg): seq[string] {.
   nosideEffect, rtl, extern: "npegs$1".} =
   ## Splits the string `s` into substrings.
-  accumulateResult(split(s, sep))
+  toSeq(split(s, sep))
 
 # ------------------- scanner -------------------------------------------------
 
@@ -1423,8 +1423,12 @@ type
     tkEscaped,          ## \\
     tkBackref,          ## '$'
     tkDollar,           ## '$'
+    # QUESTION what's the difference between backref and dollar? Not
+    # clear from documentation, should be improved.
     tkHat               ## '^'
 
+  # NOTE Use case objects? charset and index might be mutally
+  # exclusive
   Token {.final.} = object  ## a token
     kind: TokKind           ## the type of the token
     modifier: Modifier
@@ -1441,6 +1445,11 @@ type
     filename: string
 
 const
+  # IDEA Maybe use something like bijective/surjective map? This way
+  # there is no need to keep track of which enum item maps to which
+  # string, it is written explicitly.
+
+  # Mapping between token kinds and their string representations.
   tokKindToStr: array[TokKind, string] = [
     "invalid", "[EOF]", ".", "_", "identifier", "string literal",
     "character set", "(", ")", "{", "}", "{@}",
@@ -1449,6 +1458,7 @@ const
   ]
 
 proc handleCR(L: var PegLexer, pos: int): int =
+  # DOC QUESTION
   assert(L.buf[pos] == '\c')
   inc(L.lineNumber)
   result = pos+1
@@ -1456,12 +1466,15 @@ proc handleCR(L: var PegLexer, pos: int): int =
   L.lineStart = result
 
 proc handleLF(L: var PegLexer, pos: int): int =
+  # DOC QUESTION
   assert(L.buf[pos] == '\L')
   inc(L.lineNumber)
   result = pos+1
   L.lineStart = result
 
 proc init(L: var PegLexer, input, filename: string, line = 1, col = 0) =
+  ## Initialize PegParser (set buffer position to 0, `line` ->
+  ## `lineNumber` etc.)
   L.buf = input
   L.bufpos = 0
   L.lineNumber = line
@@ -1481,6 +1494,7 @@ proc errorStr(L: PegLexer, msg: string, line = -1, col = -1): string =
   result = "$1($2, $3) Error: $4" % [L.filename, $line, $col, msg]
 
 proc handleHexChar(c: var PegLexer, xi: var int) =
+  # TEMP DOC Parse hex character literal in peg string?
   case c.buf[c.bufpos]
   of '0'..'9':
     xi = (xi shl 4) or (ord(c.buf[c.bufpos]) - ord('0'))
@@ -1546,6 +1560,7 @@ proc getEscapedChar(c: var PegLexer, tok: var Token) =
     inc(c.bufpos)
 
 proc skip(c: var PegLexer) =
+  ## Skip whitespaces
   var pos = c.bufpos
   var buf = c.buf
   while pos < c.buf.len:
@@ -1805,14 +1820,17 @@ type
     skip: Peg
 
 proc pegError(p: PegParser, msg: string, line = -1, col = -1) =
+  # DOC
   var e: ref EInvalidPeg
   new(e)
   e.msg = errorStr(p, msg, line, col)
   raise e
 
 proc getTok(p: var PegParser) =
+  # DOC
   getTok(p, p.tok)
-  if p.tok.kind == tkInvalid: pegError(p, "'" & p.tok.literal & "' is invalid token")
+  if p.tok.kind == tkInvalid:
+    pegError(p, "'" & p.tok.literal & "' is invalid token")
 
 proc eat(p: var PegParser, kind: TokKind) =
   if p.tok.kind == kind: getTok(p)
@@ -2058,6 +2076,8 @@ proc escapePeg*(s: string): string =
       result.add(c)
   if inQuote: result.add('\'')
 
+
+# TODO Add compile-time assertions
 when isMainModule:
   assert escapePeg("abc''def'") == r"'abc'\x27\x27'def'\x27"
   assert match("(a b c)", peg"'(' @ ')'")
