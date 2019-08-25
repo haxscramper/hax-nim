@@ -157,9 +157,11 @@ proc printTwoColumns*(
     let lineCount = max(lines1.len, lines2.len)
     for idx in 0 ..< lineCount:
       echo " $# $#" % [
-        (idx < lines1.len).tern(
+        (idx < lines1.len)
+        .tern(
           lines1[idx].alignLeft(2),
-          " ".repeat(maxWidth1)),
+          " ".repeat(maxWidth1 + 1)
+        ),
         (idx < lines2.len).tern(lines2[idx], "")]
 
 

@@ -137,10 +137,30 @@ function test_argparse {
     ./$bin
 }
 
+function test_fsm_build {
+    build "fsm_build.nim"
+    if [[ "$?" != 0 ]]; then
+        colecho -e:2 "Build failed"
+        return
+    else
+        colecho -i:2 "Done build"
+    fi
+    # colecho -g "ps grep"
+    # ps -a | grep build
+    # colecho -g "done"
+    # bin="fsm_build.nim.bin"
+    # cd ../wip
+
+    # echo -en "3\n" | fsm-build dev pegs.nim &
+    # sleep 5
+    # echo 'echo "test"' >> pegs.nim
+}
+
 
 #test_builder
-test_create_script
+#test_create_script
 #test_argparse
+test_fsm_build
 
 inotifywait -e close_write,moved_to,create -m . |
     while read -r directory events f; do
@@ -148,9 +168,10 @@ inotifywait -e close_write,moved_to,create -m . |
           if [[ "$f" = *.nim ]] ||
                  [[ "$f" != "test1.sh" && "$f" == *".sh" ]]; then
             clear
-            # test_builder
-            test_create_script
+            #test_builder
+            #test_create_script
             #test_argparse
+            test_fsm_build
           fi
         fi
     done
