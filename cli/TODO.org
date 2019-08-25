@@ -175,7 +175,11 @@ vvvvvvvvvvvvvvvvvvv
 #+END_SRC
 + [ ] Separators for beginning/end of the section. Generate
   terminal-wide separtors
-
++ [ ] Another message style or replacement of current vebose more.
+  Current version is no really good to look at because it hash a lot
+  of visual noise. Better have something with words but no braces and
+  three-letter words. ~Err, Wrn, Log, Inf~ would be good enough.
+  Without numbers
 
 *** TODO Colecho [2/10]
 **** DONE #idea Implement support for "         ]" in colecho
@@ -326,7 +330,9 @@ cp test.png res.png # To avoid dying on missing file
 + [ ] Buffer file changes and generate json output. - write simple
   wrappper CLI tool to watch set of files/directories. This is
   especially useful with elvish shell.
-
++ [ ] Show which files will be globbed when selecting build options.
+  Add support for multiple globbing strategies for a single build
+  command.
 
 ** Script templating
 

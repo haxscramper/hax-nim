@@ -79,28 +79,28 @@ proc getPrefixString*(
         of 0:
           case style:
           of sDefault : "  -"
-          of sVerbose : "[ LOG   0 ]:"
+          of sVerbose : "Log 0"
           of sGtest   : "[          ]"
           of sLog  : "[log:__0]"
           of sBright  : "---"
         of 1:
           case style:
           of sDefault : "---"
-          of sVerbose : "[ LOG   1 ]:"
+          of sVerbose : "Log 1"
           of sGtest   : "[----------]"
           of sLog  : "[log:__1]"
           of sBright  : "---"
         of 2:
           case style:
           of sDefault : "***"
-          of sVerbose : "[ LOG   2 ]:"
+          of sVerbose : "Log 2"
           of sGtest   : "[**********]"
           of sLog  : "[log:__2]"
           of sBright  : "---"
         of 3:
           case style:
           of sDefault : ">>>"
-          of sVerbose : "[ LOG   3 ]:"
+          of sVerbose : "Log 3"
           of sGtest   : "[>>>>>>>>>>]"
           of sLog  : "[log:__3]"
           of sBright  : "---"
@@ -110,28 +110,28 @@ proc getPrefixString*(
         of 0:
           case style
           of sDefault : "  >"
-          of sVerbose : "[ INFO  0 ]:"
+          of sVerbose : "Inf 0"
           of sGtest : "[->->->->->]"
           of sLog : "[info:_0]"
           of sBright : "~~~"
         of 1:
           case style
           of sDefault : " ->"
-          of sVerbose : "[ INFO  1 ]:"
+          of sVerbose : "Inf 1"
           of sGtest : "[->->->->->]"
           of sLog : "[info:_1]"
           of sBright : "~~~"
         of 2:
           case style
           of sDefault : "-->"
-          of sVerbose : "[ INFO  2 ]:"
+          of sVerbose : "Inf 2"
           of sGtest : "[->>->>->>-]"
           of sLog : "[info:_2]"
           of sBright : "III"
         of 3:
           case style
           of sDefault : "-->"
-          of sVerbose : "[ INFO  3 ]:"
+          of sVerbose : "Inf 3"
           of sGtest : "[->>->>->>-]"
           of sLog : "[info:_3]"
           of sBright : "III"
@@ -141,28 +141,28 @@ proc getPrefixString*(
         of 0:
           case style
           of sDefault : "==>"
-          of sVerbose : "[ WARN  0 ]:"
+          of sVerbose : "Wrn 0"
           of sGtest : "[=>>=>>=>>=]"
           of sLog : "[warn:_0]"
           of sBright : ">>>"
         of 1:
           case style
           of sDefault : "==>"
-          of sVerbose : "[ WARN  1 ]:"
+          of sVerbose : "Wrn 1"
           of sGtest : "[=>>=>>=>>=]"
           of sLog : "[warn:_1]"
           of sBright : ">>>"
         of 2:
           case style
           of sDefault : "=>>"
-          of sVerbose : "[ WARN  2 ]:"
+          of sVerbose : "Wrn 2"
           of sGtest : "[=>>=>>=>>=]"
           of sLog : "[warn:_2]"
           of sBright : "WWW"
         of 3:
           case style
           of sDefault : "=>>"
-          of sVerbose : "[ WARN  3 ]:"
+          of sVerbose : "Wrn 3"
           of sGtest : "[=>>=>>=>>=]"
           of sLog : "[warn:_3]"
           of sBright : "WWW"
@@ -172,28 +172,28 @@ proc getPrefixString*(
         of 0:
           case style
           of sDefault : "###"
-          of sVerbose : "[ ERROR 0 ]:"
+          of sVerbose : "Err 0"
           of sGtest :   "[##########]"
           of sLog :  "[error:0]"
           of sBright :  "!!!"
         of 1:
           case style
           of sDefault : "!!!"
-          of sVerbose : "[ ERROR 1 ]:"
+          of sVerbose : "Err 1"
           of sGtest :   "[!!!!!!!!!!]"
           of sLog :  "[error:1]"
           of sBright :  "!!!"
         of 2:
           case style
           of sDefault : "!!!"
-          of sVerbose : "[ ERROR 2 ]:"
+          of sVerbose : "Err 2"
           of sGtest :   "[!!!!!!!!!!]"
           of sLog :  "[error:2]"
           of sBright :  "EEE"
         of 3:
           case style
           of sDefault : "!!!"
-          of sVerbose : "[ ERROR 3 ]:"
+          of sVerbose : "Err 3"
           of sGtest :   "[!!!!!!!!!!]"
           of sLog :  "[error:3]"
           of sBright :  "EEE"
@@ -210,24 +210,24 @@ proc getStyle*(
       of mLog: (fgDefault,  bgDefault, noStyle)
       of mInfo:
         case messageLevel:
-          of 0: (fgGreen,   bgDefault, noStyle)
-          of 1: (fgBlue,    bgDefault, noStyle)
-          of 2: (fgYellow,  bgDefault, noStyle)
-          of 3: (fgRed,     bgDefault, noStyle)
+          of 0: (fgGreen,   bgDefault, {styleDim})
+          of 1: (fgBlue,    bgDefault, {styleDim})
+          of 2: (fgBlue,  bgDefault, noStyle)
+          of 3: (fgCyan,     bgDefault, noStyle)
           else: (fgDefault, bgDefault, noStyle)
       of mWarn:
         case messageLevel
-          of 0: (fgGreen,   bgDefault, {styleBlink})
-          of 1: (fgYellow,  bgDefault, {styleBlink})
-          of 2: (fgYellow,  bgDefault, {styleBlink, styleBright})
-          of 3: (fgRed,     bgDefault, {styleBlink, styleBright})
+          of 0: (fgYellow,   bgDefault, {styleBlink, styleDim})
+          of 1: (fgYellow,  bgDefault, {styleBlink, styleBright})
+          of 2: (fgMagenta,  bgDefault, {styleBlink, styleDim})
+          of 3: (fgMagenta,     bgDefault, {styleBlink, styleBright})
           else: (fgDefault, bgDefault, noStyle)
       of mError:
         case messageLevel
           of 0: (fgGreen,   bgDefault, {styleBright, styleBlink})
-          of 1: (fgWhite,   bgRed,     {styleBlink})
-          of 2: (fgBlue,    bgRed,     {styleBlink})
-          of 3: (fgYellow,  bgRed,     {styleBlink})
+          of 1: (fgWhite,   bgDefault, {styleBlink,  styleReverse})
+          of 2: (fgYellow,  bgDefault, {styleBlink,  styleReverse})
+          of 3: (fgRed,     bgDefault, {styleBlink,  styleReverse})
           else: (fgDefault, bgDefault, noStyle)
 
 
@@ -379,7 +379,13 @@ proc printSeparator*(typ: string = "upper"): void =
 
 
 when isMainModule:
-  celog("Test: === ",1, ind = 4)
-  ceLog("Log", 2, ind = 8)
-  ceWarn("sdf", 2, ind = 8)
-  ceError("sdfsd", 2, ind = 8)
+  for st in sDefault..sVerbose:
+    for typ in MessageType:
+      echo "------------"
+      for l in 0..3:
+        ceWrite(
+          str = $st & " " & $typ & " " & $l,
+          level = l,
+          mtype = typ,
+          style = st,
+          indent = 0)
