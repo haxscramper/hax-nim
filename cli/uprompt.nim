@@ -1,7 +1,12 @@
 import strutils, sequtils, strformat, parseutils, options
 
+# [#A] TODO add support for exiting without selecting anything
+
+# IDEA Add support for highlightin todo comments. Things like tags,
+# importance levels etc. Better wrapping (do not ignore lists)
+
 proc writePrompt(s: string): void =
-  stdout.write(" |- " & s)
+  stdout.write(" |- " & s & "\n    ")
 
 
 proc getInt*(

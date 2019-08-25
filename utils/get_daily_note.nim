@@ -35,14 +35,15 @@ proc noteAppendRequired(note: string): bool =
   let now0000 = getSince0000(now().hour, now().minute)
   let file0000 = getSince0000(lastHour, lastMinute)
 
-  return now0000 - file0000 > logMinDelay
+  return now0000 - file0000 > logMinDelay or (
+    lastHour == 0 and lastMinute == 0)
 
 proc getTimeStampNow(): string =
-  "@time:" & now().format("hh:mm") & ";"
+  "@time:" & now().format("HH:mm") & ";"
 
 proc addNewLog(note: string): void =
   let file = note.open(fmAppend)
-  file.write("\n** @time:" & now().format("hh:mm") & ";\n\n\n")
+  file.write("\n** " & getTimeStampNow() & "\n\n\n")
   file.close()
 
 proc createNewNote(note: string): void =
@@ -69,7 +70,8 @@ proc fileIsEmpty(note: string): bool =
 let note = getCurrentNote()
 if not fileExists(note) or note.fileIsEmpty():
   createNewNote(note)
-elif noteAppendRequired(note):
+
+if noteAppendRequired(note):
   addNewLog(note)
 
 echo note

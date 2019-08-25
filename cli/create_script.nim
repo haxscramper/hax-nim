@@ -3,6 +3,7 @@ import moustachu
 import argparse
 import helpers, uprompt
 import posix
+import colecho_lib
 
 proc addUExec*(file: string): void =
   ## Add user execution permission to file
@@ -91,4 +92,6 @@ when isMainModule:
 
   let templ = templateFromExt(langExt)
   fileName.writeFile(templ.body)
+  ceUserInfo2("Created script file")
   fileName.addUExec()
+  ceUserInfo2("Added execution permission")

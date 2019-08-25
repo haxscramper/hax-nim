@@ -173,7 +173,8 @@ vvvvvvvvvvvvvvvvvvv
 >>>> goes here <<<<
 ^^^^^^^^^^^^^^^^^^^
 #+END_SRC
-
++ [ ] Separators for beginning/end of the section. Generate
+  terminal-wide separtors
 
 
 *** TODO Colecho [2/10]
@@ -507,3 +508,16 @@ other proc.
 + Parse string and expand any environmental variables found in it.
   I.e. convert ~"$HOME/test/".exp()~ to correct directory path. Also
   might expand tilde.
++ Create script to recompile all binaries and make symbolic links for
+  them
++ Integrate nim's standart logging library into colecho
++ Custom wordwrap
+  + Hardwrap text on pipes. When using build command with multiple
+    pipes separate text on ~|~ and *then* on newlines
+  + Join build commands in single pipe - when specifying build command
+    replace each ~\\n~ with nothing as if it was properly escaped
+    newline
++ [ ] [#A] Pretty-printing for lists
++ ~rx~ macro for building regular expressions using emacs-lisp-like
+  syntax (it would be best to just statically generate string of
+  regex)

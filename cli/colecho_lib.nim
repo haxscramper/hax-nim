@@ -356,15 +356,19 @@ proc ceUserWarn*(str: string): void =
   ceWrite(str = str, mtype = mWarn, level = 1, style = sBright, 0)
 
 proc ceUserInfo0*(str: string): void =
-  ceWrite(str = str, mtype = mInfo, level = 0, style = sDefault, 0)
+  ceWrite(str = str, mtype = mInfo, level = 0, style = sBright, 0)
 
 proc ceUserInfo2*(str: string): void =
   ceWrite(str = str, mtype = mInfo, level = 2, style = sDefault, 0)
 
 proc ceUserLog0*(str: string): void =
+  ## Fancier echo, nothing useful
   ceWrite(str = str, mtype = mLog, level = 0, style = sDefault, 0)
 
 proc ceUserError0*(str: string): void =
+  ## When multiple errors of that type are expected. For example when
+  ## parsing configuration file and discarding several options due to
+  ## broken configuraion.
   ceWrite(str = str, mtype = mError, level = 0, style = sBright, 0)
 
 proc printSeparator*(typ: string = "upper"): void =

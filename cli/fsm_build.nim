@@ -14,6 +14,7 @@ import posix
 import selectors
 import asyncfile
 import options
+import times
 
 
 import termformat
@@ -26,6 +27,7 @@ import macros
 import strparser
 import logging
 import create_script
+import colecho_types
 
 var utilityPid: Pid
 
@@ -141,11 +143,42 @@ type
     runCommand: string
 
 
+
+proc checkList(list: openArray[
+  tuple[p: bool,m: string,l: MessageType]]):
+    bool =
+
+  result = true
+  for it in list:
+    if not it.p:
+      if it.l == mError: ceUserError0(it.m)
+      if it.l == mWarn: ceUserWarn(it.m)
+      result = false
+
+
 proc parseSingleBuild(
   build: TomlValueRef,
   langExt: string,
   c: var Context): Option[BuildOption] =
-  if not build.hasKey("ext") or build["ext"].getStr() != langExt:
+
+  if not build.hasKey("name"):
+    ceUserError0("Missing name")
+    return
+
+  let name = build["name"]
+
+  if not checkList(
+    # IDEA contracts + toml validation DSL. This can be similar to
+    # conditional expressions for argparse2
+    [(build.hasKey("ext") and build["ext"].getStr() == langExt,
+      "", mLog),
+     (build.hasKey("ext"),
+      fmt"Build '{name}' is missing 'ext'", mWarn),
+     (build.hasKey("uname"),
+      fmt"Build '{name}' is missing 'uname'", mError),
+     (build.hasKey("build_command"),
+      fmt"Build '{name}' is missing 'build_command'", mError)
+    ]):
     return
 
   if build.hasKey("build_file"):
@@ -173,8 +206,10 @@ proc parseSingleBuild(
       elif globs.kind == String:
         toSeq(globs.getStr().walkPattern())
       else:
-        ceUserError0("""Incorred format for file globs.
-Expected string or array of strings""")
+        ceUserError0(fmt"""
+Incorred format for file globs when parsing
+'{build["name"].getStr()}'. Expected string
+or array of strings""")
         quit(1)
     else:
       @[]
@@ -190,12 +225,13 @@ Expected string or array of strings""")
   ))
 
 
-proc parseBuildBuildOpts(
+proc parseBuildOpts(
   buildConf: string,
   langExt: string,
   c: var Context,
   buildOpts: seq[BuildOption] = @[]):
     seq[BuildOption] =
+  ceUserInfo0("Parsing config")
 
   result = buildOpts
 
@@ -242,7 +278,6 @@ proc select(
     none((string,string))):
     BuildOption =
 
-
   let selected =
     if buildOpts.len > 1:
       buildOpts
@@ -254,23 +289,24 @@ proc select(
 
       getInt(
         "Enter selection",
-        valRange = (0, buildOpts.len))
+        valRange = (0, buildOpts.len - 1))
     else:
       0
 
   result = buildOpts[selected]
 
 
-proc getBuildBuildOpts(inputFile: string): seq[BuildOption] =
+proc getBuildOpts(inputFile: string): seq[BuildOption] =
   var c: Context = newContext()
 
   c["input_file"] = inputFile
-  let ext = inputFile.splitFile()[2][1..^1]
+  let ext = inputFile.getLastExt()
 
   result =
     "~/.config/hax-config/build_commands.toml"
     .expandTilde()
-    .parseBuildBuildOpts(langExt = ext, c = c)
+    .parseBuildOpts(langExt = ext, c = c)
+
 
 
 #~#==== File change loops
@@ -279,57 +315,101 @@ proc startBuilder(
   waitUtil: bool = true,
   maxRepeat: Opt[int]) {.async.} =
     var monitor = newMonitor()
-    for file in selected.files:
+    ceUserInfo0("List of watched files:")
+
+    for file in selected.files.sorted.deduplicate(true):
+      ceUserLog0(file)
       monitor.add(file, {MonitorModify})
 
     proc doBuild(cmd: string): bool =
-      execShellCmd("/bin/bash -c \"$#\"" % cmd) == 0
+      printSeparator("upper")
+      result = execShellCmd("/bin/bash -c \"$#\"" % cmd) == 0
+      printSeparator("lower")
 
+    proc doRunBuild(): bool =
+      if doBuild(selected.buildCommand):
+        ceUserInfo0("Build succeded, running")
+        startUtility(selected.runCommand)
+        true
+      else:
+        ceUserWarn("Build failed")
+        false
+
+
+
+
+
+    let cooldownSec: float = 1
+    var lastBuild: float = epochTime()
+
+    ceUserInfo0("Initial build")
+    discard doRunBuild()
+
+
+
+    var lastBuildState: bool = true
+
+    # TODO Print message about waiting for changes in according places
     while true:
-      if utilityPid != 0 and waitUtil:
-        var statVal: cint
-        let res = waitpid(utilityPid, statVal, 0)
-        ceUserInfo0("Run finished")
-      elif utilityPid != 0 and not waitUtil:
-        var null: cint = 0
-        let testRes = waitpid(utilityPid, null, WNOHANG)
-        if testRes == 0:
-          ceUserInfo0("New change, killing utility ...")
-          let res = kill(utilityPid, SIGTERM)
-          ceUserLog0("Done")
-        else:
-          ceUserInfo0("Run finished")
-
-
-      ceUserInfo2 "Waiting for changes"
       let events: seq[MonitorEvent] = await monitor.read()
       # TODO analyze list of changes and reduce list of events to
-      # avoid repetitive rebuilds
-      ceUserInfo2 "Change happened"
+      # avoid repetitive rebuilds or wait at least certain amount of
+      # time between rebuilds ignoring all changes to ignore events
+      # that happened in sequence but in different event batches
+      if events.mapIt(it.kind == MonitorModify).foldl(a or b) and
+         lastBuild + cooldownSec < epochTime():
+        block: # Kill utility if needed
+          if utilityPid != 0 and waitUtil:
+            var statVal: cint
+            let res = waitpid(utilityPid, statVal, 0)
+            ceUserInfo0("Run finished")
+          elif utilityPid != 0 and not waitUtil:
+            var null: cint = 0
+            let testRes = waitpid(utilityPid, null, WNOHANG)
+            if testRes == 0:
+              ceUserInfo0("New change, killing utility ...")
+              let res = kill(utilityPid, SIGTERM)
+              ceUserLog0("Done")
+            elif lastBuildState:
+              ceUserInfo0("Run finished")
 
-      for ev in events:
-        if ev.kind == MonitorModify:
+        block: # Rebuild and restart
+          lastBuild = epochTime()
           ceUserInfo0 "Rebuilding ..."
-          if doBuild(selected.buildCommand):
-            ceUserInfo0 "Rebuild succeded, running ..."
-            startUtility(selected.runCommand)
+
+          lastBuildState = doRunBuild()
+          if not lastBuildState:
+            ceUserInfo0 "Waiting for new changes"
+
 
 proc runDev(opts: CmdParsed) =
   let inputFile = opts.targetFile
-  if not fileExists(inputFile) and promptYN("File is missing. Create files?"):
-    let templ = templateFromExt(inputFile.getLastExt())
-    inputFile.writeFile(templ.body)
+  let fileExt = inputFile.getLastExt()
+  if not fileExists(inputFile):
+    if promptYN("File is missing. Create files?"):
+      let templ = templateFromExt(fileExt)
+      inputFile.writeFile(templ.body)
 
-    inputFile.addUExec()
+      inputFile.addUExec()
 
-    ceUserInfo2(fmt"Created file {inputFile} and added execution permission")
+      ceUserInfo2(fmt"Created file {inputFile} and added execution permission")
 
-  else:
-    ceUserWarn("No file created, exiting development")
-    return
+    else:
+      ceUserWarn("No file created, exiting development")
+      return
 
 
-  let buildOpts = getBuildBuildOpts(inputFile)
+  let buildOpts = getBuildOpts(inputFile)
+  if buildOpts.len == 0:
+    ceUserError0(fmt"""
+No build opts found for '{inputFile}'. Make sure
+that *at least one* build command with extension '{fileExt}'
+or with no extension at all
+exists in configuraion file and can be parsed without errors
+(see previous messages for error clarifications).
+""")
+    quit (1)
+
 
   asyncCheck startBuilder(
     buildOpts.select(),
@@ -420,7 +500,7 @@ fsm-build watch "[$watched]" |
 """
 
 proc generateTestScript(inputFile:string): string =
-  let buildOpts = getBuildBuildOpts(inputFile)
+  let buildOpts = getBuildOpts(inputFile)
   let selected = buildOpts.select()
   # TODO use script templates for file header
   let templ: string = fmt"""
@@ -459,3 +539,6 @@ when isMainModule:
           parseResults.fileToCreate))
     of defaultMode:
       discard
+
+# IDEA hide cursor in terminal on start and show it when program is
+# terminated. Requires to catch shortcuts.
