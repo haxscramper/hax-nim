@@ -151,9 +151,13 @@ function test_fsm_build {
     # bin="fsm_build.nim.bin"
     # cd ../wip
 
-    # echo -en "3\n" | fsm-build dev pegs.nim &
-    # sleep 5
-    # echo 'echo "test"' >> pegs.nim
+    pushd "../bin" &> /dev/null
+    ln -f ../cli/fsm_build.nim.bin fsm-build
+    echo -en "y\n0\n" | fsm-build dev pegs.pl &
+    sleep 1
+    rm -f pegs.pl
+    sleep 2
+    killall fsm-build
 }
 
 

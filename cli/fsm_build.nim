@@ -302,10 +302,13 @@ proc getBuildOpts(inputFile: string): seq[BuildOption] =
   c["input_file"] = inputFile
   let ext = inputFile.getLastExt()
 
-  result =
-    "~/.config/hax-config/build_commands.toml"
-    .expandTilde()
-    .parseBuildOpts(langExt = ext, c = c)
+  let selfProc = allocCstringArray(@["/proc/self/exe"])
+  var buf = newString(1024)
+
+  discard readlink(selfProc[0], buf, 1024)
+  let conf = buf.splitPath()[0] & "/config/build_commands.toml"
+
+  result = conf.parseBuildOpts(langExt = ext, c = c)
 
 
 

@@ -333,6 +333,31 @@ cp test.png res.png # To avoid dying on missing file
 + [ ] Show which files will be globbed when selecting build options.
   Add support for multiple globbing strategies for a single build
   command.
++ [ ] If missing build and run command do not perform build at all
+  instead of substituting ~./{{input_file}}~.
++ [ ] #!! Add support for postponing launch of the application until
+  certain event (signal on socket). This is very useful when writing
+  simple gui applications and you want to compile often but run the
+  application only when some important change occurs.
++ [ ] #! (addition to previous): add support for launching application
+  via multiple different commands --- this is also useful for testing
+  of some application when you want to run gui only sometimes but some
+  other things require more frequent runtime testing. One of the
+  examples: you write GUI app and have some sort of file loading at
+  the start (reading configuration, opening default project etc) and
+  want to test this. You can comment and uncomment code for launching
+  app gui each time you want to test it, but it is much easier to bind
+  shortcut for that kind of actions. On shortcut you send signal to
+  currently running fsm-build and next time your application is built
+  it will be launched with some command-line argument.
++ [ ] #interesting Add support for running perl scripts as command to
+  generate bash commands (finding files, substituting strings etc).
++ [ ] #need-to-test Support for makefiles in some way?
++ [ ] Add ~--quiet -q~ option for supressing any messages except
+  separators and ~--quiet2 --q2~ for supressing absolutely all
+  messages that are not genrated by build or run.
++ [ ] Add ~--indent~ to add indentation for output of the build and
+  run.
 
 ** Script templating
 
@@ -500,6 +525,23 @@ simple task, but it creates somewhat silly looking code like
 It might be easier to write some kind of macro to automate writing
 these ~a = a~ things and show that I'm simply passing options down for
 other proc.
+
+** Codegen
+
++ [ ] #wip Templating engine for common code constructs (currently in
+  the workings). In some cases there are very common code constructs
+  (repeated if-else statements, struct/class definitions for storing
+  data, xml parser code, method calls, vector/array/iterator
+  algorithms) that are *very* similar in all C-family languages. It
+  might be possible to automate process of writing these things using
+  templating engine for code and some scripting language built-in into
+  templates.
+
+** Create-script
+
++ [ ] #!!! Make more descriptive names for script templates, add
+  unames and error checking like in ~fsm-build~
++ [ ] #!! Move script templates and build commands into =hax-nim= repo
 
 * Ideas
 
