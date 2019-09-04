@@ -1,0 +1,149 @@
+[global_config]
+test = "tt"
+
+[documentation]
+main = """
+Configuration file contains collection of build commands.
+Each build command *must* have foolloding fields:
+- 'name' :: for human-readable name of the command
+- 'ext' :: for file extension
+- 'uname' :: for *unique* identifier.
+- 'build_command' :: bash shell command to build input file
+"""
+
+[[build]]
+name = "Python mypy"
+uname = "python mypy"
+lang = "python"
+ext = "py"
+type = "interpreted"
+build_file = "{{input_file}}"
+build_command = "mypy {{input_file}}"
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "Nim silent"
+ext = "nim"
+uname = "nim_silent"
+type = "compiled"
+build_file = "{{input_file}}.bin"
+build_command = """
+nim c --cc:tcc --verbosity:0 --hints:off -o:{{build_file}} {{input_file}}"""
+file_globs = [ "*.nim" ]
+run_command = "./{{build_file}}"
+
+[[build]]
+name = "Nim tcc"
+ext = "nim"
+uname = "nim_tcc"
+type = "compiled"
+build_file = "{{input_file}}.bin"
+build_command = "nim c --cc:tcc -o:'{{build_file}}' '{{input_file}}'"
+run_command = "./{{build_file}}"
+file_globs = [ "*.nim" ]
+
+[[build]]
+name = "Nim simple"
+ext = "nim"
+type = "compiled"
+uname = "nim_simple"
+build_file = "{{input_file}}.bin"
+build_command = "nim c -o:'{{build_file}}' '{{input_file}}'"
+run_command = "./{{build_file}}"
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "Nim legacy"
+lang = "nim"
+type = "compiled"
+uname = "nim_legacy"
+ext = "nim"
+build_file = "{{input_file}}.bin"
+build_command = "nim c --cc:tcc --verbosity:0 --hints:off -o:'{{build_file}}' -d:nimOldCaseObjects  --warning[CaseTransition]:off {{input_file}}"
+run_command = "./{{build_file}}"
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "Clang debug"
+ext = "cpp"
+uname = "clang_debug"
+type = "compiled"
+build_file = "{{input_file}}.bin"
+build_command = "clang++ -o {{build_file}}  -g -DDEBUG {{input_file}}"
+run_command = "./{{build_file}}"
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "Clang release"
+lang = "c++"
+type = "compiled"
+ext = "cpp"
+uname = "clang_release"
+build_file = "{{input_file}}.bin"
+build_command = "clang++ -o {{build_file}} -O2 {{input_file}}"
+run_command = "./{{build_file}}"
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "TCC C"
+lang = "c"
+type = "compiled"
+ext = "c"
+uname = "tcc_c"
+build_file = "{{input_file}}.bin"
+build_command = "tcc -o {{build_file}} {{input_file}}"
+run_command = "./{{build_file}}"
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "G++ json"
+lang = "c++"
+type = "compiled"
+ext = "cpp"
+uname = "g++_json"
+build_file = "{{input_file}}.bin"
+build_command = """
+g++ -o {{build_file}} -fdiagnostics-format=json {{input_file}} 2>&1 | \
+jq .[].message"""
+file_globs = [ "{{input_file}}" ]
+
+[[build]]
+name = "Clang++ all"
+lang = "c++"
+ext = "cpp"
+uname = "clang++_all"
+type = "compiled"
+build_file = "{{input_file}}.bin"
+build_command = "clang++ *.cpp -o {{build_file}}"
+file_globs = [ "*.cpp", "*.hpp" ]
+run_command = "./{{build_file}}"
+
+[[build]]
+name = "Perl critic"
+uname = "perl_critic_0"
+lang = "perl"
+ext = "pl"
+build_file = "{{input_file}}"
+build_command = ""
+file_globs = [ "*.pl" ]
+run_command = "./{{build_file}}"
+
+
+[[build]]
+name = "Bash default"
+uname = "bash_default_0"
+lang = "bash"
+ext = "sh"
+build_file = "{{input_file}}"
+build_command = ""
+file_globs = [ "{{input_file}}" ]
+run_command = "./{{build_file}}"
+
+[[build]]
+name = "Ocaml simple"
+uname = "ocaml_simple"
+ext = "ml"
+build_file = "{{input_file}}.bin"
+build_command = "ocamlc -o {{build_file}} {{input_file}}"
+file_globs = [ "{{input_file}}" ]
+run_command = "./{{build_file}}"

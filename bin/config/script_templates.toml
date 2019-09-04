@@ -1,0 +1,82 @@
+[[templ]]
+name = "bash_simple"
+uname = "bash_simple_0"
+lang_ext = "sh"
+body = """
+#!/usr/bin/env bash
+# -*- coding: utf-8 -*-
+# bash
+set -o nounset
+set -o errexit
+msg="colecho -b"
+"""
+
+[[templ]]
+name = "elv"
+lang_ext = "elv"
+body = """
+#!/usr/bin/env elvish
+# -*- coding: utf-8 -*-
+# elvish
+"""
+
+[[templ]]
+name = "perl"
+lang_ext = "pl"
+body = """
+#!/usr/bin/env perl
+# -*- coding: utf-8 -*-
+# perl
+
+use warnings;
+use strict;
+
+# Command line argument parsing
+use Pod::Usage;
+use Getopt::Long;
+use Data::Dumper;
+
+# Allow to use true and false as named constants
+use constant false => 0;
+use constant true  => 1;
+
+# Allow to use functions with parameter signatures
+use v5.20;
+use feature qw(signatures);
+no warnings qw(experimental::signatures);
+
+my $_I = 2;
+sub log1($message) { system("colecho -I:$_I -- '$message'"); }
+sub err1($message) { system("colecho -I:$_I -e:2 -- '$message'"); }
+sub info1($message) { system("colecho -I:$_I -i:1 -- '$message'"); }
+sub warn1($message) { system("colecho -I:$_I -w:1 -- '$message'"); }
+
+say "Hello world";
+"""
+
+[[templ]]
+name = "perl_simple"
+lang_ext = "pl"
+description = "Template for simple perl script"
+body = """
+#!/usr/bin/env perl
+# -*- coding: utf-8 -*-
+# perl
+use warnings;
+use strict;
+# Allow to use true and false as named constants
+use constant false => 0;
+use constant true  => 1;
+
+# Allow to use functions with parameter signatures
+use v5.20;
+use feature qw(signatures);
+no warnings qw(experimental::signatures);
+# Pretty message printing
+sub log1($message) { system("colecho -- '$message'"); }
+sub err1($message) { system("colecho -e:2 -- '$message'"); }
+sub info1($message) { system("colecho -i:1 -- '$message'"); }
+sub warn1($message) { system("colecho -w:1 -- '$message'"); }
+
+say "Hello world";
+"""
