@@ -1,0 +1,23 @@
+[type.String]
+type = "QString"
+
+[type.Vec]
+type = "std::vector< {{1}} >"
+
+[type.Int]
+type = "int"
+
+[type.Hash]
+type = "std::unordered_map< {{1}}, {{2}} >"
+
+[type.HSet]
+type = "std::unordered_set< {{1}} >"
+
+[spec.const]
+type = "const {{1}}"
+
+[spec.ptr]
+type = "{{1}} *"
+
+[spec.ref]
+type = "{{1}} &"

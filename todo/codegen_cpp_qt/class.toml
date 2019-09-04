@@ -1,0 +1,30 @@
+[class]
+name = "Grid"
+parents = [ "TestParent" ]
+docstring = """
+Store manipulate two-dimenstional array of strings. Supports
+serialization into XML (using Qt's xml capabilities), markdown
+tables.
+"""
+
+[[field]]
+name = "grid"
+type = "Vec<Vec<String:{const_t}>>"
+methods = [
+        "set",
+        "get",
+        "named_set",
+        "append",
+        "insert",
+        "get_ptr",
+        "get_ref"
+        ]
+
+docstring = """
+Array of immutable strings.
+"""
+
+[[field]]
+name = "status"
+type = "Enum<Status>"
+values = [ "Empty", "Generated" ]

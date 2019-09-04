@@ -1,0 +1,11 @@
+Generate C++ classes from configuration files written in TOML markup.
+Automatically generate code for serialization and deserialization in
+different markup languages:
+
++ XML to/from using Qt's xml tooling (generate SAX parser). Use of the
+  BOOST xml handling facilities is theoretically possible too but not
+  currently in the scope of interest
++ Json to/from using nlohmann json library.
+
+Automatically generate wrapper code to use the generated classes in
+perl, python and nim.
