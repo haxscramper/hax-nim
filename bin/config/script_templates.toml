@@ -80,3 +80,16 @@ sub warn1($message) { system("colecho -w:1 -- '$message'"); }
 
 say "Hello world";
 """
+
+[[templ]]
+name = "java_empty"
+lang_ext = "java"
+description = "empty .java file"
+body = """
+public class HelloWorld {
+    public static void main(String[] args) {
+        // Prints "Hello, World" in the terminal window.
+        System.out.println("Hello, World");
+    }
+}
+"""

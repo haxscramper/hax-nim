@@ -153,9 +153,9 @@ function test_fsm_build {
 
     pushd "../bin" &> /dev/null
     ln -f ../cli/fsm_build.nim.bin fsm-build
-    echo -en "y\n0\n" | fsm-build dev pegs.pl &
+    echo -en "y\n0\n" | fsm-build dev test.tmp.java &
     sleep 1
-    rm -f pegs.pl
+    rm -f test.tmp.java
     sleep 2
     killall fsm-build
 }

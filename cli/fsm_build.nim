@@ -300,13 +300,9 @@ proc getBuildOpts(inputFile: string): seq[BuildOption] =
   var c: Context = newContext()
 
   c["input_file"] = inputFile
+  c["fsm_build_bin_dir"] = getCallPath().splitPath()[0]
   let ext = inputFile.getLastExt()
-
-  let selfProc = allocCstringArray(@["/proc/self/exe"])
-  var buf = newString(1024)
-
-  discard readlink(selfProc[0], buf, 1024)
-  let conf = buf.splitPath()[0] & "/config/build_commands.toml"
+  let conf = getCallPath().splitPath()[0] & "/config/build_commands.toml"
 
   result = conf.parseBuildOpts(langExt = ext, c = c)
 
@@ -326,6 +322,7 @@ proc startBuilder(
 
     proc doBuild(cmd: string): bool =
       printSeparator("upper")
+      #echo  "Building using:", cmd
       result = execShellCmd("/bin/bash -c \"$#\"" % cmd) == 0
       printSeparator("lower")
 

@@ -147,3 +147,14 @@ build_file = "{{input_file}}.bin"
 build_command = "ocamlc -o {{build_file}} {{input_file}}"
 file_globs = [ "{{input_file}}" ]
 run_command = "./{{build_file}}"
+
+[[build]]
+name = "Java single file"
+uname = "java_single_file_1"
+ext = "java"
+build_file = "{{input_file}}.d/out.jar"
+build_command = """
+{{fsm_build_bin_dir}}/build-commands/java.pl {{input_file}}
+"""
+file_globs = [ "{{input_file}}" ]
+run_command = "java -jar {{build_file}}"

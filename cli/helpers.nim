@@ -3,6 +3,7 @@ import std/wordwrap
 import strutils
 import macros
 import deques
+import posix
 
 #~#=== Optional type
 type Opt*[T] = Option[T]
@@ -237,3 +238,14 @@ template mapItBFStoSeq*(
         q.addLast((sub, lv + 1))
 
     result
+
+
+proc getCallPath*(): string =
+  let selfProc = allocCstringArray(@["/proc/self/exe"])
+  var buf = newString(1024)
+
+  discard readlink(selfProc[0], buf, 1024)
+
+  deallocCstringArray(selfProc)
+
+  return buf

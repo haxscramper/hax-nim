@@ -5,6 +5,8 @@ import helpers, uprompt
 import posix
 import colecho_lib
 
+
+
 proc addUExec*(file: string): void =
   ## Add user execution permission to file
   let pathnames: cstringArray = allocCStringArray(@[file])
@@ -43,11 +45,7 @@ func getLastExt*(file: string): string =
 proc templateFromExt*(langExt: string): tuple[name, body: string] =
   let context = getContext()
 
-  let selfProc = allocCstringArray(@["/proc/self/exe"])
-  var buf = newString(1024)
-
-  discard readlink(selfProc[0], buf, 1024)
-  let conf = buf.splitPath()[0] & "/config/script_templates.toml"
+  let conf = getCallPath().splitPath()[0] & "/config/script_templates.toml"
 
 
   let templates = parseTemplates(

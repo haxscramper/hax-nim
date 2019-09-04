@@ -33,8 +33,9 @@ sub get_balance ($line) {
 
 my @imports;
 my @classes;
-my $main_class;
-my $input_file = "main.java";
+my $main_class = "";
+say "Arguments:", @ARGV;
+my $input_file = $ARGV[0];
 
 {
     my %class;
@@ -102,7 +103,7 @@ for my $class (@classes) {
 
 info1("Main class is $main_class");
 info1("Generated files:");
-unlink "main.java";
+unlink "$input_file";
 
 sub system1($command) {
     say $command;
