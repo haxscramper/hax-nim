@@ -358,6 +358,18 @@ cp test.png res.png # To avoid dying on missing file
   messages that are not genrated by build or run.
 + [ ] Add ~--indent~ to add indentation for output of the build and
   run.
++ [ ] User-defined variables for script templates. Can be added in top
+  section for the configuration script or parsed from output of the
+  scripts located at ~~/.config/hax-config/config/vars.sh~ or
+  ~~/.config/hax-local/config/vars.sh~. @[Pass some arguments to the
+  scripts to determine which output should be generated?]
++ [ ] Build command for standalone tikz images that are included in
+  other files: generate temporary file with the correct wrapping, add
+  original file body to it, compile, convert to pdf and show as image
+  in terminal using kitty. Might also use regular script templates and
+  do some =sed= replacements in the middle to avoid having to do ~echo
+  << EOF~ @[script template with comment that will be replaced on sed
+  run]
 
 ** Script templating
 

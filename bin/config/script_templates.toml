@@ -45,11 +45,58 @@ use v5.20;
 use feature qw(signatures);
 no warnings qw(experimental::signatures);
 
-my $_I = 2;
-sub log1($message) { system("colecho -I:$_I -- '$message'"); }
-sub err1($message) { system("colecho -I:$_I -e:2 -- '$message'"); }
-sub info1($message) { system("colecho -I:$_I -i:1 -- '$message'"); }
-sub warn1($message) { system("colecho -I:$_I -w:1 -- '$message'"); }
+sub log1 ($message, $ind = 0) { system("colecho -I:$ind -- '$message'"); }
+sub err1 ($message, $ind = 0) { system("colecho -I:$ind -e:2 -- '$message'"); }
+sub info1($message, $ind = 0) { system("colecho -I:$ind -i:1 -- '$message'"); }
+sub warn1($message, $ind = 0) { system("colecho -I:$ind -w:1 -- '$message'"); }
+
+say "Hello world";
+"""
+
+
+[[templ]]
+name = "perl_portable"
+lang_ext = "pl"
+body = """
+#!/usr/bin/env perl
+# -*- coding: utf-8 -*-
+# perl
+
+use warnings;
+use strict;
+
+# Command line argument parsing
+use Pod::Usage;
+use Getopt::Long;
+use Data::Dumper;
+use File::Which;
+
+# Allow to use true and false as named constants
+use constant false => 0;
+use constant true  => 1;
+
+# Allow to use functions with parameter signatures
+use v5.20;
+use feature qw(signatures);
+no warnings qw(experimental::signatures);
+
+sub command_exists($comm) {
+    return defined (which "$comm");
+}
+
+# Pretty message printing
+sub log1($message, $ind = 0)  {
+    if (command_exists("colecho")) { system("colecho -I:$ind -- '$message'");
+    } else { say "log1 $message"; } }
+sub err1($message, $ind = 0)  {
+    if (command_exists("colecho")) { system("colecho -I:$ind -e:2 -- '$message'");
+    } else { say "log1 $message"; } }
+sub info1($message, $ind = 0) {
+    if (command_exists("colecho")) { system("colecho -I:$ind -i:1 -- '$message'");
+    } else { say "log1 $message"; } }
+sub warn1($message, $ind = 0) {
+    if (command_exists("colecho")) { system("colecho -I:$ind -w:1 -- '$message'");
+    } else { say "log1 $message"; } }
 
 say "Hello world";
 """
@@ -72,11 +119,6 @@ use constant true  => 1;
 use v5.20;
 use feature qw(signatures);
 no warnings qw(experimental::signatures);
-# Pretty message printing
-sub log1($message) { system("colecho -- '$message'"); }
-sub err1($message) { system("colecho -e:2 -- '$message'"); }
-sub info1($message) { system("colecho -i:1 -- '$message'"); }
-sub warn1($message) { system("colecho -w:1 -- '$message'"); }
 
 say "Hello world";
 """
@@ -92,4 +134,22 @@ public class HelloWorld {
         System.out.println("Hello, World");
     }
 }
+"""
+
+[[templ]]
+name = "LaTeX ru/en simple"
+lang_ext = "tex"
+body = """
+\\documentclass[oneside,fleqn]{book}
+\\usepackage[margin=0.3cm, paperwidth=14cm]{geometry}
+\\usepackage[english,russian]{babel}
+\\usepackage{fontspec}
+\\usepackage[parfill]{parskip}
+
+\\begin{document}
+
+Test     text
+Тестовый текст
+
+\\end{document}
 """

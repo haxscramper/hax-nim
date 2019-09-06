@@ -158,3 +158,12 @@ build_command = """
 """
 file_globs = [ "{{input_file}}" ]
 run_command = "java -jar {{build_file}}"
+
+[[build]]
+name = "Latex latexmk"
+uname = "latex_latexmk"
+ext = "tex"
+build_file = "{{input_file}}.pdf"
+build_command = "latexml --interaction=nonstopmode {{input_file}}"
+cleanup_command = "latexmk -C {{input_file}}"
+run_command = ""
