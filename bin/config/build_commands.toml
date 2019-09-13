@@ -160,10 +160,33 @@ file_globs = [ "{{input_file}}" ]
 run_command = "java -jar {{build_file}}"
 
 [[build]]
-name = "Latex latexmk"
-uname = "latex_latexmk"
+name = "Java delayed run"
+uname = "java_delayed_run_1"
+ext = "java"
+build_file = "{{input_file}}.d/out.jar"
+build_command = """
+{{fsm_build_bin_dir}}/build-commands/java.pl {{input_file}}
+"""
+file_globs = [ "{{input_file}}" ]
+run_command = ""
+
+[[build]]
+name = "Latex latexmk pdflua"
+uname = "latex_latexmk_pdflua"
 ext = "tex"
 build_file = "{{input_file}}.pdf"
-build_command = "latexml --interaction=nonstopmode {{input_file}}"
+build_command = "latexmk -latexoption=\"-shell-escape\" -pdflua --interaction=nonstopmode {{input_file}}"
 cleanup_command = "latexmk -C {{input_file}}"
 run_command = ""
+
+[[build]]
+name = "GNU Prolog compile"
+uname = "gprolog_compile"
+ext = "gplog"
+build_file = "{{input_file}}.bin"
+build_command = """
+cp {{input_file}} {{input_file}}.pl && \
+gplc -o {{build_file}} {{input_file}}.pl && \
+rm {{input_file}}.pl
+"""
+run_command = "./{{build_file}}"

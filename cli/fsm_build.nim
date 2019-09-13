@@ -281,7 +281,7 @@ proc select(
   let selected =
     if buildOpts.len > 1:
       buildOpts
-      .mapIt(it.buildCommand)
+      .mapIt(it.name & ". Build command: '" & it.buildCommand & "'")
       .toSeq()
       .enumerate()
       .mapIt(($(it[0]) , it[1]))
@@ -329,7 +329,8 @@ proc startBuilder(
     proc doRunBuild(): bool =
       if doBuild(selected.buildCommand):
         ceUserInfo0("Build succeded, running")
-        startUtility(selected.runCommand)
+        if selected.runCommand != "":
+          startUtility(selected.runCommand)
         true
       else:
         ceUserWarn("Build failed")

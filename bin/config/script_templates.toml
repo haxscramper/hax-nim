@@ -81,22 +81,23 @@ use feature qw(signatures);
 no warnings qw(experimental::signatures);
 
 sub command_exists($comm) {
-    return defined (which "$comm");
+    return `which $comm 2> /dev/null` ne "";
 }
 
 # Pretty message printing
-sub log1($message, $ind = 0)  {
-    if (command_exists("colecho")) { system("colecho -I:$ind -- '$message'");
-    } else { say "log1 $message"; } }
-sub err1($message, $ind = 0)  {
-    if (command_exists("colecho")) { system("colecho -I:$ind -e:2 -- '$message'");
-    } else { say "log1 $message"; } }
-sub info1($message, $ind = 0) {
-    if (command_exists("colecho")) { system("colecho -I:$ind -i:1 -- '$message'");
-    } else { say "log1 $message"; } }
-sub warn1($message, $ind = 0) {
-    if (command_exists("colecho")) { system("colecho -I:$ind -w:1 -- '$message'");
-    } else { say "log1 $message"; } }
+my $pretty_msg = command_exists("colecho");
+sub log1($message)  {
+    if ($pretty_msg) { system("colecho -- \\"$message\\"");
+    } else { say "  - $message"; } }
+sub err1($message)  {
+    if ($pretty_msg) { system("colecho -e:2 -- \\"$message\\"");
+    } else { say "!!! $message"; } }
+sub info1($message) {
+    if ($pretty_msg) { system("colecho -i:1 -- \\"$message\\"");
+    } else { say "--> $message"; } }
+sub warn1($message) {
+    if ($pretty_msg) { system("colecho -w:1 -- \\"$message\\"");
+    } else { say "=>> $message"; } }
 
 say "Hello world";
 """
@@ -141,10 +142,11 @@ name = "LaTeX ru/en simple"
 lang_ext = "tex"
 body = """
 \\documentclass[oneside,fleqn]{book}
-\\usepackage[margin=0.3cm, paperwidth=14cm]{geometry}
+\\usepackage[margin=0.2cm, paperwidth=16cm]{geometry}
 \\usepackage[english,russian]{babel}
 \\usepackage{fontspec}
 \\usepackage[parfill]{parskip}
+\\setmainfont{CMU Serif}[Ligatures=TeX]
 
 \\begin{document}
 
@@ -152,4 +154,46 @@ Test     text
 Тестовый текст
 
 \\end{document}
+"""
+
+[[templ]]
+name = "LaTeX en/ru minted"
+lang_ext = "tex"
+body = """
+\\documentclass[oneside,fleqn]{book}
+\\usepackage[margin=0.2cm, paperwidth=16cm]{geometry}
+\\usepackage[english,russian]{babel}
+\\usepackage{fontspec}
+\\usepackage[parfill]{parskip}
+
+\\setmainfont{CMU Serif}[Ligatures=TeX]
+\\setmonofont{Consolas}
+
+\\usepackage{minted}
+
+\\begin{document}
+
+Test     text
+Тестовый текст
+
+\begin{minted}{java}
+// Главный класс
+public class Main {
+	public static void main(String[] args) {
+    System.out.println("Привет мир!");
+	}
+}
+\\end{minted}
+
+\\end{document}
+"""
+
+[[templ]]
+name = "GNU Prolog"
+lang_ext = "gplog"
+body = """
+:- initialization(main).
+main :-
+    %% <++>
+    nl, halt.
 """

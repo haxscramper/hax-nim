@@ -4,6 +4,8 @@
 cd "$(dirname "$0")"
 set -o nounset
 
+start=$PWD
+
 function build {
     file="$1"
 
@@ -39,3 +41,10 @@ build "colecho_cli.nim"
 build "create_script.nim"
 cd ../utils
 build "get_daily_note.nim"
+
+cd $start
+
+ln $PWD/cli/fsm_build.nim.bin bin/fsm-build
+ln $PWD/cli/create_script.nim.bin bin/create-script
+ln -s cli/colecho_cli.nim.bin bin/colecho
+ln -s utils/get_daily_note.nim.bin bin/get-daily-note

@@ -1,11 +1,16 @@
 #!/usr/bin/env perl
 # -*- coding: utf-8 -*-
 # perl
+
 use warnings;
 use strict;
 
-use File::Copy;
+# Command line argument parsing
+use Pod::Usage;
+use Getopt::Long;
 use Data::Dumper;
+use File::Which;
+use File::Copy;
 use Storable qw(dclone);
 
 # Allow to use true and false as named constants
@@ -16,11 +21,25 @@ use constant true  => 1;
 use v5.20;
 use feature qw(signatures);
 no warnings qw(experimental::signatures);
+
+sub command_exists($comm) {
+    return `which $comm 2> /dev/null` ne "";
+}
+
 # Pretty message printing
-sub log1  ($message, $ind = 0) { system("colecho -I:$ind -- '$message'"); }
-sub err1  ($message, $ind = 0) { system("colecho -e:2 -I:$ind -- '$message'"); }
-sub info1 ($message, $ind = 0) { system("colecho -i:1 -I:$ind -- '$message'"); }
-sub warn1 ($message, $ind = 0) { system("colecho -w:1 -I:$ind -- '$message'"); }
+my $pretty_msg = command_exists("colecho");
+sub log1($message)  {
+    if ($pretty_msg) { system("colecho -- \"$message\"");
+    } else { say "  - $message"; } }
+sub err1($message)  {
+    if ($pretty_msg) { system("colecho -e:2 -- \"$message\"");
+    } else { say "!!! $message"; } }
+sub info1($message) {
+    if ($pretty_msg) { system("colecho -i:1 -- \"$message\"");
+    } else { say "--> $message"; } }
+sub warn1($message) {
+    if ($pretty_msg) { system("colecho -w:1 -- \"$message\"");
+    } else { say "=>> $message"; } }
 
 
 
@@ -110,7 +129,7 @@ sub system1($command) {
     system($command);
 }
 
-log1($_, 2) for glob "*.java";
+log1($_) for glob "*.java";
 system1("javac $_") for glob "*.java";
 writeFile("manifest.txt", "Main-Class: $main_class\n");
 system1("jar cfvm out.jar manifest.txt " . join(" ", map { "'$_'" } glob "*.class"));

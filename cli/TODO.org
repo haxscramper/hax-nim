@@ -160,6 +160,8 @@ some command line arguments for testing. My actions:
 
 ** Colecho
 
++ [ ] Remove hardcoded terminal width regulation. If launched in tty
+  with no =X= running fit as many characters per line as possible.
 + [ ] Macro for printing messages (similar to ~LOG~ in DebugMacro)
   that does not require adding commas (instead of ~LOG "sdfsd",
   "SDF"~ use ~LOG "sdf" DSF~)
@@ -370,6 +372,7 @@ cp test.png res.png # To avoid dying on missing file
   do some =sed= replacements in the middle to avoid having to do ~echo
   << EOF~ @[script template with comment that will be replaced on sed
   run]
++ [ ] Add build script to the list of watched files
 
 ** Script templating
 
@@ -581,3 +584,18 @@ other proc.
 + ~rx~ macro for building regular expressions using emacs-lisp-like
   syntax (it would be best to just statically generate string of
   regex)
++ [ ] Simple command-line utility for performing common tasks:
+  substituting environment variables and home directory (tilda),
+  running templating with some variables (~cat in.file | tool
+  --templ-subst:"hostname=${hostname}"~), removing script-style
+  comments from files and streams (~cat file.in | tool
+  --remove-comments~). This should be a more verbose and fail-safe
+  version of common awk/sed patterns. Instead of doing some
+  regex-based replacements and running everything throught multiple
+  layers of pipes I would rather prefer to do ~cat file.in | tool
+  --remove-comments --templ-subst:"filename=file.in"
+  --templ-subst:"level=debug" --envsubst --tilda-subst~ which is
+  cleanly more verbose but much more human-readable and easier to
+  understand compared to ~cat file.in | sed -e '/^#[^!].*/d' -e
+  's/\(.*[^!]\)#.*[^}]/\1/' | sed 's/{{filename}}/file.in' | sed
+  's/{{level}}/debug/ | envsubst | sed "s/~/$HOME"~
