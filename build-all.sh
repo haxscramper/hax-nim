@@ -46,5 +46,6 @@ cd $start
 
 ln $PWD/cli/fsm_build.nim.bin bin/fsm-build
 ln $PWD/cli/create_script.nim.bin bin/create-script
-ln -s cli/colecho_cli.nim.bin bin/colecho
-ln -s utils/get_daily_note.nim.bin bin/get-daily-note
+cd bin
+ln -s ../cli/colecho_cli.nim.bin colecho
+ln -s ../utils/get_daily_note.nim.bin get-daily-note
