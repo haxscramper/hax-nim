@@ -85,7 +85,7 @@ my $input_file = $ARGV[0];
             my $add = get_balance($line);
             # printf "%-50s --> $paren_balance/$add\n", $line;
             $paren_balance += $add;
-            push (@{ $class{'body'} },  "//$input_file $.\n $line");
+            push (@{ $class{'body'} },  "$line");
             if ($paren_balance == 0) {
                 $class_started = false;
                 $class{'end'} = $.;
@@ -96,7 +96,7 @@ my $input_file = $ARGV[0];
     }
 }
 
-my $dir = "$input_file.d";
+my $dir = ".$input_file.d";
 
 rmdir "$dir";
 mkdir "$dir";

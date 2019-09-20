@@ -44,8 +44,8 @@ build "get_daily_note.nim"
 
 cd $start
 
-ln $PWD/cli/fsm_build.nim.bin bin/fsm-build
-ln $PWD/cli/create_script.nim.bin bin/create-script
+ln -f $PWD/cli/fsm_build.nim.bin bin/fsm-build
+ln -f $PWD/cli/create_script.nim.bin bin/create-script
 cd bin
-ln -s ../cli/colecho_cli.nim.bin colecho
-ln -s ../utils/get_daily_note.nim.bin get-daily-note
+ln -sf ../cli/colecho_cli.nim.bin colecho
+ln -sf ../utils/get_daily_note.nim.bin get-daily-note

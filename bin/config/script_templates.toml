@@ -69,7 +69,8 @@ use strict;
 use Pod::Usage;
 use Getopt::Long;
 use Data::Dumper;
-use File::Which;
+use File::Copy;
+use Cwd;
 
 # Allow to use true and false as named constants
 use constant false => 0;
@@ -176,7 +177,7 @@ body = """
 Test     text
 Тестовый текст
 
-\begin{minted}{java}
+\\begin{minted}{java}
 // Главный класс
 public class Main {
 	public static void main(String[] args) {
@@ -196,4 +197,37 @@ body = """
 main :-
     %% <++>
     nl, halt.
+"""
+
+[[templ]]
+name = "C++ logger"
+lang_ext = "cpp"
+body = """
+#include <iostream>
+#include <vector>
+
+
+class Logger
+{
+  public:
+    ~Logger() {
+        std::cout << "\b\n";
+    }
+
+    static Logger log() {
+        return Logger();
+    }
+
+    template <class T>
+    Logger& operator<<(T t) {
+        std::cout << t << " ";
+        return *this;
+    }
+};
+
+#define LOG Logger::log()
+
+int main() {
+    LOG << "Logger test";
+}
 """

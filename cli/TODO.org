@@ -311,6 +311,25 @@ vvvvvvvvvvvvvvvvvvv
 
 ** FSM build
 
++ [ ] Solve M-to-N problem for selecting build, run and preview
+  commands: maybe separate them into two different categories (=build=
+  and =run=)
++ [ ] Add support for preview command. User should be able to choose
+  from running preview each time build is succeded or once, after
+  first build.
++ [ ] Provide template variables for file without extension (ex: when
+  i compile =file.tex= it's filename is =file= and last extension is
+  =tex=). This is useful for running preview commands and different
+  log parsers.
++ [ ] Add support for running commands on build fail (useful for
+  hooking things on parsing latex build logs)
++ [ ] List all extensions and build commands for each extension
++ [ ] Highlight build command name and actual build command
++ [ ] Add check for installed software (list commands and then check
+  whether or not each command exists)
++ [ ] Add support for generating files using scripts;
++ [ ] If no templates are present ask to create empty file instead of
+  crashing.
 + [ ] Recursively search C++ files starting from main one to determine
   list of files to watch.
 + [ ] Support outoutting file events in a form of json (for use in
@@ -599,3 +618,10 @@ other proc.
   understand compared to ~cat file.in | sed -e '/^#[^!].*/d' -e
   's/\(.*[^!]\)#.*[^}]/\1/' | sed 's/{{filename}}/file.in' | sed
   's/{{level}}/debug/ | envsubst | sed "s/~/$HOME"~
++ [ ] Collection of java misc methods that will be =included= using
+  ~m4~ before running main ~java.pl~ and then separated into different
+  classes. Need to keep track of include dependencies. #todo: rewrite
+  java build script from perl to nim and user proper parser.
++ [ ] Rewrite =camomilla= in nim and use more colorful error
+  messaging.
++ [ ] Multiline properties support for org-mode parser
