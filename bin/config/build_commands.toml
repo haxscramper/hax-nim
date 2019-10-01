@@ -218,3 +218,37 @@ gplc -o {{build_file}} {{input_file}}.pl && \
 rm {{input_file}}.pl
 """
 run_command = "./{{build_file}}"
+
+[[build]]
+name = "SWI prolog simple"
+uname = "swi_prolog"
+ext = "splog"
+build_command = "true"
+run_command = "swipl -t main -g halt -f {{input_file}}"
+
+
+[[build]]
+name = "Graphviz simple"
+uname = "graphviz_simple"
+ext = "dot"
+build_file = "{{input_file}}.tmp.png"
+build_command = "dot -Tpng {{input_file}} -o{{build_file}}"
+run_command = "true"
+
+[[build]]
+name = "Graphviz m4"
+uname = "graphviz_m4"
+ext = "dot"
+build_file = "{{input_file}}.tmp.png"
+build_command = """
+m4 {{input_file}} > {{input_file}}.tmp && \
+dot -Tpng {{input_file}}.tmp -o{{build_file}}
+"""
+run_command = "true"
+
+[[build]]
+name = "Emacs elisp"
+uname = "emacs_elisp"
+ext = "el"
+build_command = ""
+run_command = "emacs --script {{input_file}}"

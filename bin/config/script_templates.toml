@@ -104,6 +104,72 @@ say "Hello world";
 """
 
 [[templ]]
+name = "perl_heavy"
+lang_ext = "pl"
+description = "Fully-featured template with CLI parsing etc."
+body = """
+#!/usr/bin/env perl
+# -*- coding: utf-8 -*-
+# perl
+
+use warnings;
+use strict;
+
+# Command line argument parsing
+use Pod::Usage;
+use Getopt::Long;
+use Data::Dumper;
+use File::Copy;
+use Cwd;
+
+# Allow to use true and false as named constants
+use constant false => 0;
+use constant true  => 1;
+
+# Allow to use functions with parameter signatures
+use v5.20;
+use feature qw(signatures);
+no warnings qw(experimental::signatures);
+
+sub command_exists($comm) {
+    return `which $comm 2> /dev/null` ne "";
+}
+
+sub write_file($file, $string) {
+    open (FH, ">", $file);
+    print FH $string;
+    close FH;
+}
+
+# Pretty message printing
+my $pretty_msg = command_exists("colecho");
+sub log1($message)  {
+    if ($pretty_msg) { system("colecho -- \\"$message\\"");
+    } else { say "  - $message"; } }
+sub err1($message)  {
+    if ($pretty_msg) { system("colecho -e:2 -- \\"$message\\"");
+    } else { say "!!! $message"; } }
+sub info1($message) {
+    if ($pretty_msg) { system("colecho -i:1 -- \\"$message\\"");
+    } else { say "--> $message"; } }
+sub warn1($message) {
+    if ($pretty_msg) { system("colecho -w:1 -- \\"$message\\"");
+    } else { say "=>> $message"; } }
+
+
+my $quiet_run;
+GetOptions(
+    "quiet" => \\$quiet_run
+    );
+
+$quiet_run ||= false;
+
+
+say "Hello world";
+
+"""
+
+[[templ]]
 name = "perl_simple"
 lang_ext = "pl"
 description = "Template for simple perl script"
@@ -200,6 +266,36 @@ main :-
 """
 
 [[templ]]
+name = "SWI-Prolog"
+lang_ext = "splog"
+body = """
+:- initialization(main).
+
+main :-
+    %% <++>
+    write("Hello world"),
+    nl, halt.
+"""
+
+[[templ]]
+name = "SWI-prolog interactive/test"
+lang_ext = "splog"
+body = """
+:- initialization(main).
+
+interactive :-
+    nl
+.
+
+test :-
+    nl
+.
+
+main :- test, halt.
+"""
+
+
+[[templ]]
 name = "C++ logger"
 lang_ext = "cpp"
 body = """
@@ -231,3 +327,34 @@ int main() {
     LOG << "Logger test";
 }
 """
+
+[[templ]]
+name = "Graphviz simple"
+lang_ext = "dot"
+body = """digraph G {
+
+}
+"""
+
+[[templ]]
+name = "C hello world"
+lang_ext = "c"
+body = """
+#include <stdio.h>
+
+int main() {
+    puts("Hello world");
+}
+"""
+
+[[templ]]
+name = "elisp simple"
+lang_ext = "el"
+body = """
+(message "Hello world")
+"""
+
+[[templ]]
+name = "Nim hello world"
+lang_ext = "nim"
+body = "echo \"Hello world!\""

@@ -9,7 +9,6 @@ use strict;
 use Pod::Usage;
 use Getopt::Long;
 use Data::Dumper;
-use File::Which;
 use File::Copy;
 use Storable qw(dclone);
 
@@ -130,6 +129,6 @@ sub system1($command) {
 }
 
 log1($_) for glob "*.java";
-system1("javac $_") for glob "*.java";
+system("javac $_") for glob "*.java";
 writeFile("manifest.txt", "Main-Class: $main_class\n");
-system1("jar cfvm out.jar manifest.txt " . join(" ", map { "'$_'" } glob "*.class"));
+system("jar cfvm out.jar manifest.txt " . join(" ", map { "'$_'" } glob "*.class") . " > /dev/null");
