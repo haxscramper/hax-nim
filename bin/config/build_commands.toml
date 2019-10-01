@@ -141,6 +141,16 @@ file_globs = [ "{{input_file}}" ]
 run_command = "./{{build_file}}"
 
 [[build]]
+name = "Bash shellcheck"
+uname = "bash_shellcheck_0"
+lang = "bash"
+ext = "sh"
+build_command = ""
+build_fule = "{{input_file}}"
+file_globs = [ "{{input_file}}" ]
+run_command = "shellcheck {{input_file}} && ./{{input_file}}"
+
+[[build]]
 name = "Ocaml simple"
 uname = "ocaml_simple"
 ext = "ml"
