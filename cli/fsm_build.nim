@@ -33,8 +33,6 @@ var utilityPid: Pid
 
 
 
-var log1 = newFileLogger("debug.tmp", fmtStr="[$time]: ")
-
 proc dlog(args: varargs[string, `$`]): void =
   discard
   # log1.log(lvlAll, args.join(" "))
@@ -54,6 +52,7 @@ type
     argParsed: seq[string]
     maxRepeat: Opt[int]
     waitUtil: bool
+    verbose: bool
     case kind: OperationMode:
       of doRunDev:
         targetFile: string
@@ -83,6 +82,10 @@ proc parseCMDLine(): CmdParsed =
       name: "uname"
       opt: ["--uname", "+takes_value"]
       help: "Unique name of build config"
+    opt:
+      name: "verbose-mode"
+      opt: ["--verbose", "-v"]
+      help: "Parse configuration verbosely"
   #   opt:
   #     name: "run-dev"
   #     opt: ["--dev", "--run-dev", "+takes_value"]
@@ -90,8 +93,6 @@ proc parseCMDLine(): CmdParsed =
   # does not exist user will be asked whether he wants to create new file.
   # New file will be created using default script templates.
   # """
-
-  dlog("---")
 
   result =
     if argParsed.len >= 2 and argParsed[0] == "dev":
@@ -127,6 +128,8 @@ proc parseCMDLine(): CmdParsed =
   if "test".kp:
     result.maxRepeat = "test".k.toInt()
 
+  result.verbose = "verbose-mode".kp();
+
   result.waitUtil =
     if "wait-util".kp:
       "wait-util".k.toBool()
@@ -159,7 +162,9 @@ proc checkList(list: openArray[
 proc parseSingleBuild(
   build: TomlValueRef,
   langExt: string,
-  c: var Context): Option[BuildOption] =
+  c: var Context,
+  parseConf: tuple[verbose: bool] = (verbose: false)
+     ): Option[BuildOption] =
 
   if not build.hasKey("name"):
     ceUserError0("Missing name")
@@ -228,9 +233,11 @@ or array of strings""")
 proc parseBuildOpts(
   buildConf: string,
   langExt: string,
-  c: var Context,
-  buildOpts: seq[BuildOption] = @[]):
-    seq[BuildOption] =
+  context: var Context,
+  buildOpts: seq[BuildOption] = @[],
+  parseConf: tuple[verbose: bool] = (verbose: false)
+     ): seq[BuildOption] =
+
   ceUserInfo0("Parsing config")
 
   result = buildOpts
@@ -238,7 +245,7 @@ proc parseBuildOpts(
   let buildConfToml = parsetoml.parseFile(buildConf)
 
   for build in buildConfToml["build"].getElems():
-    let res = parseSingleBuild(build, langExt, c)
+    let res = parseSingleBuild(build, langExt, context, parseConf)
     if res.isSome:
       result.add(res.get())
 
@@ -297,14 +304,14 @@ proc select(
 
 
 proc getBuildOpts(inputFile: string): seq[BuildOption] =
-  var c: Context = newContext()
+  var context: Context = newContext()
 
-  c["input_file"] = inputFile
-  c["fsm_build_bin_dir"] = getCallPath().splitPath()[0]
+  context["input_file"] = inputFile
+  context["fsm_build_bin_dir"] = getCallPath().splitPath()[0]
   let ext = inputFile.getLastExt()
   let conf = getCallPath().splitPath()[0] & "/config/build_commands.toml"
 
-  result = conf.parseBuildOpts(langExt = ext, c = c)
+  result = conf.parseBuildOpts(langExt = ext, context = context, parseConf = (verbose: false))
 
 
 

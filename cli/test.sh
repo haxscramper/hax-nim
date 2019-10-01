@@ -14,9 +14,12 @@ function build {
         --hints:off                   \
         -o:"$file.bin"                \
         -d:nimOldCaseObjects          \
+        -d:npegTrace \
+        -d:npegBackStackSize=16 \
         --warning[CaseTransition]:off \
         "$file"
 
+        # -d:npegGraph \
     build_code="$?"
 
     colecho -L "end"
@@ -148,34 +151,54 @@ function test_fsm_build {
     # colecho -g "ps grep"
     # ps -a | grep build
     # colecho -g "done"
-    # bin="fsm_build.nim.bin"
     # cd ../wip
+    # bin="fsm_build.nim.bin"
 
-    pushd "../bin" &> /dev/null
-    ln -f ../cli/fsm_build.nim.bin fsm-build
-    echo -en "y\n0\n" | fsm-build dev test.tmp.java &
+    # ln -f ../cli/fsm_build.nim.bin fsm-build
+    cp -v fsm_build.nim.bin ../bin/fsm-build
+    which fsm-build
+    # echo -en "y\n0\n" | fsm-build dev test.tmp.java &
+    echo -en "y\n0\n" | fsm-build dev test.tmp.dot &
     sleep 1
-    rm -f test.tmp.java
+    rm -f test.tmp.dot
     sleep 2
     killall fsm-build
+}
+
+function test_flowchart_parser {
+    build "flowchart_generator.nim"
+    bin="flowchart_generator.nim.bin"
+
+    if [[ "$?" != 0 ]]; then
+        colecho -e:2 "Build failed"
+        return
+    else
+        colecho -i:2 "Done build"
+    fi
+
+    find test_files/flowchart_generator -name "*.txt" |
+        xargs -i ./$bin --input:"{}" --output:"{}.dot"
 }
 
 
 #test_builder
 #test_create_script
 #test_argparse
-test_fsm_build
+# test_fsm_build
+test_flowchart_parser
 
 inotifywait -e close_write,moved_to,create -m . |
     while read -r directory events f; do
         if [[ "$events" = *"CLOSE_WRITE"* ]]; then
           if [[ "$f" = *.nim ]] ||
+                 [[ "$f" = *.pegs ]] ||
                  [[ "$f" != "test1.sh" && "$f" == *".sh" ]]; then
             clear
             #test_builder
             #test_create_script
             #test_argparse
-            test_fsm_build
+            # test_fsm_build
+            test_flowchart_parser
           fi
         fi
     done

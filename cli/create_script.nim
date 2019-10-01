@@ -4,6 +4,7 @@ import argparse
 import helpers, uprompt
 import posix
 import colecho_lib
+import strformat
 
 
 
@@ -54,7 +55,7 @@ proc templateFromExt*(langExt: string): tuple[name, body: string] =
     langExt = langExt)
 
   var selected: int =
-    if templates.len > 1:
+    if templates.len > 1: # Select single build option by default
       templates
       .enumerate()
       .mapIt(($it[0], it[1].name))
@@ -62,6 +63,15 @@ proc templateFromExt*(langExt: string): tuple[name, body: string] =
       getInt("Select", (0, templates.len - 1))
     else:
       0
+
+  if templates.len == 0:
+    ceUserError0(fmt"""
+No templates found for extension {langExt}. Make sure
+that *at least one* template with extension '{langExt}'
+exists in configuraion file and can be parsed without errors
+(see previous messages for error clarifications).
+""")
+    quit (1)
 
   result = templates[selected]
 

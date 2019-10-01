@@ -112,7 +112,7 @@ macro parseArgsTyped(body: untyped): untyped =
   let subTree = getSubTree(body)
 
   result = quoteDoInterpolStmt:
-    echo "test"
+    # echo "test"
     `"generateSubEnums(subTree)"`
 
     proc parseArguments(args: string): string =
