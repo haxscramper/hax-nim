@@ -18,12 +18,10 @@ function build {
         --expandMacro:enter \
         -d:npegBackStackSize=16 \
         --warning[CaseTransition]:off \
-        "$file" &> compile.out.tmp
+        "$file"
 
         # -d:npegGraph \
     build_code="$?"
-
-    cat compile.out.tmp
 
     colecho -L "end"
     echo
