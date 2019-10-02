@@ -17,3 +17,11 @@ for (int i = 0; i < 10; ++i) { while () { if () {} } }
 { int i = 0; }
 { a; }
 { a < 21; }
+{ call(); }
+{ call(arg, 12); }
+if () {} else {}
+if () {} else if () {} else {}
+if (call()) { call1(); } else { call2(); }
+if ( call(call(1)) ) { call2(); } else { call3(); }
+if (a == b) { int c = call1(); print(c); }
+while (call1()) { }

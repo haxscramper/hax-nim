@@ -1030,7 +1030,6 @@ template eventParser*(pegAst, handlers: untyped): (proc(s: string): int) =
 
     mkHandlerTplts:
       handlers
-
     macro enter(pegKind, s, pegNode, start: untyped): untyped =
       # This is called by the matcher code in *matchOrParse* at the
       # start of the code for a grammar element of kind *pegKind*.

@@ -14,12 +14,15 @@ function build {
         -o:"$file.bin"                \
         -d:nimOldCaseObjects          \
         -d:npegTrace \
+        --expandMacro:enter \
         -d:npegBackStackSize=16 \
         --warning[CaseTransition]:off \
-        "$file"
+        "$file" &> compile.out.tmp
 
         # -d:npegGraph \
     build_code="$?"
+
+    cat compile.out.tmp
 
     colecho -L "end"
     echo
@@ -167,7 +170,12 @@ function test_fsm_build {
 function test_flowchart_parser {
     bin="flowchart_generator.nim.bin"
 
-    do_build="false"
+    if [[ "$1" = *.txt ]]; then
+        do_build="false"
+    else
+        do_build="true"
+    fi
+
     full_run="false"
 
     if [[ "$do_build" = true ]]; then
@@ -216,20 +224,21 @@ function test_flowchart_parser {
 #test_create_script
 #test_argparse
 # test_fsm_build
-test_flowchart_parser
+test_flowchart_parser none
 
-inotifywait -e close_write,moved_to,create -m . |
+inotifywait -r -e close_write,moved_to,create -m . |
     while read -r directory events f; do
         if [[ "$events" = *"CLOSE_WRITE"* ]]; then
           if [[ "$f" = *.nim ]] ||
                  [[ "$f" = *.pegs ]] ||
+                 [[ "$f" = *.txt ]] ||
                  [[ "$f" != "test1.sh" && "$f" == *".sh" ]]; then
             clear
             #test_builder
             #test_create_script
             #test_argparse
             # test_fsm_build
-            test_flowchart_parser
+            test_flowchart_parser $f
           fi
         fi
     done
