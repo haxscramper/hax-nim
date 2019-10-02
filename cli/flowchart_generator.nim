@@ -2,6 +2,8 @@ import pegs
 import npeg
 import termformat, argparse, helpers
 import os, strutils, sequtils, macros
+import colecho_lib
+import colecho_types
 import strformat
 import tables
 import deques
@@ -76,20 +78,23 @@ let parse = pegAst.eventParser:
 
 var dbgLvl = 0
 var dbgStr = ""
+let ignored = @["ws"]
 let debugParse = pegAst.eventParser:
   pkNonTerminal:
     enter:
-      let ident = "| ".repeat(dbgLvl)
-      echo ident, &"{p.nt.name}"
-      inc dbgLvl
+      if p.nt.name notin ignored:
+        let ident = "|   ".repeat(dbgLvl)
+        echo ident, &"{p.nt.name}"
+        inc dbgLvl
     leave:
-      dec dbgLvl
-      let ident = "  ".repeat(dbgLvl)
-      let matchStr = dbgStr.substr(start, start + length - 1)
-      if length > 0:
-        echo ident, &"{p.nt.name} ok"
-      else:
-        echo ident, &"{p.nt.name} fail"
+      if p.nt.name notin ignored:
+        dec dbgLvl
+        let ident = "|   ".repeat(dbgLvl)
+        let matchStr = dbgStr.substr(start, start + length - 1)
+        if length > 0:
+          echo ident, &"{p.nt.name} " & $toGreen("ok")
+        else:
+          echo ident, &"{p.nt.name} " & $toRed("fail")
   pkChar:
     leave:
       let ident = "  ".repeat(dbgLvl)
@@ -103,7 +108,8 @@ let debugParse = pegAst.eventParser:
 
 
 proc test(str: string, andParse: bool = false, dbg = false): void =
-  echo fmt"{str:<60}: {str.match(pegAst)}"
+  let res = $(if str.match(pegAst): "true".toGreen else: "false".toRed)
+  echo &"{res:<15}: {str}"
   if dbg:
     dbgStr = str
     discard debugParse(str)
@@ -297,6 +303,10 @@ parseArgs:
     name: "builtin-tests"
     opt: ["--builtin-tests"]
     help: "run builtin tests"
+  opt:
+    name: "debug-parse"
+    opt: ["--debug-parse", "+takes_value"]
+    help: "run debug parse on the statement"
 
 if hasErrors:
   quit(1)
@@ -314,6 +324,15 @@ if "input-file".kp():
 
 elif "test-line".kp():
   test("test-line".k.toStr())
+
+elif "debug-parse".kp:
+  let instr = "debug-parse".k.toStr
+  let res = debugParse(instr)
+  ceUserInfo2(&"parsing {instr}")
+  if res > 0:
+    ceUserInfo0(&"parse: ok ({res})")
+  else:
+    ceUserInfo0("parse: fail")
 
 elif "builtin-tests".kp():
   runTestCases()

@@ -1,6 +1,7 @@
 { }
 if () {}
 if ( );
+if ();
 for (;;);
 for (i = 0;;);
 for (int i = 0;;);
@@ -12,3 +13,7 @@ while ();
 for (;;) { }
 for (;;) { while () {} }
 for (int i = 0; i < 10; ++i) { while () { if () {} } }
+{ i = 0; }
+{ int i = 0; }
+{ a; }
+{ a < 21; }

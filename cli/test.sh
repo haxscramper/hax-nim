@@ -6,7 +6,6 @@ function build {
     file="$1"
 
     colecho -L "start $file"
-    rm -f "$file.bin"
 
     nim c                             \
         --cc:tcc                      \
@@ -166,14 +165,37 @@ function test_fsm_build {
 }
 
 function test_flowchart_parser {
-    build "flowchart_generator.nim"
     bin="flowchart_generator.nim.bin"
 
-    if [[ "$build_code" != 0 ]]; then
-        colecho -e:2 "Build failed"
+    do_build="false"
+    full_run="false"
+
+    if [[ "$do_build" = true ]]; then
+        build "flowchart_generator.nim"
+
+        if [[ "$build_code" != 0 ]]; then
+            colecho -e:2 "Build failed"
+            return
+        else
+            colecho -i:2 "Done build"
+        fi
+    fi
+
+
+    while read -r test
+    do
+        ./$bin --test-line:"$test"
+    done < <(cat test_files/flowchart_generator/simple.txt)
+
+
+    while read -r debug
+    do
+        ./$bin --debug-parse:"$debug"
+    done < <(cat test_files/flowchart_generator/debug.txt)
+
+
+    if [[ "$full_run" != true ]]; then
         return
-    else
-        colecho -i:2 "Done build"
     fi
 
 
@@ -187,11 +209,6 @@ function test_flowchart_parser {
 
     find test_files/flowchart_generator -name "*.txt" |
         xargs -i ./$bin --input:"{}" --output:"{}.dot"
-
-    while read -r test
-    do
-        ./$bin --test-line:"$test"
-    done < <(cat test_files/flowchart_generator/simple.txt)
 }
 
 

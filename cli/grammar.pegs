@@ -6,24 +6,26 @@ stmt <-
      while_loop /
      ( "{" ws stmt* ws "}" )
 
-opt_stmt <- ws ( ( ws ";" ) / stmt ) ws
+opt_stmt <- ( ( ws stmt ws ) / ( ws ";" ws ) )?
 
-if_stmt <- "if" ws "(" (ws expr ws)? ")" opt_stmt
+if_stmt <- "if" ws "(" ws (expr ws)? ")" ( opt_stmt / ( ws ";" ) )
 # else_stmt <- "else" opt_stmt
-# elif_stmt <- "else" "if" opt_stmt
+# elif_stmt <- "else" ws "if" opt_stmt
 cond_stmt <- if_stmt # ( elif_stmt )* else_stmt?
+stmt_control <- ( ( \ident ws \ident "=" ws expr) /
+             ( \ident ws "=" ws expr ) /
+             expr )?
 
-for_loop <- "for" ws "(" (ws ( assgn / decl_init ) ws)? ";" (ws expr ws)? ";" (ws expr ws)? ")" opt_stmt
+for_loop <- "for" ws "(" stmt_control ";" stmt_control ";" stmt_control ")" opt_stmt
 while_loop <- "while" ws "(" (ws expr ws)? ")" opt_stmt
 # primary expression
-assgn <- \ident ws "=" ws expr
-decl_init <- \ident ws assgn
 expr <- intcon /
      \ident binop expr /
      \ident relop expr /
      unop \ident /
      \ident unop /
-     "(" ws expr ws ")"
+     "(" ws expr ws ")" /
+     \ident
 
 
 binop <- ws ( "+" / "-" / "*" / "/" ) ws

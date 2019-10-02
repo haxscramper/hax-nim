@@ -21,6 +21,13 @@ type
     style*: set[Style]
 
 
+proc toRed*(str: string): ColoredString =
+  ColoredString(str: str, fg: fgRed)
+
+proc toGreen*(str: string): ColoredString =
+  ColoredString(str: str, fg: fgGreen)
+
+
 proc `$`*(colored: ColoredString): string =
   let fgCode = if colored.fg.int != 0:
       ansiForegroundColorCode(
