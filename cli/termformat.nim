@@ -1,10 +1,4 @@
-import terminal, sequtils, strutils
-
-proc tern*[T](cond: bool, t: T, f: T): T =
-  if cond:
-    return t
-  else:
-    return f
+import terminal, sequtils, strutils, helpers
 
 proc justifyFitTerminal*(
   str: string,

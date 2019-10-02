@@ -1,5 +1,5 @@
 import pegs
-import npeg
+import options
 import termformat, argparse, helpers
 import os, strutils, sequtils, macros
 import colecho_lib
@@ -147,8 +147,10 @@ type
     cnkElif
     cnkWhile
     cnkElse
-    cnkCond
     cnkFor
+    cnkCond
+    cnkAssgn
+    cnkExpr
     cnkUndef
 
 
@@ -158,9 +160,9 @@ type
     case kind: NodeKind:
       of cnkIf .. cnkWhile: cond: string
       of cnkFor:
-        init: string
-        bound: string
-        postAct: string
+        init: Option[string]
+        bound: Option[string]
+        postAct: Option[string]
       else: nil
 
 
@@ -171,6 +173,8 @@ proc toNodeKind(str: string): NodeKind =
     of "for_loop": cnkFor
     of "while_loop": cnkWhile
     of "cond_stmt": cnkCond
+    of "assgn": cnkAssgn
+    of "expr": cnkExpr
     else: cnkUndef
 
 proc toNode(str: string): Node = Node(kind: str.toNodeKind)
@@ -189,39 +193,68 @@ type
   Scope = ref object
     node: Node
     name: string
+    text: string
     children: seq[Scope]
 
-var stack: seq[Scope]
 
 func getName(st: seq[Scope]): string = st.mapIt(it.name).join("_")
 
-
-var done: bool = false
-let allowed = @["if_stmt", "for_loop", "while_loop"]
-var body = ""
-let chartBuilder = pegAst.eventParser:
-  pkNonTerminal:
-    enter:
-      if not done and p.nt.name in allowed:
-        # echoi stack.len, &"add {p.nt.name} to stack"
-        stack.add(Scope(
-          name: getName(stack) & "_start",
-          node: toNode(p.nt.name)
-        ))
-    leave:
-      if not done and p.nt.name in allowed:
-        if length > 0:
-          let child = stack.pop()
-          if stack.len > 0:
-            stack[^1].children.add(child)
-            echoi stack.len, &"add {p.nt.name} to parent node"
-          else:
-            echoi stack.len, &"done parsing {p.nt.name}"
-            done = true
-            stack.add(child)
+proc placeChildNode(stack: var seq[Scope], child: Scope) =
+  var top = stack.pop()
+  let tkind = top.node.kind
+  var addAsChild = false
+  case child.node.kind:
+    of cnkAssgn:
+      if tkind == cnkFor and top.node.init.isNone:
+        top.node.init = child.text
+      else:
+        addAsChild = true
+    of cnkExpr:
+      if tkind == cnkFor:
+        if top.node.bound.isNone:
+          top.node.bound = child.text
+        elif top.node.postAct.isNone:
+          top.node.postAct = child.text
         else:
-          discard stack.pop()
-          # echoi stack.len, &"remove {p.nt.name} from stack"
+          addAsChild = true
+    else: addAsChild = true
+
+  if addAsChild:
+    top.children.add(child)
+
+  stack.add(top)
+
+
+proc chartBuilder(str: string): Option[Scope] =
+  var done: bool = false
+  var stack: seq[Scope]
+  let allowed = @["if_stmt", "while_loop", "expr", "assgn", "for_loop"]
+  #~# Flowchart parser
+  let chartBuilderImpl = pegAst.eventParser:
+    pkNonTerminal:
+      enter:
+        if not done and p.nt.name in allowed:
+          # echoi stack.len, &"add {p.nt.name} to stack"
+          stack.add(Scope(
+            name: getName(stack) & p.nt.name & "_",
+            node: toNode(p.nt.name)
+          ))
+      leave:
+        if not done and p.nt.name in allowed:
+          if length > 0:
+            var child = stack.pop()
+            if stack.len > 0:
+              child.text = s.substr(start, start + length - 1)
+              stack.placeChildNode(child)
+            else:
+              done = true
+              stack.add(child)
+          else:
+            discard stack.pop()
+            # echoi stack.len, &"remove {p.nt.name} from stack"
+
+  if chartBuilderImpl(str) > 0:
+    return stack[^1]
 
 
 # echo parse("if ( )")
@@ -246,6 +279,7 @@ func enumerate(scopes: seq[Scope]): seq[Scope] =
       res
   )
 
+
 proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
   let shape = case stmt.node.kind:
     of cnkFor:
@@ -259,13 +293,22 @@ proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
   let label = case stmt.node.kind:
     of cnkIf .. cnkWhile: &"label=\"{stmt.node.cond}\""
     of cnkFor:
-      if start:
-        &"label=\"{stmt.node.init}\n{stmt.node.bound}\""
-      else:
-        &"label=\"{stmt.node.postAct}\""
+      block:
+        let nd = stmt.node
+        if start:
+          if nd.init.isSome and nd.bound.isSome:
+            &"label=\"{nd.init.get()}\n{nd.bound.get()}\""
+          else: ""
+        else:
+          if stmt.node.postAct.isSome:
+            &"label=\"{stmt.node.postAct.get()}\""
+          else: ""
     else: &"label=\"{name}\""
 
-  result = name & &"[{shape}, {label}];\n"
+  result = &"{name}[" &
+     tern(shape.len > 0, shape & ",", "") &
+     tern(label.len > 0, label & ",", "") &
+    "];\n"
 
 proc joinScope(
   statements: seq[ScopeDescr],
@@ -273,21 +316,27 @@ proc joinScope(
      ): string =
   var prevEnd = startWith
   for stmt in statements:
+    echo stmt.node.kind
     result &= stmt.makeDotNode(stmt.start, true)
     result &= stmt.makeDotNode(stmt.final, false)
     result &= prevEnd & " -> " & stmt.start & ";\n" & stmt.body
     prevEnd = stmt.final
 
-  result &= prevEnd & " -> " & endWith & ";"
+  result &= prevEnd & " -> " & endWith & ";\n"
 
 
 proc scopeToGraph(scope: Scope): ScopeDescr =
-  let start = scope.name & "_start"
-  let final = scope.name & "_end"
+  let start = scope.name & "_startScp"
+  let final = scope.name & "_endScp"
 
   let inner = scope.children.mapIt(it.scopeToGraph()).joinScope(start, final)
 
-  return ScopeDescr(start: start, final: final, body: inner, node: scope.node)
+  return ScopeDescr(
+    start: start,
+    final: final,
+    body: inner,
+    node: scope.node
+  )
 
 func enumerate(scope: Scope): Scope =
   result = scope
@@ -298,14 +347,13 @@ proc scopeToDot(inScope: Scope): string =
   let top = scopeToGraph(scope)
   joinScope(@[top], "start", "end")
 
-
 proc runTestCases() =
-  echo chartBuilder("for (int i = 0; i < 10; ++i) { while () { if () {} } while () { } }")
-  body = scopeToDot(stack[^1])
-  let conf = "splines=ortho;\n"
-  echo "b: ", body
-  writeFile("graph.tmp.dot", "digraph G {" & conf &
-    (if body.len > 0: body else: "a -> b;") & "}")
+  let body: Option[Scope] = chartBuilder(
+    "for (int i = 0; i < 10; ++i) { }")
+  if body.isSome:
+    let conf = "splines=ortho;\n"
+    let res = body.get.scopeToDot
+    writeFile("graph.tmp.dot", "digraph G {\n" & conf & $res & "}")
 
 
 # echo parse("for (;;) { while () {}}")

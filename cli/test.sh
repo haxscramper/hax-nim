@@ -11,6 +11,7 @@ function build {
         --cc:tcc                      \
         --verbosity:0                 \
         --hints:off                   \
+        --debugger:native \
         -o:"$file.bin"                \
         -d:nimOldCaseObjects          \
         -d:npegTrace \
@@ -176,7 +177,7 @@ function test_flowchart_parser {
         do_build="true"
     fi
 
-    full_run="false"
+    full_run="true"
 
     if [[ "$do_build" = true ]]; then
         build "flowchart_generator.nim"
