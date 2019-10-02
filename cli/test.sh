@@ -169,15 +169,29 @@ function test_flowchart_parser {
     build "flowchart_generator.nim"
     bin="flowchart_generator.nim.bin"
 
-    if [[ "$?" != 0 ]]; then
+    if [[ "$build_code" != 0 ]]; then
         colecho -e:2 "Build failed"
         return
     else
         colecho -i:2 "Done build"
     fi
 
+
+    ./$bin --builtin-tests
+
+    dot -Tpng graph.tmp.dot > out.tmp.png
+    if [[ "$?" = 0 ]]; then
+        cp out.tmp.png final.tmp.png
+    fi
+
+
     find test_files/flowchart_generator -name "*.txt" |
         xargs -i ./$bin --input:"{}" --output:"{}.dot"
+
+    while read -r test
+    do
+        ./$bin --test-line:"$test"
+    done < <(cat test_files/flowchart_generator/simple.txt)
 }
 
 
