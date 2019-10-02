@@ -25,3 +25,10 @@ if (call()) { call1(); } else { call2(); }
 if ( call(call(1)) ) { call2(); } else { call3(); }
 if (a == b) { int c = call1(); print(c); }
 while (call1()) { }
+{ a = call(); }
+{ a; b; }
+{ a = call(); a = call(); }
+{ (a); }
+{ (((a))); }
+{ ((((call(call(call())))))); }
+{ call(call(1), call(2), call(3)); }

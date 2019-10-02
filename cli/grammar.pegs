@@ -5,7 +5,7 @@ stmt <-
      for_loop /
      while_loop /
      expr ";" /
-     ( "{" ws stmt* ws "}" )
+     ( "{" ws ( stmt ws?  )* ws "}" )
 
 end_stmt <- ws ( stmt ws / ";" ws )
 
@@ -21,7 +21,7 @@ call <- ident "(" (ws_expr ("," ws_expr)* )? ")"
 assgn <- ident ws ident ws "=" ws expr / ident ws "=" ws expr
 ws_expr <- ws (expr ws)?
 expr <- intcon /
-     ident ( binop / relop) expr /
+     ident ( binop / relop / logop ) expr /
      unop ident /
      ident unop /
      assgn /
@@ -33,7 +33,7 @@ expr <- intcon /
 binop <- ws ( "+" / "-" / "*" / "/") ws
 relop <- ws ( "<" / ">" / "==" / "!=" ) ws
 unop <- ws ( "--" / "++" ) ws
-# logop <- ws ( "||" / "&&" ) ws
+logop <- ws ( "||" / "&&" ) ws
 
 ident <- {\ident}
 ws <- \s*

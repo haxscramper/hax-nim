@@ -1,1 +1,0 @@
-if (a == b) { int c = call1(); print(c); }
