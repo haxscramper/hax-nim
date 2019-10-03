@@ -295,11 +295,14 @@ type
 
 
 type
+  # IDEA treat this as DAG
   GVizNode = ref object
     name: string
     targets: seq[GVizNode]
     style: string
-    text: string
+    text: seq[string]
+    kind: NodeKind
+    isStart: bool
 
 
 func enumerate(scopes: seq[Scope]): seq[Scope] =
@@ -438,12 +441,73 @@ proc scopeToDot(inScope: Scope): string =
   let toplevel = Node(kind: cnkTerminal)
   joinScope(@[top], "start", "end", toplevel)
 
+proc scopeToGviz(inScope: Scope): GVizNode =
+  let kind = inScope.node.kind
+  let nd = inScope.node
+  GVizNode(
+    kind: kind,
+    name: inScope.name,
+    text: case kind:
+      of cnkFor: @[nd.init, nd.bound, nd.postAct].mapIt(it.get)
+      of cnkIf .. cnkWhile: @[nd.cond.get]
+      of cnkExpr, cnkAssgn: @[inScope.text]
+      else: @[],
+    targets: inScope.children.mapIt(it.scopeToGviz)
+  )
+
+# TODO
+# template forEachLeaf(topNode: typed, subNode: untyped, op: untyped): untyped =
+#   ## Call operator on each leaft node (i.e. subnode which has empty
+#   ## subNode) does not guarantee to visit each leaf once
+
+proc getStyle(gv: GVizNode): string =
+  @[
+    &"label=\"{gv.name}\"",
+    tern(gv.kind in @[cnkIf, cnkElif], "shape=diamond", "")
+  ].filterIt(it.len > 0).join(",")
+
+# TODO
+# macro if1(head, body: untyped): untyped =
+#   ## Block-style ternary expression. Evaluate `t:` part if head is
+#   ## true otherwise evaluate `f:`.
+#   quote do:
+#     if `head`:
+
+
+proc gvizToDot(gv: GVizNode, gvTop: GVizNode): string =
+  let edges = block:
+    if gv.kind != cnkCond:
+      gv.targets.mapIt(&"{gv.name} -> {it.name};" ).join("\n")
+    else:
+      var prev = gv.targets[0].name
+      let start = prev
+      var res: string
+      for targ in gv.targets[1..^1]:
+        if targ.kind != cnkElse:
+          res &= &"{prev} -> {targ.name}[xlabel=no];\n"
+          prev = targ.name
+        else:
+          res &= &"{prev} -> {targ.targets[0].name}[label=no];\n"
+
+      &"{gv.name} -> {start};\n{{\nrank=same;\n{res}}}\n"
+
+  let nodes = gv.targets.mapIt(&"{it.name}[{it.getStyle}];").join("\n")
+  let underTargets = gv.targets.mapIt(it.gvizToDot(gv)).join("\n")
+  return edges & nodes & underTargets
+
+proc topGVizToDot(body: GVizNode): string =
+  var start = body
+  return gvizToDot(start, start)
+
+
+
 proc runTestCases() =
   let body: Option[Scope] = chartBuilder(
     "if (a) { int a = 0; } else if (c) { int c = 0; } else { int b = 0; };")
   if body.isSome:
+    let gviz = scopeToGviz(body.get)
     let conf = "splines=ortho;nodesep=1;ranksep=1;\n"
-    let res = body.get.scopeToDot
+    let res = gviz.topGVizToDot()
     writeFile("graph.tmp.dot", "digraph G {\n" & conf & $res & "}")
 
 
