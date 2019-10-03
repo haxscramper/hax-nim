@@ -8,6 +8,7 @@ import strformat
 import tables
 import deques
 
+var level = 0
 
 
 # let parser = peg "document":
@@ -292,6 +293,15 @@ type
     body: string
     node: Node
 
+
+type
+  GVizNode = ref object
+    name: string
+    targets: seq[GVizNode]
+    style: string
+    text: string
+
+
 func enumerate(scopes: seq[Scope]): seq[Scope] =
   toSeq(pairs(scopes)).mapIt(
     block:
@@ -302,7 +312,7 @@ func enumerate(scopes: seq[Scope]): seq[Scope] =
 
 
 proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
-  echoi 1, "Make node for", name
+  echoi level, "Make node for", name
   let shape = case stmt.node.kind:
     of cnkFor:
       "shape=" & (if start: "trapezium" else: "invtrapezium")
@@ -337,7 +347,7 @@ proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
 
   result = &"{name}[" &
      join(@[shape, label, style
-            # , &"xlabel=\"{name}\""
+            , &"xlabel=\"{name}\""
      ].filterIt(it != ""), ",") &
      "];\n"
 
@@ -350,6 +360,9 @@ proc joinScope(
   top: Node
      ): string =
   var prevEnd = startWith
+  echoi level, "Joining scope under", startWith
+  echoi level, "To", endWith
+  inc level
   if top.kind == cnkCond:
     for stmt in statements:
       if stmt.node.kind notin @[cnkIf, cnkElif, cnkElse, cnkCond]:
@@ -361,16 +374,13 @@ proc joinScope(
     for stmt in statements:
       result &= stmt.makeDotNode(stmt.start, true)
       result &= stmt.makeDotNode(stmt.final, false)
-      if stmt.node.kind != cnkElse:
-        let fromPrev = prevEnd & " -> " & stmt.start & "[label=no];\n" & stmt.body
-        if prevEnd == startWith:
-          result &= fromPrev
-        else:
-          branches &= fromPrev
+      let fromPrev = prevEnd & " -> " & stmt.start & "[xlabel=no];\n" & stmt.body
+      # if stmt.node.kind in @[cnkIf, cnkElif, cnkElse]:
+      #   branches &= fromPrev
+      # else:
+      result &= fromPrev
 
-        result &= stmt.final & " -> " & endWith & "[label=yes];\n"
-      else:
-        result &= prevEnd & " -> " & endWith & "[label=no];\n"
+      result &= stmt.final & " -> " & endWith & "[xlabel=yes];\n"
 
       prevEnd = stmt.start
 
@@ -389,8 +399,8 @@ proc joinScope(
 
 
 proc scopeToGraph(scope: Scope): ScopeDescr =
-  let start = scope.name & "_startScp"
-  let final = scope.name & "_endScp"
+  let start = scope.name & "_st"
+  let final = scope.name & "_en"
 
   echo "converting scope ", scope.name
   echo scope.text
@@ -403,6 +413,7 @@ proc scopeToGraph(scope: Scope): ScopeDescr =
 
   let publicStart = case scope.node.kind:
     of cnkExpr, cnkAssgn: start & "_body"
+    of cnkCond: scope.children[0].name & "_st"
     else: start
 
   let publicFinal = case scope.node.kind:
@@ -429,9 +440,9 @@ proc scopeToDot(inScope: Scope): string =
 
 proc runTestCases() =
   let body: Option[Scope] = chartBuilder(
-    "if (a) { int a = 0; } else { int b = 0; };")
+    "if (a) { int a = 0; } else if (c) { int c = 0; } else { int b = 0; };")
   if body.isSome:
-    let conf = "splines=ortho;\n"
+    let conf = "splines=ortho;nodesep=1;ranksep=1;\n"
     let res = body.get.scopeToDot
     writeFile("graph.tmp.dot", "digraph G {\n" & conf & $res & "}")
 
