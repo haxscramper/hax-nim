@@ -118,16 +118,16 @@ let debugParse =
       leave:
         let ident = "    ".repeat(dbgLvl)
         if length > 0:
-          echo ident, "[ ", p.ch, " ]", $toGreen(" ok")
+          echo ident, "[ '", p.ch, "' ]", $toGreen(" ok")
         else:
-          echo ident, "[ ", p.ch, " ]", $toRed(" fail")
+          echo ident, "[ '", p.ch, "' ]", $toRed(" fail")
     pkTerminal:
       leave:
         let ident = "    ".repeat(dbgLvl)
         if length > 0:
-          echo ident, p.term, " ", $toGreen("ok")
+          echo ident, " \"", p.term, "\" ", $toGreen("ok")
         else:
-          echo ident, p.term, " ", $toRed("fail")
+          echo ident, " \"", p.term, "\" ", $toRed("fail")
 
 
 
@@ -152,6 +152,7 @@ type
     cnkAssgn
     cnkExpr
     cnkUndef
+    cnkTerminal
 
 
 
@@ -170,6 +171,8 @@ type
 proc toNodeKind(str: string): NodeKind =
   case str:
     of "if_stmt": cnkIf
+    of "elif_stmt": cnkElif
+    of "else_stmt": cnkElse
     of "for_loop": cnkFor
     of "while_loop": cnkWhile
     of "cond_stmt": cnkCond
@@ -185,8 +188,6 @@ proc `$`(node: Node): string =
     " ".repeat(lv) & $(it.kind)
   ).join("\n")
 
-proc echoi(indent: int, message: varargs[string, `$`]): void =
-  echo "  ".repeat(indent), message.join(" ")
 
 
 type
@@ -197,13 +198,13 @@ type
     children: seq[Scope]
 
 
-func getName(st: seq[Scope]): string = st.mapIt(it.name).join("_")
 
 proc placeChildNode(stack: var seq[Scope], child: Scope) =
   var top = stack.pop()
   var tn = top.node
   let tkind = top.node.kind
   var addAsChild = false
+  echoi 1, "Placing child: ", child.text
   case child.node.kind:
     of cnkAssgn:
       if tkind == cnkFor and tn.init.isNone:
@@ -232,15 +233,19 @@ proc placeChildNode(stack: var seq[Scope], child: Scope) =
   top.node = tn
 
   if addAsChild:
+    echoi 2, "As child node for top"
     top.children.add(child)
 
   stack.add(top)
 
+func getName(st: seq[Scope]): string = tern(st.len == 0, "start_", st[^1].name)
 
 proc chartBuilder(str: string): Option[Scope] =
+  echoi "Building chart for: ", str
   var done: bool = false
   var stack: seq[Scope]
-  let allowed = @["if_stmt", "while_loop", "expr", "assgn", "for_loop"]
+  let allowed = @["if_stmt", "while_loop", "expr", "assgn",
+                  "for_loop", "elif_stmt", "else_stmt", "cond_stmt"]
   #~# Flowchart parser
   let chartBuilderImpl = pegAst.eventParser:
     pkNonTerminal:
@@ -251,12 +256,15 @@ proc chartBuilder(str: string): Option[Scope] =
             name: getName(stack) & p.nt.name & "_",
             node: toNode(p.nt.name)
           ))
+        # elif p.nt.name notin allowed:
+        #   echoi 1, "Skipping", p.nt.name
       leave:
         if not done and p.nt.name in allowed:
           if length > 0:
             var child = stack.pop()
             if stack.len > 0:
               child.text = s.substr(start, start + length - 1)
+              echoi "found", child.text, child.node.kind
               stack.placeChildNode(child)
             else:
               done = true
@@ -265,7 +273,9 @@ proc chartBuilder(str: string): Option[Scope] =
             discard stack.pop()
             # echoi stack.len, &"remove {p.nt.name} from stack"
 
-  if chartBuilderImpl(str) > 0:
+  let res = chartBuilderImpl(str)
+  if res > 0:
+    showArrow("", str, res, &"parse: ok ({res})")
     return stack[^1]
 
 
@@ -292,6 +302,7 @@ func enumerate(scopes: seq[Scope]): seq[Scope] =
 
 
 proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
+  echoi 1, "Make node for", name
   let shape = case stmt.node.kind:
     of cnkFor:
       "shape=" & (if start: "trapezium" else: "invtrapezium")
@@ -299,7 +310,15 @@ proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
       "shape=" & (if start: "trapezium" else: "point")
     of cnkIf:
       "shape=" & (if start: "diamond" else: "point")
+    of cnkElif:
+      "shape=" & tern(start, "diamond", "point")
+    of cnkElse, cnkCond:
+      "shape=point"
     else: ""
+
+  let style = case stmt.node.kind:
+    of cnkFor: ""
+    else: tern(start, "", "style=bold")
 
   let label = case stmt.node.kind:
     of cnkIf .. cnkWhile: &"label=\"{stmt.node.cond.get()}\""
@@ -317,20 +336,54 @@ proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
     else: &"label=\"{name}\""
 
   result = &"{name}[" &
-     tern(shape.len > 0, shape, "") &
-     tern(label.len > 0, "," & label, "") &
-    "];\n"
+     join(@[shape, label, style
+            # , &"xlabel=\"{name}\""
+     ].filterIt(it != ""), ",") &
+     "];\n"
+
+proc joinScope(str, startWith, endWith: string): string =
+  result &= startWith & "_body" & "[label=\"" & str & "\"" & ",shape=box];\n"
 
 proc joinScope(
   statements: seq[ScopeDescr],
-  startWith: string, endWith: string
+  startWith: string, endWith: string,
+  top: Node
      ): string =
   var prevEnd = startWith
-  for stmt in statements:
-    result &= stmt.makeDotNode(stmt.start, true)
-    result &= stmt.makeDotNode(stmt.final, false)
-    result &= prevEnd & " -> " & stmt.start & ";\n" & stmt.body
-    prevEnd = stmt.final
+  if top.kind == cnkCond:
+    for stmt in statements:
+      if stmt.node.kind notin @[cnkIf, cnkElif, cnkElse, cnkCond]:
+        ceUserError0("stmt child is not if/else/elif")
+
+
+    var branches: string
+
+    for stmt in statements:
+      result &= stmt.makeDotNode(stmt.start, true)
+      result &= stmt.makeDotNode(stmt.final, false)
+      if stmt.node.kind != cnkElse:
+        let fromPrev = prevEnd & " -> " & stmt.start & "[label=no];\n" & stmt.body
+        if prevEnd == startWith:
+          result &= fromPrev
+        else:
+          branches &= fromPrev
+
+        result &= stmt.final & " -> " & endWith & "[label=yes];\n"
+      else:
+        result &= prevEnd & " -> " & endWith & "[label=no];\n"
+
+      prevEnd = stmt.start
+
+    result = "//Child nodes for cond node at " &
+      startWith &
+      "\n{\nrank=same;\n" & branches & "}\n" & result
+
+  else:
+    for stmt in statements:
+      result &= stmt.makeDotNode(stmt.start, true)
+      result &= stmt.makeDotNode(stmt.final, false)
+      result &= prevEnd & " -> " & stmt.start & ";\n" & stmt.body
+      prevEnd = stmt.final
 
   result &= prevEnd & " -> " & endWith & ";\n"
 
@@ -339,11 +392,27 @@ proc scopeToGraph(scope: Scope): ScopeDescr =
   let start = scope.name & "_startScp"
   let final = scope.name & "_endScp"
 
-  let inner = scope.children.mapIt(it.scopeToGraph()).joinScope(start, final)
+  echo "converting scope ", scope.name
+  echo scope.text
+
+  let inner = case scope.node.kind:
+    of cnkExpr, cnkAssgn:
+      scope.text.joinScope(start, final)
+    else:
+      scope.children.mapIt(it.scopeToGraph()).joinScope(start, final, scope.node)
+
+  let publicStart = case scope.node.kind:
+    of cnkExpr, cnkAssgn: start & "_body"
+    else: start
+
+  let publicFinal = case scope.node.kind:
+    of cnkExpr, cnkAssgn: start & "_body"
+    else: final
+
 
   return ScopeDescr(
-    start: start,
-    final: final,
+    start: publicStart,
+    final: publicFinal,
     body: inner,
     node: scope.node
   )
@@ -355,11 +424,12 @@ func enumerate(scope: Scope): Scope =
 proc scopeToDot(inScope: Scope): string =
   let scope = enumerate(inScope)
   let top = scopeToGraph(scope)
-  joinScope(@[top], "start", "end")
+  let toplevel = Node(kind: cnkTerminal)
+  joinScope(@[top], "start", "end", toplevel)
 
 proc runTestCases() =
   let body: Option[Scope] = chartBuilder(
-    "if (a) { } else if (b) { } else if (c) { } else { }")
+    "if (a) { int a = 0; } else { int b = 0; };")
   if body.isSome:
     let conf = "splines=ortho;\n"
     let res = body.get.scopeToDot

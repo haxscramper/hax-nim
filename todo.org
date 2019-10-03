@@ -313,6 +313,8 @@ vvvvvvvvvvvvvvvvvvv
 
 ** FSM build
 
++ [ ] Display process animation while building files for java
+  (#interesting)
 + [ ] Add support for running custom user-defined command (dynamically
   selected) after each event. Support selecting command from socket
   and during runtime.

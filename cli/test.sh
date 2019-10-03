@@ -210,6 +210,7 @@ function test_flowchart_parser {
 
     dot -Tpng graph.tmp.dot > out.tmp.png
     if [[ "$?" = 0 ]]; then
+        colecho -i "graph is ok, copying ..."
         cp out.tmp.png final.tmp.png
     fi
 

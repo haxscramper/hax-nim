@@ -109,6 +109,12 @@ template tern*(
     else: fBranch
 
 
+proc echoi*(indent: int, message: varargs[string, `$`]): void =
+  echo "  ".repeat(indent), message.join(" ")
+
+proc echoi*(message: varargs[string, `$`]): void =
+  echo message.join(" ")
+
 
 proc replaceN*(str: string, n: int, subst: char = ' '): string =
   result = str
