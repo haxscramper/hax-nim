@@ -211,7 +211,7 @@ proc chartBuilder(str: string): Option[Scope] =
 
   let res = chartBuilderImpl(str)
   if res > 0:
-    showArrow("", str, res, &"parse: ok ({res})")
+    # showArrow("", str, res, &"parse: ok ({res})")
     return stack[^1]
 
 
@@ -484,7 +484,6 @@ proc finalGVizToDot(gv, gvTop: GVizNode): (string, seq[string]) =
     @[gv.name])
 
 
-var recLevel = 0
 proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
   dotBody: string, outNodes: seq[string]] =
   #% Generate edge connection between child nodes
@@ -492,9 +491,7 @@ proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
   #% Generte description (label, style) for current node
   let node = getNodeDescription(gv, gvTop)
   #% Recurse into target nodes, generate descriptions and get lists of
-  echoi recLevel, "Recursing ... ".toRed
   #% final nodes in sequence.
-  inc recLevel
   let underTargets: seq[(string, seq[string])] =
     gv.targets.mapIt(it.gvizToDot(gv))
 
@@ -510,12 +507,6 @@ proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
           else: @[]
 
 
-  dec recLevel
-  echoi reclevel, &"Under target map: {underTargets.mapIt(it[1]).concat.joinq.tored}"
-  echoi reclevel, &"under \"{gv.name}\" ({gvTop.kind}) \"{gvTop.name}\" ({gvTop.kind})"
-  echoi recLevel, "got nodes:", $outNodes
-  echo ""
-
   return (
     edges & #% edges withing curent toplevel
     node & #% node description for current node
@@ -527,14 +518,11 @@ proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
 # graohviz body itself
 proc gvizToDot(gv: GVizNode, gvTop: GVizNode): tuple[
   dotBody: string, outNodes: seq[string]] =
-  echoi recLevel, "starting conversion".toGreen
   let (body, outNodes) =
     case gv.kind:
       of cnkExpr .. cnkAssgn: finalGVizToDot(gv, gvTop)
       else: nestedGVizToDot(gv, gvTop)
 
-  echoi recLevel, &"Working with \"{gv.name}\" ({$gv.text})"
-  echoi recLevel, "out nodes:", $outNodes
   return (body, outNodes)
 
 proc topGVizToDot(body: GVizNode): string =
@@ -585,6 +573,8 @@ if (topIf) {
 } else if (elseif1) {
 doSomething;
 } else if (elseif12) {
+doSomething2;
+} else if (elseif12134) {
 doSomething2;
       } else {
           els1act;
