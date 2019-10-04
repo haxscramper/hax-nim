@@ -380,13 +380,13 @@ proc scopeToGviz(inScope: Scope): GVizNode =
 #   ## Call operator on each leaft node (i.e. subnode which has empty
 #   ## subNode) does not guarantee to visit each leaf once
 
-proc getStyle(gv: GVizNode): string =
+proc getStyle(gv: GVizNode, start: bool = true): string =
   @[
     &"label=\"{gv.name}\"",
     case gv.kind:
       of cnkIf, cnkElif: "shape=diamond"
       of cnkExpr, cnkAssgn: "shape=box"
-      of cnkFor: "shape=trapezium"
+      of cnkFor: tern(start, "shape=trapezium", "shape=invtrapezium")
       else: ""
   ].filterIt(it.len > 0).join(",")
 
@@ -405,6 +405,8 @@ proc label(gv: GVizNode, start: bool = true): string =
 
 
 proc getEdgeConnections(gv, gvTop: GVizNode): string =
+  defer:
+    result &= "\n\n\n"
   case gv.kind:
     of cnkExpr .. cnkAssgn: ""
     of cnkCond, cnkIf .. cnkFor:
@@ -454,19 +456,24 @@ rank=same;
       # input to toplevel node, second for output from it.
       # This weay if 'it' is for loop it will have edge
       # coming in its head, and edge comint from its tail.
-      gv.targets.mapIt(&"{gv.name} -> {it.name};" ).join("\n")
+      let res = gv.targets.mapIt(&"{gv.name} -> {it.name};" ).join("\n")
+      &"""
+/* start */
+{res}
+/* end */
+"""
 
 
 
 
 proc getNodeDescription(gv, gvTop: GVizNode): string =
   case gv.kind:
+    of cnkElse: ""
     of cnkExpr .. cnkAssgn, cnkIf .. cnkElif:
        &"{gv.name}[{gv.getStyle},label=\"{gv.label}\"];\n"
     of cnkFor: &"{gv.name}[{gv.getStyle},label=\"{gv.label}\"];\n"
-    of cnkElse: ""
     else:
-      gv.targets.mapIt(
+      gv.targets.filterIt(it.kind notin @[cnkElse]).mapIt(
           &"{it.name}[{it.getStyle},label=\"{it.label}\"];"
       ).join("\n")
 
@@ -476,6 +483,8 @@ proc finalGVizToDot(gv, gvTop: GVizNode): (string, seq[string]) =
   (&"{gv.name}[{gv.getStyle},label=\"{gv.label}\"];\n",
     @[gv.name])
 
+
+var recLevel = 0
 proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
   dotBody: string, outNodes: seq[string]] =
   #% Generate edge connection between child nodes
@@ -483,18 +492,29 @@ proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
   #% Generte description (label, style) for current node
   let node = getNodeDescription(gv, gvTop)
   #% Recurse into target nodes, generate descriptions and get lists of
+  echoi recLevel, "Recursing ... ".toRed
   #% final nodes in sequence.
+  inc recLevel
   let underTargets: seq[(string, seq[string])] =
     gv.targets.mapIt(it.gvizToDot(gv))
+
 
   var outNodes: seq[string] = #% Generate output node names
     case gv.kind:
       of cnkExpr .. cnkAssgn: @[gv.name]
       of cnkFor: @[gv.name & "_end"]
+      of cnkIf: underTargets[^1][1]
       else:
         case gvTop.kind:
-          of cnkCond: underTargets.mapIt(it[1]).concat()
+          of cnkCond, cnkIf: underTargets.mapIt(it[1]).concat()
           else: @[]
+
+
+  dec recLevel
+  echoi reclevel, &"Under target map: {underTargets.mapIt(it[1]).concat.joinq.tored}"
+  echoi reclevel, &"under \"{gv.name}\" ({gvTop.kind}) \"{gvTop.name}\" ({gvTop.kind})"
+  echoi recLevel, "got nodes:", $outNodes
+  echo ""
 
   return (
     edges & #% edges withing curent toplevel
@@ -507,11 +527,14 @@ proc nestedGVizToDot(gv, gvTop: GVizNode): tuple[
 # graohviz body itself
 proc gvizToDot(gv: GVizNode, gvTop: GVizNode): tuple[
   dotBody: string, outNodes: seq[string]] =
+  echoi recLevel, "starting conversion".toGreen
   let (body, outNodes) =
     case gv.kind:
       of cnkExpr .. cnkAssgn: finalGVizToDot(gv, gvTop)
       else: nestedGVizToDot(gv, gvTop)
 
+  echoi recLevel, &"Working with \"{gv.name}\" ({$gv.text})"
+  echoi recLevel, "out nodes:", $outNodes
   return (body, outNodes)
 
 proc topGVizToDot(body: GVizNode): string =
@@ -521,7 +544,13 @@ proc topGVizToDot(body: GVizNode): string =
   let res: tuple[dotBody: string, outNodes: seq[string]] =
       gvizToDot(start, start)
 
-  return res.dotBody & res.outNodes.mapIt(&"{it} -> end;").join("\n")
+  let stNode =
+    if start.kind == cnkCond:
+      start.targets[0].name
+    else:
+      start.name
+
+  return &"start -> {stNode};\n" & res.dotBody & res.outNodes.mapIt(&"{it} -> end;").join("\n")
 
 
 
@@ -545,11 +574,30 @@ proc runTestCases() =
 #   for(int i =0; i < 10; ++i) { underFor2; }
 # };
     """
-if (a) { q = 1; } else { q = 2; }
-""")
+if (topIf) {
+    q = 1;
+    if (nested1If) {
+        nest1Act1231;
+        nest1Act12;
+        nest1Act1;
+      if (nested1If) {
+          nest1Act;
+} else if (elseif1) {
+doSomething;
+} else if (elseif12) {
+doSomething2;
+      } else {
+          els1act;
+      }
+    } else {
+        els1act;
+    }
+} else {
+    q = 2;
+}""")
   if body.isSome:
     let gviz = scopeToGviz(body.get)
-    let conf = "splines=ortho;nodesep=1;\n"
+    let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
     let res = gviz.topGVizToDot()
     writeFile("graph.tmp.dot", "digraph G {\n" & conf & $res & "}")
 
