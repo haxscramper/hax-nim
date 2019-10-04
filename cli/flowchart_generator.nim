@@ -117,18 +117,9 @@ type
 
 
   Node = ref object
-    childNodes: seq[Node]
-    case kind: NodeKind:
-      of cnkIf .. cnkWhile: cond: Option[string]
-      # XXX replace with seq. There is no need tonstore so
-      # detailed information. This woukd also simplify
-      # child placement code, by reducing number of special
-      # cases.
-      of cnkFor:
-        init: Option[string]
-        bound: Option[string]
-        postAct: Option[string]
-      else: nil
+    children: seq[Node] ## Child nodes. I case of for/while... some of
+                        ## them might be used for node description
+    kind: NodeKind
 
 
 
@@ -148,7 +139,7 @@ proc toNode(str: string): Node = Node(kind: str.toNodeKind)
 
 proc `$`(node: Node): string =
   result = node.mapItBFStoSeq(
-    childNodes,
+    children,
     " ".repeat(lv) & $(it.kind)
   ).join("\n")
 
@@ -156,19 +147,16 @@ proc `$`(node: Node): string =
 
 type
   Scope = ref object
-    node: Node
+    kind: NodeKind
     name: string
     text: string
-    children: seq[Scope]
+    children: seq[Scope] ## Scopes enclosed by this one. In case of
+                         ## if/for... some of them might be used as
+                         ## condition/init for drawing nodes.
 
 
 
 proc placeChildNode(stack: var seq[Scope], child: Scope) =
-  var top = stack.pop()
-  var tn = top.node
-  let tkind = top.node.kind
-  var addAsChild = false
-  echoi 1, "Placing child: ", child.text
   # XXX reverse handling of the child nodes. instewd of selecting
   # based on node type do this based on top level node type.
   # if top is for loop append expressio|assignment to node expr
@@ -182,38 +170,11 @@ proc placeChildNode(stack: var seq[Scope], child: Scope) =
   	else: 0
   ]#
 
-  case child.node.kind:
-    of cnkAssgn:
-      if tkind == cnkFor and tn.init.isNone:
-        tn.init = child.text
-      else:
-        addAsChild = true
-    of cnkExpr:
-      case tkind:
-        of cnkFor:
-          if tn.bound.isNone:
-            tn.bound = child.text
-          elif tn.postAct.isNone:
-            tn.postAct = child.text
-          else:
-            addAsChild = true
-        of cnkIf .. cnkWhile:
-          if tn.cond.isNone:
-            tn.cond = child.text
-          else:
-            addAsChild = true
-        else:
-          addAsChild = true
+  # NOTE we do not differentiate between expressions etc. when placing
+  # child nodes. The difference is only used when drawing final graph
+  # --- then we put some of the child scopes as description for nodes.
+  stack[^1].children.add(child)
 
-    else: addAsChild = true
-
-  top.node = tn
-
-  if addAsChild:
-    echoi 2, "As child node for top"
-    top.children.add(child)
-
-  stack.add(top)
 
 func getName(st: seq[Scope]): string = tern(st.len == 0, "start_", st[^1].name)
 
@@ -231,7 +192,7 @@ proc chartBuilder(str: string): Option[Scope] =
           # echoi stack.len, &"add {p.nt.name} to stack"
           stack.add(Scope(
             name: getName(stack) & p.nt.name & "_",
-            node: toNode(p.nt.name)
+            kind: p.nt.name.toNodeKind
           ))
         # elif p.nt.name notin allowed:
         #   echoi 1, "Skipping", p.nt.name
@@ -241,7 +202,7 @@ proc chartBuilder(str: string): Option[Scope] =
             var child = stack.pop()
             if stack.len > 0:
               child.text = s.substr(start, start + length - 1)
-              echoi "found", child.text, child.node.kind
+              echoi "found", child.text, child.kind
               stack.placeChildNode(child)
             else:
               done = true
@@ -315,18 +276,19 @@ proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
     else: tern(start, "", "style=bold")
 
   let label = case stmt.node.kind:
-    of cnkIf .. cnkWhile: &"label=\"{stmt.node.cond.get()}\""
-    of cnkFor:
-      block:
-        let nd = stmt.node
-        if start:
-          if nd.init.isSome and nd.bound.isSome:
-            &"label=\"{nd.init.get()}\n{nd.bound.get()}\""
-          else: ""
-        else:
-          if stmt.node.postAct.isSome:
-            &"label=\"{stmt.node.postAct.get()}\""
-          else: ""
+    # TEMP removed during refactoring
+    # of cnkIf .. cnkWhile: &"label=\"{stmt.node.cond.get()}\""
+    # of cnkFor:
+    #   block:
+    #     let nd = stmt.node
+    #     if start:
+    #       if nd.init.isSome and nd.bound.isSome:
+    #         &"label=\"{nd.init.get()}\n{nd.bound.get()}\""
+    #       else: ""
+    #     else:
+    #       if stmt.node.postAct.isSome:
+    #         &"label=\"{stmt.node.postAct.get()}\""
+    #       else: ""
     else: &"label=\"{name}\""
 
   result = &"{name}[" &
@@ -389,7 +351,7 @@ proc scopeToGraph(scope: Scope): ScopeDescr =
   echo "converting scope ", scope.name
   echo scope.text
 
-  let inner = case scope.node.kind:
+  let inner = case scope.kind:
     of cnkExpr, cnkAssgn:
       scope.text.joinScope(start, final)
     else:
@@ -458,7 +420,8 @@ proc getStyle(gv: GVizNode): string =
 
 # XXX return tuple with list of last nodes and
 # graohviz body itself
-proc gvizToDot(gv: GVizNode, gvTop: GVizNode): string =
+proc gvizToDot(gv: GVizNode, gvTop: GVizNode): tuple[
+  dotBody: string, outNodes: seq[string]] =
   let edges = block:
     if gv.kind != cnkCond:
       # if this is for|while loop add two edges: first for
@@ -473,6 +436,7 @@ proc gvizToDot(gv: GVizNode, gvTop: GVizNode): string =
       for targ in gv.targets[1..^1]:
         if targ.kind != cnkElse:
           res &= &"{prev} -> {targ.name}[xlabel=no];\n"
+          # XXX Draw edges to the target items.
           prev = targ.name
         else:
           res &= &"{prev} -> {targ.targets[0].name}[label=no];\n"
@@ -484,20 +448,33 @@ proc gvizToDot(gv: GVizNode, gvTop: GVizNode): string =
   # if we were working with for/while... we add all last
   # nodes to the end target node. connection from last node
   # if hor loop is handled by node that is one level above
-  let underTargets = gv.targets.mapIt(it.gvizToDot(gv)).join("\n")
+
+  # NOTE this does not generate edges between child nodes and top
+  # ones. We are generating grapvhiz description and getting list of
+  # last nodes.
+  let underTargets: seq[(string, seq[string])] =
+    gv.targets.mapIt(it.gvizToDot(gv))
+  let targetBody = underTargets.mapIt(it[0]).join("\n")
   # XXX we need to return listbof last nodes to upper
   # so tgat would be connected to whatever comes after tgem
   # if toplevel is a loop it would add new node and export
   # it. if this is a cond we would pass everything forward.
   # if this is an expression of assignment we should
   # passthrough nodes as well.
-  return edges & nodes & underTargets
+  var outNodes: seq[string]
+  return (edges & nodes & targetBody, outNodes)
 
 proc topGVizToDot(body: GVizNode): string =
   # XXX create start node and pass it as top-level
   # ro builder
   var start = body
-  return gvizToDot(start, start)
+  # NOTE we get body of graphviz graph (all nodes' styles, edges
+  # connected etc.) and list of last ('dangling') nodes in graph that
+  # we are free to connect in whatever way we like
+  let res: tuple[dotBody: string, outNodes: seq[string]] =
+      gvizToDot(start, start)
+
+  return res.dotBody & res.outNodes.mapIt(&"{it} -> end;").join("\n")
 
 
 
