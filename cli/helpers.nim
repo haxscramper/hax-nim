@@ -115,6 +115,7 @@ proc echoi*(indent: int, message: varargs[string, `$`]): void =
 proc echoi*(message: varargs[string, `$`]): void =
   echo message.join(" ")
 
+proc joinl*(inseq: openarray[string]): string = inseq.join("\n")
 
 proc replaceN*(str: string, n: int, subst: char = ' '): string =
   result = str
