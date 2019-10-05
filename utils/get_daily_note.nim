@@ -1,4 +1,6 @@
 import strformat, strutils, sequtils
+import ../cli/argparse
+import macros
 
 import re
 import os
@@ -7,16 +9,13 @@ import times
 const newDayAfter = 5
 const logMinDelay = 8
 
-proc getCurrentNote(): string =
+proc getCurrentNote(fileDirectory: string): string =
   ## Return path to current daily note
   var time = now()
   if time.hour < newDayAfter:
     time.monthday = time.monthday - 1
 
-  result = getHomeDir() &
-    ".config/hax-local/dirs/personal/notes/daily/" &
-    time.format("yyyy-MM-dd") &
-    ".org"
+  fileDirectory & "/" & time.format("yyyy-MM-dd") & ".org"
 
 proc noteAppendRequired(note: string): bool =
   var lastHour = 0
@@ -51,10 +50,12 @@ proc createNewNote(note: string): void =
     now().format("yyyy-MM-dd") &
     "; " & getTimeStampNow() & "\n\n"
 
-  let tail = """
+  let org_time = now().format("yyyy-MM-dd ddd hh:mm")
+  let tail = &"""
 * Tasks
 ** TODO [/]
-   + [ ]
+   DEADLINE: <{org_time}>
+*** TODO <++>
 
 * Logs
 
@@ -67,11 +68,42 @@ proc createNewNote(note: string): void =
 proc fileIsEmpty(note: string): bool =
   note.readFile().len == 0
 
-let note = getCurrentNote()
-if not fileExists(note) or note.fileIsEmpty():
-  createNewNote(note)
 
-if noteAppendRequired(note):
-  addNewLog(note)
+parseArgs:
+  opt:
+    name: "modify-file"
+    opt: ["--mod-file"]
+    help: "Whether or not to append new log or create missing file"
+  opt:
+    name: "file-dir"
+    opt: ["--file-dir", "+takes_values"]
+    help: "Directory for note file"
+  opt:
+    name: "update-symlink"
+    opt: ["--update-symlink"]
+    help: "Udate symbolic link for 'today' note"
+
+
+let fileDirectory =
+  if "file-dir".kp:
+    let dir = "file-dir".k.toStr()
+    if dir.endsWith("/"): dir[0..^2]
+    else: dir
+  else:
+    getHomeDir() & ".config/hax-local/dirs/personal/notes/daily/"
+
+
+let note = getCurrentNote(fileDirectory)
+
+if "modify-file".kp:
+  if not fileExists(note) or note.fileIsEmpty():
+    createNewNote(note)
+
+  if noteAppendRequired(note):
+    addNewLog(note)
+
+if "update-symlink".kp:
+  removeFile(fileDirectory & "/today.org")
+  createSymlink(src = note, dest = fileDirectory & "/today.org")
 
 echo note

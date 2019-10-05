@@ -157,19 +157,6 @@ type
 
 
 proc placeChildNode(stack: var seq[Scope], child: Scope) =
-  # XXX reverse handling of the child nodes. instewd of selecting
-  # based on node type do this based on top level node type.
-  # if top is for loop append expressio|assignment to node expr
-  # until length is three. rverything else goes to child nodes.
-  # to remove another specisl case we could just get number of
-  # 'internal' nodes.
-  #[
-  let internal = case tn.kind:
-  	of cnkFor: 3
-  	of cnkIf .. cnkWhile: 1
-  	else: 0
-  ]#
-
   # NOTE we do not differentiate between expressions etc. when placing
   # child nodes. The difference is only used when drawing final graph
   # --- then we put some of the child scopes as description for nodes.
@@ -207,27 +194,10 @@ proc chartBuilder(str: string): Option[Scope] =
               stack.add(child)
           else:
             discard stack.pop()
-            # echoi stack.len, &"remove {p.nt.name} from stack"
 
   let res = chartBuilderImpl(str)
   if res > 0:
-    # showArrow("", str, res, &"parse: ok ({res})")
     return stack[^1]
-
-
-# echo parse("if ( )")
-# echo parse("for (i = 0;;)")
-
-# proc testr(str: rule, std: text): void =
-#   let pnt = pegAst.nt(str)
-
-type
-  ScopeDescr = object
-    start: string
-    final: string
-    body: string
-    node: Node
-
 
 type
   # IDEA treat this as DAG
@@ -242,6 +212,20 @@ type
     style: string ## Node style modifier
     text: seq[string] ## predicate for conditions/loops etc.
     kind: NodeKind
+
+
+proc compressActions(inseq: seq[GVizNode]): seq[GVizNode] =
+  let compressable = cnkExpr .. cnkAssgn
+  if inseq.len > 1:
+    result.add(inseq[0])
+    for i, item in inseq[1..^1]:
+      if inseq[i].kind in compressable and item.kind in compressable:
+        result[^1].text &= item.text[0..^2] & @[item.text[^1] & ";"]
+      else:
+        result.add(item)
+  else:
+    result = inseq
+
 
 func enumerate(scopes: seq[Scope]): seq[Scope] =
   toSeq(pairs(scopes)).mapIt(
@@ -263,93 +247,8 @@ trgs: ({targets.len})
 {targets}
   """
 
-proc makeDotNode(stmt: ScopeDescr, name: string, start: bool = true): string =
-  echoi level, "Make node for", name
-  let shape = case stmt.node.kind:
-    of cnkFor:
-      "shape=" & (if start: "trapezium" else: "invtrapezium")
-    of cnkWhile:
-      "shape=" & (if start: "trapezium" else: "point")
-    of cnkIf:
-      "shape=" & (if start: "diamond" else: "point")
-    of cnkElif:
-      "shape=" & tern(start, "diamond", "point")
-    of cnkElse, cnkCond:
-      "shape=point"
-    else: ""
-
-  let style = case stmt.node.kind:
-    of cnkFor: ""
-    else: tern(start, "", "style=bold")
-
-  let label = case stmt.node.kind:
-    # TEMP removed during refactoring
-    # of cnkIf .. cnkWhile: &"label=\"{stmt.node.cond.get()}\""
-    # of cnkFor:
-    #   block:
-    #     let nd = stmt.node
-    #     if start:
-    #       if nd.init.isSome and nd.bound.isSome:
-    #         &"label=\"{nd.init.get()}\n{nd.bound.get()}\""
-    #       else: ""
-    #     else:
-    #       if stmt.node.postAct.isSome:
-    #         &"label=\"{stmt.node.postAct.get()}\""
-    #       else: ""
-    else: &"label=\"{name}\""
-
-  result = &"{name}[" &
-     join(@[shape, label, style
-            , &"xlabel=\"{name}\""
-     ].filterIt(it != ""), ",") &
-     "];\n"
-
 proc joinScope(str, startWith, endWith: string): string =
   result &= startWith & "_body" & "[label=\"" & str & "\"" & ",shape=box];\n"
-
-proc joinScope(
-  statements: seq[ScopeDescr],
-  startWith: string, endWith: string,
-  top: Node
-     ): string =
-  var prevEnd = startWith
-  echoi level, "Joining scope under", startWith
-  echoi level, "To", endWith
-  inc level
-  if top.kind == cnkCond:
-    for stmt in statements:
-      if stmt.node.kind notin @[cnkIf, cnkElif, cnkElse, cnkCond]:
-        ceUserError0("stmt child is not if/else/elif")
-
-
-    var branches: string
-
-    for stmt in statements:
-      result &= stmt.makeDotNode(stmt.start, true)
-      result &= stmt.makeDotNode(stmt.final, false)
-      let fromPrev = prevEnd & " -> " & stmt.start & "[xlabel=no];\n" & stmt.body
-      # if stmt.node.kind in @[cnkIf, cnkElif, cnkElse]:
-      #   branches &= fromPrev
-      # else:
-      result &= fromPrev
-
-      result &= stmt.final & " -> " & endWith & "[xlabel=yes];\n"
-
-      prevEnd = stmt.start
-
-    result = "//Child nodes for cond node at " &
-      startWith &
-      "\n{\nrank=same;\n" & branches & "}\n" & result
-
-  else:
-    for stmt in statements:
-      result &= stmt.makeDotNode(stmt.start, true)
-      result &= stmt.makeDotNode(stmt.final, false)
-      result &= prevEnd & " -> " & stmt.start & ";\n" & stmt.body
-      prevEnd = stmt.final
-
-  result &= prevEnd & " -> " & endWith & ";\n"
-
 
 proc scopeToGviz(inScope: Scope): GVizNode =
   let kind = inScope.kind
@@ -372,7 +271,7 @@ proc scopeToGviz(inScope: Scope): GVizNode =
             of cnkIf .. cnkWhile: inScope.children[1..^1]
             else: inScope.children
 
-        children.enumerate.mapIt(it.scopeToGviz)
+        children.enumerate.mapIt(it.scopeToGviz).compressActions
   )
 
 # TODO
@@ -575,19 +474,21 @@ doSomething;
 } else if (elseif12) {
 doSomething2;
 } else if (elseif12134) {
-doSomething2;
+doSomething122;
       } else {
           els1act;
       }
     } else {
         els1act;
+        qwe12e;
     }
 } else {
     q = 2;
+    q = 12;
 }""")
   if body.isSome:
     let gviz = scopeToGviz(body.get)
-    let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
+    let conf = "splines=spline;nodesep=0.5;ranksep=0.7;\n"
     let res = gviz.topGVizToDot()
     writeFile("graph.tmp.dot", "digraph G {\n" & conf & $res & "}")
 

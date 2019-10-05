@@ -196,6 +196,19 @@ file_globs = [ "*.java", "*.m4" ]
 run_command = ""
 
 [[build]]
+name = "java.pl"
+uname = "java_pl_1"
+ext = "java"
+build_file = ".{{input_file}}.d/out.jar"
+build_command = """
+{{fsm_build_bin_dir}}/build-commands/java.pl {{input_file}}
+"""
+file_globs = [ "*.java" ]
+run_command = "java -jar {{build_file}}"
+
+
+
+[[build]]
 name = "Java preprocessor do run"
 uname = "java_preprocessor_do_run_1"
 ext = "java"
