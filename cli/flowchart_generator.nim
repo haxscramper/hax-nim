@@ -219,9 +219,16 @@ proc compressActions(inseq: seq[GVizNode]): seq[GVizNode] =
   let compressable = cnkExpr .. cnkAssgn
   if inseq.len > 1:
     result.add(inseq[0])
+    var added = 0
     for i, item in inseq[1..^1]:
-      if inseq[i].kind in compressable and item.kind in compressable:
-        result[^1].text &= item.text[0..^2] & @[item.text[^1] & ";"]
+      if inseq[i].kind in compressable and
+         item.kind in compressable:
+        if added < 5:
+          result[^1].text &= item.text[0..^2] & @[item.text[^1] & ";"]
+          inc added
+        else:
+          result.add(item)
+          added = 0
       else:
         result.add(item)
   else:
@@ -313,53 +320,60 @@ proc label(gv: GVizNode, start: bool = true): string =
     else: @[gv.name, $gv.kind].joinl()
 
 
+proc getTargetConnections(gv, gvTop: GVizNode, start: string): string =
+  var prev = start
+  for targ in gv.targets[1..^1]:
+    let nextName =
+      case targ.kind:
+        of cnkElse, cnkCond: gv.targets[^1].targets[0].name
+        else: targ.name
+
+    let labelStr =
+      case targ.kind:
+        of cnkElif, cnkElse: "[xlabel=no]"
+        else: ""
+
+
+    result &= &"{prev} -> {nextName}{labelStr};\n"
+    # XXX Draw edges to the target items.
+    prev = targ.name
+
+proc getConnectionBlock(gv, gvTop: GVizNode, connectList, start: string): string =
+  case gv.kind:
+    of cnkCond:
+        &"""
+/* start */
+{{
+/* edge connection {gv.name} */
+rank=same;
+{connectList}
+}}
+/* end */
+"""
+    of cnkElif:
+      &"{gv.name} -> {gv.targets[0].name}[xlabel=yes];"
+    of cnkElse:
+      ""
+    else:
+        &"""
+/* start */
+/* True branch for {gv.name} */
+{gv.name} -> {start}[xlabel=yes];
+{connectList}
+/* end */
+"""
+
+
+
 proc getEdgeConnections(gv, gvTop: GVizNode): string =
   defer:
     result &= "\n\n\n"
   case gv.kind:
     of cnkExpr .. cnkAssgn: ""
     of cnkCond, cnkIf .. cnkFor:
-      var prev = gv.targets[0].name
-      let start = prev
-      var res: string
-      for targ in gv.targets[1..^1]:
-        let nextName =
-          case targ.kind:
-            of cnkElse, cnkCond: gv.targets[^1].targets[0].name
-            else: targ.name
-
-        let labelStr =
-          case targ.kind:
-            of cnkElif, cnkElse: "[xlabel=no]"
-            else: ""
-
-
-        res &= &"{prev} -> {nextName}{labelStr};\n"
-        # XXX Draw edges to the target items.
-        prev = targ.name
-
-
-      if gv.kind == cnkCond:
-        &"""
-/* start */
-{{
-/* edge connection {gv.name} */
-rank=same;
-{res}
-}}
-/* end */
-"""
-      elif gv.kind in @[cnkElse, cnkElif]:
-        # &"{gv.name} -> {gv.targets[^1].name};"
-        ""
-      else:
-        &"""
-/* start */
-/* True branch for {gv.name} */
-{gv.name} -> {start}[xlabel=yes];
-{res}
-/* end */
-"""
+      let start = gv.targets[0].name
+      var connectList = getTargetConnections(gv, gvTop, start)
+      getConnectionBlock(gv, gvTop, connectList, start)
 
     else:
       # if this is for|while loop add two edges: first for
@@ -502,17 +516,16 @@ if "input-file".kp and "output-file".kp:
     if "dump-tree".kp:
       let scopeDump = body.get.mapItBFStoSeq(
         children,
-        " ".repeat(lv) &
-          $it.kind & ":  " &
-          tern(
-            it.kind in cnkExpr .. cnkAssgn,
-            it.text,
-            "")).join("\n")
+        block:
+          let ident = "  ".repeat(lv)
+          let comm = tern(it.kind in cnkExpr .. cnkAssgn, it.text, "")
+          ident & $it.kind & ":  " & comm
+      ).join("\n")
 
       writeFile(outputFile, scopeDump)
     else:
       let gviz = scopeToGviz(body.get)
-      let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
+      let conf = "splines=spline;nodesep=0.5;ranksep=0.7;\n"
       let res = gviz.topGVizToDot()
       writeFile(outputFile, "digraph G {\n" & conf & $res & "}")
   else:

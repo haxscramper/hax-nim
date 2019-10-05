@@ -206,7 +206,7 @@ function test_flowchart_parser {
     fi
 
 
-    rm -f $testdir/*.tmp.dot
+    rm -f $testdir/*.tmp.*
     find $testdir -name "*.txt.*" |
         xargs -i ./$bin --input:"{}" --output:"{}.tmp.dot"
 

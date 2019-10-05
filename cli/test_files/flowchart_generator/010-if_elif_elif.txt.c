@@ -4,6 +4,16 @@ if (a) {
     v;
 } else if (sadf) {
     asdf;
+    asdf;
+    asdf;
+    asdf213;
+    asdf;
+    asdf213;
+    asdf;
+    asdf213;
+    asdf;
+    asdf213;
+    asdf;
 } else if (asd) {
     se;
 } else {
