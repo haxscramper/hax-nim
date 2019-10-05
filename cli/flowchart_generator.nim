@@ -163,7 +163,8 @@ proc placeChildNode(stack: var seq[Scope], child: Scope) =
   stack[^1].children.add(child)
 
 
-func getName(st: seq[Scope]): string = tern(st.len == 0, "start_", st[^1].name)
+func getName(st: seq[Scope]): string =
+  tern(st.len == 0, "start_", st[^1].name & $st[^1].children.len)
 
 proc chartBuilder(str: string): Option[Scope] =
   var done: bool = false
@@ -345,7 +346,7 @@ rank=same;
         &"""
 /* start */
 /* True branch for {gv.name} */
-{gv.name} -> {start}[xlabel=yes];
+{gv.name} -> {start}:ne[xlabel=yes];
 {res}
 /* end */
 """
@@ -460,35 +461,20 @@ proc runTestCases() =
 #   for(int i =0; i < 10; ++i) { underFor1; }
 #   for(int i =0; i < 10; ++i) { underFor2; }
 # };
-    """
-if (topIf) {
-    q = 1;
-    if (nested1If) {
-        nest1Act1231;
-        nest1Act12;
-        nest1Act1;
-      if (nested1If) {
+    """if (nested1If) {
           nest1Act;
 } else if (elseif1) {
 doSomething;
-} else if (elseif12) {
-doSomething2;
 } else if (elseif12134) {
 doSomething122;
+doSomethingElse;
       } else {
           els1act;
       }
-    } else {
-        els1act;
-        qwe12e;
-    }
-} else {
-    q = 2;
-    q = 12;
-}""")
+""")
   if body.isSome:
     let gviz = scopeToGviz(body.get)
-    let conf = "splines=spline;nodesep=0.5;ranksep=0.7;\n"
+    let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
     let res = gviz.topGVizToDot()
     writeFile("graph.tmp.dot", "digraph G {\n" & conf & $res & "}")
 
