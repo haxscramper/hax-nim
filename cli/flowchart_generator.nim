@@ -251,7 +251,11 @@ trgs: ({targets.len})
 proc joinScope(str, startWith, endWith: string): string =
   result &= startWith & "_body" & "[label=\"" & str & "\"" & ",shape=box];\n"
 
+var tmp = 0
 proc scopeToGviz(inScope: Scope): GVizNode =
+  inc tmp
+  defer: dec tmp
+
   let kind = inScope.kind
   GVizNode(
     kind: kind,
@@ -272,6 +276,12 @@ proc scopeToGviz(inScope: Scope): GVizNode =
             of cnkIf .. cnkWhile: inScope.children[1..^1]
             else: inScope.children
 
+        echoi tmp, &"Under {inScope.name.togreen} ({inScope.kind})"
+        echo $children.enumerate.mapIt(
+          "  ".repeat(tmp) &
+            it.name & ": " &
+            it.text.replace('\n', ' ')
+        ).joinl
         children.enumerate.mapIt(it.scopeToGviz).compressActions
   )
 
@@ -282,7 +292,6 @@ proc scopeToGviz(inScope: Scope): GVizNode =
 
 proc getStyle(gv: GVizNode, start: bool = true): string =
   @[
-    &"label=\"{gv.name}\"",
     case gv.kind:
       of cnkIf, cnkElif: "shape=diamond"
       of cnkExpr, cnkAssgn: "shape=box"
@@ -340,7 +349,8 @@ rank=same;
 }}
 /* end */
 """
-      elif gv.kind in @[cnkElse, cnkCond]:
+      elif gv.kind in @[cnkElse, cnkElif]:
+        # &"{gv.name} -> {gv.targets[^1].name};"
         ""
       else:
         &"""
@@ -444,32 +454,28 @@ proc topGVizToDot(body: GVizNode): string =
 
 proc runTestCases() =
   let body: Option[Scope] = chartBuilder(
-# if (a) {
-# int a = 0;
-# int q = 12;
-#   if (q) {
-#   nestedIfQ1;
-#   } else {
-#   nestedIfQ2;
-#   }
-# } else if (c) {
-#   int c = 0;
-# } else if (c) {
-#   int c = 0;
-# } else {
-#   int b = 0;
-#   for(int i =0; i < 10; ++i) { underFor1; }
-#   for(int i =0; i < 10; ++i) { underFor2; }
-# };
     """if (nested1If) {
           nest1Act;
+if (a) {
+asdf;
+} else {
+e;
+}
 } else if (elseif1) {
 doSomething;
 } else if (elseif12134) {
-doSomething122;
-doSomethingElse;
+if (nestedElseIf) {
+asdf;
+actions;
+} else {
+esdasdf;
+}
       } else {
-          els1act;
+if (nestedElse) {
+asdf;
+} else {
+doSomethingElse;
+}
       }
 """)
   if body.isSome:
