@@ -276,12 +276,12 @@ proc scopeToGviz(inScope: Scope): GVizNode =
             of cnkIf .. cnkWhile: inScope.children[1..^1]
             else: inScope.children
 
-        echoi tmp, &"Under {inScope.name.togreen} ({inScope.kind})"
-        echo $children.enumerate.mapIt(
-          "  ".repeat(tmp) &
-            it.name & ": " &
-            it.text.replace('\n', ' ')
-        ).joinl
+        # echoi tmp, &"Under {inScope.name.togreen} ({inScope.kind})"
+        # echo $children.enumerate.mapIt(
+        #   "  ".repeat(tmp) &
+        #     it.name & ": " &
+        #     it.text.replace('\n', ' ')
+        # ).joinl
         children.enumerate.mapIt(it.scopeToGviz).compressActions
   )
 
@@ -453,31 +453,7 @@ proc topGVizToDot(body: GVizNode): string =
 
 
 proc runTestCases() =
-  let body: Option[Scope] = chartBuilder(
-    """if (nested1If) {
-          nest1Act;
-if (a) {
-asdf;
-} else {
-e;
-}
-} else if (elseif1) {
-doSomething;
-} else if (elseif12134) {
-if (nestedElseIf) {
-asdf;
-actions;
-} else {
-esdasdf;
-}
-      } else {
-if (nestedElse) {
-asdf;
-} else {
-doSomethingElse;
-}
-      }
-""")
+  let body: Option[Scope] = chartBuilder("""""")
   if body.isSome:
     let gviz = scopeToGviz(body.get)
     let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
@@ -516,12 +492,13 @@ if hasErrors:
 if "input-file".kp():
   let inputFile = "input-file".k.toStr()
   let outputFile = "output-file".k.toStr()
-  # echo "Out file: ", outputFile
-  # echo "In  file: ", inputFile
 
-  # let inputString = readFile(inputFile).string
-
-  # echo "In file content: \n\n", inputString
+  let body: Option[Scope] = chartBuilder(readFile(inputFile).string)
+  if body.isSome:
+    let gviz = scopeToGviz(body.get)
+    let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
+    let res = gviz.topGVizToDot()
+    writeFile(outputFile, "digraph G {\n" & conf & $res & "}")
 
 elif "test-line".kp():
   test("test-line".k.toStr())

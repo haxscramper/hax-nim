@@ -188,17 +188,17 @@ function test_flowchart_parser {
         fi
     fi
 
-
+    testdir="test_files/flowchart_generator"
     while read -r test
     do
         ./$bin --test-line:"$test"
-    done < <(cat test_files/flowchart_generator/simple.txt)
+    done < <(cat $testdir/simple.txt)
 
 
     while read -r debug
     do
         ./$bin --debug-parse:"$debug"
-    done < <(cat test_files/flowchart_generator/debug.txt)
+    done < <(cat $testdir/debug.txt)
 
 
     if [[ "$full_run" != true ]]; then
@@ -206,17 +206,15 @@ function test_flowchart_parser {
     fi
 
 
-    ./$bin --builtin-tests
+    rm -f $testdir/*.tmp.dot
+    find $testdir -name "*.txt.*" |
+        xargs -i ./$bin --input:"{}" --output:"{}.tmp.dot"
 
-    dot -Tpng graph.tmp.dot > out.tmp.png
-    if [[ "$?" = 0 ]]; then
-        colecho -i "graph is ok, copying ..."
-        cp out.tmp.png final.tmp.png
-    fi
-
-
-    find test_files/flowchart_generator -name "*.txt" |
-        xargs -i ./$bin --input:"{}" --output:"{}.dot"
+    while read -r dotfile
+    do
+        dot -Tpng $dotfile > $dotfile.png
+    done < <(find -name "*.tmp.dot")
+    ./generate_page.py
 }
 
 

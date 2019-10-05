@@ -21,6 +21,13 @@ body = """
 """
 
 [[templ]]
+name = "Python simple"
+lang_ext = "py"
+body = """
+#!/usr/bin/env python
+"""
+
+[[templ]]
 name = "perl"
 lang_ext = "pl"
 body = """

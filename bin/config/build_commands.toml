@@ -22,6 +22,14 @@ build_command = "mypy {{input_file}}"
 file_globs = [ "{{input_file}}" ]
 
 [[build]]
+name = "Python run"
+uname = "python_run"
+ext = "py"
+build_command = "./{{input_file}}"
+file_globs = [ "*.py" ]
+run_command = "true"
+
+[[build]]
 name = "Nim silent"
 ext = "nim"
 uname = "nim_silent"
