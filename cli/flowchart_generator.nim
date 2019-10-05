@@ -356,7 +356,7 @@ rank=same;
         &"""
 /* start */
 /* True branch for {gv.name} */
-{gv.name} -> {start}:ne[xlabel=yes];
+{gv.name} -> {start}[xlabel=yes];
 {res}
 /* end */
 """
@@ -484,21 +484,40 @@ parseArgs:
     name: "debug-parse"
     opt: ["--debug-parse", "+takes_value"]
     help: "run debug parse on the statement"
+  opt:
+    name: "dump-tree"
+    opt: ["--dump-tree"]
+    help: "Dump syntax tree of input file to output file instead of generatig dot diagram"
 
 if hasErrors:
   quit(1)
 
 
-if "input-file".kp():
+if "input-file".kp and "output-file".kp:
   let inputFile = "input-file".k.toStr()
   let outputFile = "output-file".k.toStr()
 
   let body: Option[Scope] = chartBuilder(readFile(inputFile).string)
   if body.isSome:
-    let gviz = scopeToGviz(body.get)
-    let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
-    let res = gviz.topGVizToDot()
-    writeFile(outputFile, "digraph G {\n" & conf & $res & "}")
+    if "dump-tree".kp:
+      let scopeDump = body.get.mapItBFStoSeq(
+        children,
+        " ".repeat(lv) &
+          $it.kind & ":  " &
+          tern(
+            it.kind in cnkExpr .. cnkAssgn,
+            it.text,
+            "")).join("\n")
+
+      writeFile(outputFile, scopeDump)
+    else:
+      let gviz = scopeToGviz(body.get)
+      let conf = "splines=ortho;nodesep=0.5;ranksep=0.7;\n"
+      let res = gviz.topGVizToDot()
+      writeFile(outputFile, "digraph G {\n" & conf & $res & "}")
+  else:
+    if "dump-tree".kp:
+      writeFile(outputFile, "Failed to parse input file")
 
 elif "test-line".kp():
   test("test-line".k.toStr())

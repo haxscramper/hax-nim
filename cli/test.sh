@@ -210,6 +210,9 @@ function test_flowchart_parser {
     find $testdir -name "*.txt.*" |
         xargs -i ./$bin --input:"{}" --output:"{}.tmp.dot"
 
+    find $testdir -name "*.txt.*" |
+        xargs -i ./$bin --input:"{}" --dump-tree --output:"{}.tmp.synt"
+
     while read -r dotfile
     do
         dot -Tpng $dotfile > $dotfile.png
@@ -230,6 +233,8 @@ inotifywait -r -e close_write,moved_to,create -m . |
           if [[ "$f" = *.nim ]] ||
                  [[ "$f" = *.pegs ]] ||
                  [[ "$f" = *.txt ]] ||
+                 [[ "$f" = *.txt.c ]] ||
+                 [[ "$f" = *.py ]] ||
                  [[ "$f" != "test1.sh" && "$f" == *".sh" ]]; then
             clear
             #test_builder
