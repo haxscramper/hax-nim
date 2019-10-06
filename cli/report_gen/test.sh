@@ -72,7 +72,7 @@ $msg -i:1 "Running report template"
 
 task_formulation=$(find "$in_file_dir" -name "task.txt")
 source_files=$(find "$in_file_dir" -name "*.java" -printf \
-                    "$in_file_dir/%f" \
+                    "$in_file_dir/%f\n" \
                    | tee /dev/tty \
                    | tr '\n' ',')
 

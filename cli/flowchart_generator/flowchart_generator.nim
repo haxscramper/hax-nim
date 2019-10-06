@@ -527,12 +527,12 @@ if "input-file".kp and "output-file".kp:
       let gviz = scopeToGviz(body.get)
       let conf = "splines=spline;nodesep=0.5;ranksep=0.7;\n"
       let res = gviz.topGVizToDot()
-      writeFile(outputFile, "digraph G {\n" & conf & $res & "}")
+      writeFile(outputFile, "digraph G { graph [ dpi = 300 ]; \n" & conf & $res & "}")
   else:
     if "dump-tree".kp:
       writeFile(outputFile, "Failed to parse input file")
     else:
-      writeFile(outputFile, "digraph G { fail[label=\"failed to parse\"]; }")
+      writeFile(outputFile, "digraph G {  graph [ dpi = 300 ];  fail[label=\"failed to parse\"]; }")
 
 elif "test-line".kp():
   test("test-line".k.toStr())
