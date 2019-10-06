@@ -156,7 +156,7 @@ ext = "sh"
 build_command = ""
 build_fule = "{{input_file}}"
 file_globs = [ "{{input_file}}" ]
-run_command = "shellcheck {{input_file}} && ./{{input_file}}"
+run_command = "shellcheck --exclude=SC2034 {{input_file}} && ./{{input_file}}"
 
 [[build]]
 name = "Ocaml simple"

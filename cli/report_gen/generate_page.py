@@ -7,7 +7,7 @@ from pygments.formatters import HtmlFormatter
 
 files = [
     f for f in glob.glob(
-        "test_files/flowchart_generator/*.txt.*"
+        "test_files/*.txt.*"
     ) if re.match(r".*?\.txt\.\w+$", f)
     ]
 

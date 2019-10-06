@@ -1,9 +1,9 @@
 import pegs
 import options
-import termformat, argparse, helpers
+import ../../lib/termformat, ../../lib/argparse, ../../lib/helpers
 import os, strutils, sequtils, macros
-import colecho_lib
-import colecho_types
+import ../../lib/colecho_lib
+import ../../lib/colecho_types
 import strformat
 import tables
 import deques
@@ -11,7 +11,7 @@ import deques
 # XXX remove this
 var level = 0
 
-let pegGrammar = readFile("grammar.pegs").string
+const pegGrammar = readFile("grammar.pegs").string
 let pegAst = parsePeg(pegGrammar)
 
 
@@ -531,6 +531,8 @@ if "input-file".kp and "output-file".kp:
   else:
     if "dump-tree".kp:
       writeFile(outputFile, "Failed to parse input file")
+    else:
+      writeFile(outputFile, "digraph G { fail[label=\"failed to parse\"]; }")
 
 elif "test-line".kp():
   test("test-line".k.toStr())
