@@ -220,12 +220,27 @@ function test_flowchart_parser {
     ./generate_page.py
 }
 
+function test_extract_methods {
+    bin="extract_methods.nim.bin"
+
+    build "extract_methods.nim"
+    if [[ "$build_code" != 0 ]]; then
+        colecho -e:2 "Build failed"
+        return
+    else
+        colecho -i:2 "Done build"
+    fi
+
+    ./$bin --input-file:"test_files/extract_method/test.java" \
+           --output-dir:"test_files/extract_method/"
+}
 
 #test_builder
 #test_create_script
 #test_argparse
 # test_fsm_build
-test_flowchart_parser none
+# test_flowchart_parser none
+test_extract_methods
 
 inotifywait -r -e close_write,moved_to,create -m . |
     while read -r directory events f; do
@@ -241,7 +256,8 @@ inotifywait -r -e close_write,moved_to,create -m . |
             #test_create_script
             #test_argparse
             # test_fsm_build
-            test_flowchart_parser $f
+            # test_flowchart_parser $f
+            test_extract_methods
           fi
         fi
     done
