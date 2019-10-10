@@ -33,7 +33,9 @@ class FloatStructure extends JFrame {
 
     void setupTable() {
         // TODO highlight cell colors
-        TableModel dataModel = new FloatTableModel(fltBits, bits);
+        /* Some multiline comments
+           */
+        TableModel dataModel = /* ad annoying inline comments */ new FloatTableModel(fltBits, bits);
 
         fltTable_tbl = new JTable(dataModel);
         updateHeader();

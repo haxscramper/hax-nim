@@ -17,6 +17,7 @@ proc splitClass(str: string): seq[tuple[
   var currentBody: seq[string]
   var methStarted: bool
   var className: string
+  var inComment: bool
 
   for line in str.split('\n'):
     if line =~ re".*?class (\w+) .*?":
@@ -30,14 +31,35 @@ proc splitClass(str: string): seq[tuple[
 
     if methstarted:
       parenBalance += line.getbalance()
-      currentBody.add(line)
+
+      let notrail =
+        if line =~ re"(.*?)\/\/.*": matches[0]
+        else: line
+
+      let noComm =
+        if inComment:
+          if notrail =~ re".*?\*\/(.*)":
+            inComment = false
+            matches[0]
+          else:
+            ""
+        else:
+          if notrail =~ re"(.*?)\/\*.*?\*\/(.*)":
+            matches[0] & " " & matches[1]
+          elif notrail =~ re"(.*?)\/\*.*":
+            inComment = true
+            matches[0]
+          else:
+            notrail
+
+      currentBody.add(noComm)
+
       if (parenBalance == 0):
         methstarted = false
         result.add((
           className & "." & currentName,
           currentBody[1..^2].join("\n")))
         currentBody = @[]
-
 
 
 parseArgs:
@@ -65,4 +87,4 @@ if "input-file".kp and "output-dir".kp:
     if "verbose".kp:
       echo outPath
 
-    outpath.writefile(meth.body)
+    outpath.writefile("{\n" & meth.body & "\n}")
