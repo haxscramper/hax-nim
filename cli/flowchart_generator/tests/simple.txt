@@ -39,3 +39,6 @@ while (call1()) { }
 { b.call(c).call(d); }
 { a = 12; b = "123"; c = a.call(a).call(b); }
 { a = 12; b = "123"; c = call(a).call(b); }
+{ outNumber_fld.setText(Double.toString(Long.valueOf(bits.k.toNum()).doubleValue() + bits.v.toDbl())); }
+{ Long.valueOf(bits.k.toNum()).doubleValue() + bits.v.toDbl(); }
+{ Long.valueOf(bits.k.toNum()).doubleValue(); }

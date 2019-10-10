@@ -83,8 +83,8 @@ source_files=$(find "$in_file_dir" -name "*.java" -printf \
                    | tee /dev/tty \
                    | tr '\n' ',')
 
-
 cp $flowchart_images/*.$image_ext $final_dir
+
 
 tpage \
     --define "files=$source_files" \

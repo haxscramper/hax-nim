@@ -21,7 +21,7 @@ call <- ident "(" (ws_expr ("," ws_expr)* )? ")"
 assgn <- ident ws ident ws "=" ws expr / ident ws "=" ws expr
 ws_expr <- ws (expr ws)?
 
-meth_call <- primary ( "." call )+
+meth_call <- primary ( "." ( call / ident ) )+
 primary <- ident / call
 expr <- literal /
      ident ( binop / relop / logop ) expr /

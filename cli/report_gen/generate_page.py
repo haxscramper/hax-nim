@@ -18,10 +18,22 @@ parser.add_argument('--syntax-suffix',
                     required=True,
                     help="Suffix added for file syntax dump")
 
+parser.add_argument("--syntax-prefix",
+                    dest="syntax_prefix",
+                    required=True,
+                    help="Prefx that will be added to path" +
+                    "to generate image file path")
+
 parser.add_argument("--image-suffix",
                     dest="image_suffix",
                     required=True,
                     help="Suffix for image file")
+
+parser.add_argument("--image-prefix",
+                    dest="image_prefix",
+                    required=True,
+                    help="Prefix that will be added to path" +
+                    "to generate image file path")
 
 parser.add_argument("--output-file",
                     dest="output_file",
@@ -33,19 +45,6 @@ parser.add_argument("--files-prefix",
                     required=True,
                     help="Prefix that will be removed from" +
                     "file name to generate image/" + "synt path")
-
-parser.add_argument("--image-prefix",
-                    dest="image_prefix",
-                    required=True,
-                    help="Prefix that will be added to path" +
-                    "to generate image file path")
-
-parse.add_argument("--synt-prefix",
-                   dest="synt_prefix",
-                   required=True,
-                   help="Prefx that will be added to path" +
-                   "to generate image file path")
-
 args = parser.parse_args()
 
 files = [f for f in glob.glob(args.files_glob)]
@@ -54,14 +53,10 @@ files.sort()
 
 print("Output file:", args.output_file)
 print("Image suffix:", args.image_suffix)
+print("Image prefix:", args.image_prefix)
 print("Syntax suffix:", args.syntax_suffix)
+print("Syntax prefix:", args.syntax_prefix)
 print("Files glob:", args.files_glob)
-print("Files:")
-
-for f in files:
-    print(" -", f)
-
-exit
 
 rows = []
 for f in files:
@@ -72,9 +67,15 @@ for f in files:
         <td><b>{}</b></td>
         </tr>""".format(f))
 
-    code_filename = f[len(args.files_prefix)]
+    code_filename = f[len(args.files_prefix):]
     image_file = args.image_prefix + code_filename + args.image_suffix
-    synt_file = args.synt_prefix + code_filename + args.synt_suffix
+    synt_file = args.syntax_prefix + code_filename + args.syntax_suffix
+
+    print("")
+    print("   code:", f)
+    print("   file:", code_filename)
+    print("   imag:", image_file)
+    print("   synt:", synt_file)
 
     code = highlight(open(f).read(), CLexer(), HtmlFormatter())
     synt = highlight(open(synt_file).read(), YamlLexer(), HtmlFormatter())
