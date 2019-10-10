@@ -535,7 +535,9 @@ if "input-file".kp and "output-file".kp:
       writeFile(outputFile, "digraph G {  graph [ dpi = 300 ];  fail[label=\"failed to parse\"]; }")
 
 elif "test-line".kp():
-  test("test-line".k.toStr())
+  let file = "test-line".k.toStr()
+  for line in file.readFile().string.split('\n'):
+    test(line)
 
 elif "debug-parse".kp:
   let instr = "debug-parse".k.toStr

@@ -20,21 +20,26 @@ while_loop <- "while" ws "(" ws_expr? ")" end_stmt
 call <- ident "(" (ws_expr ("," ws_expr)* )? ")"
 assgn <- ident ws ident ws "=" ws expr / ident ws "=" ws expr
 ws_expr <- ws (expr ws)?
-expr <- intcon /
+
+meth_call <- primary ( "." call )+
+primary <- ident / call
+expr <- literal /
      ident ( binop / relop / logop ) expr /
      unop ident /
      ident unop /
      assgn /
      call /
+     meth_call /
      "(" ws expr ws ")" /
      ident
-
 
 binop <- ws ( "+" / "-" / "*" / "/") ws
 relop <- ws ( "<" / ">" / "==" / "!=" ) ws
 unop <- ws ( "--" / "++" ) ws
 logop <- ws ( "||" / "&&" ) ws
 
+literal <- strlit / intcon
+strlit <- ws "\"" ( "\\\"" / ( !"\"" .))* "\"" ws
 ident <- {\ident}
 ws <- \s*
 intcon <- \d+

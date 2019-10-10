@@ -32,3 +32,10 @@ while (call1()) { }
 { (((a))); }
 { ((((call(call(call())))))); }
 { call(call(1), call(2), call(3)); }
+{ a = "sdf"; }
+{ a = "\n"; }
+{ a = "asdfasdf\"asdf\t"; }
+{ a = b.call(c); }
+{ b.call(c).call(d); }
+{ a = 12; b = "123"; c = a.call(a).call(b); }
+{ a = 12; b = "123"; c = call(a).call(b); }
