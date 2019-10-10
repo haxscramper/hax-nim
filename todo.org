@@ -634,3 +634,9 @@ other proc.
 + [ ] Rewrite =camomilla= in nim and use more colorful error
   messaging.
 + [ ] Multiline properties support for org-mode parser
++ [ ] Generate graphviz diagram from source code of peg grammars to
+  identiy possible recursive behaviours and visualize grammar as graph
+  (which might be very useful for debugging). Another #possibe_idea is
+  to step-by-step animation of how parsing is performed. The main
+  issue is stability of the graph image, maybe it could be handled if
+  we use something other than graphviz for image layout.

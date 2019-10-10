@@ -4,27 +4,86 @@ import re
 from pygments import highlight
 from pygments.lexers import CLexer, YamlLexer
 from pygments.formatters import HtmlFormatter
+import argparse
 
-files = [
-    f for f in glob.glob(
-        "test_files/*.txt.*"
-    ) if re.match(r".*?\.txt\.\w+$", f)
-    ]
+parser = argparse.ArgumentParser(description='Generate html')
+
+parser.add_argument('--files-glob',
+                    dest='files_glob',
+                    required=True,
+                    help='POSIX glob for list of files to process')
+
+parser.add_argument('--syntax-suffix',
+                    dest="syntax_suffix",
+                    required=True,
+                    help="Suffix added for file syntax dump")
+
+parser.add_argument("--image-suffix",
+                    dest="image_suffix",
+                    required=True,
+                    help="Suffix for image file")
+
+parser.add_argument("--output-file",
+                    dest="output_file",
+                    default="out.tmp.html",
+                    help="Name of the output file")
+
+parser.add_argument("--files-prefix",
+                    dest="files_prefix",
+                    required=True,
+                    help="Prefix that will be removed from" +
+                    "file name to generate image/" + "synt path")
+
+parser.add_argument("--image-prefix",
+                    dest="image_prefix",
+                    required=True,
+                    help="Prefix that will be added to path" +
+                    "to generate image file path")
+
+parse.add_argument("--synt-prefix",
+                   dest="synt_prefix",
+                   required=True,
+                   help="Prefx that will be added to path" +
+                   "to generate image file path")
+
+args = parser.parse_args()
+
+files = [f for f in glob.glob(args.files_glob)]
 
 files.sort()
 
+print("Output file:", args.output_file)
+print("Image suffix:", args.image_suffix)
+print("Syntax suffix:", args.syntax_suffix)
+print("Files glob:", args.files_glob)
+print("Files:")
+
 for f in files:
-    print(f)
+    print(" -", f)
+
+exit
 
 rows = []
 for f in files:
-    rows.append("<tr><td><b>non</b></td><td>file:</td><td><b>{}</b></td></tr>".format(f))
-    code = highlight(open(f).read(), CLexer(), HtmlFormatter())
-    synt = highlight(open(f + ".tmp.synt").read(), YamlLexer(), HtmlFormatter())
-    imag = "<img src=\"{}\"></img>".format(f + ".tmp.dot.png")
-    row = "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(code, synt, imag)
-    rows.append(row)
+    rows.append("""
+        <tr>
+        <td><b>non</b></td>
+        <td>file:</td>
+        <td><b>{}</b></td>
+        </tr>""".format(f))
 
+    code_filename = f[len(args.files_prefix)]
+    image_file = args.image_prefix + code_filename + args.image_suffix
+    synt_file = args.synt_prefix + code_filename + args.synt_suffix
+
+    code = highlight(open(f).read(), CLexer(), HtmlFormatter())
+    synt = highlight(open(synt_file).read(), YamlLexer(), HtmlFormatter())
+
+    imag = "<img src=\"{}\"></img>".format(image_file)
+
+    row = "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(code, synt, imag)
+
+    rows.append(row)
 
 head = """
 <!DOCTYPE html>
@@ -50,8 +109,7 @@ table_header = """
 
 table = "<table border=\"3\">" + table_header + "\n".join(rows) + "</table>"
 
-
 out = head + style + "<body>" + table + "</body><html>"
 
-with open("out.tmp.html", "w") as f:
+with open(args.output_file, "w") as f:
     f.write(out)

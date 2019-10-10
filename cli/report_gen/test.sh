@@ -19,7 +19,7 @@ mkdir -p $final_dir
 mkdir -p $flowchart_images
 mkdir -p $split_methods_dir
 
-find -type f -name "*.tmp.*" | xargs rm
+find . -type f -name "*.tmp.*" -print0 | xargs -0 rm
 
 $msg -i:1 "Splitting files in directory '$in_file_dir'"
 while read -r class_file
@@ -54,7 +54,14 @@ do
 done < <(find $flowchart_images -type f -name "*.dot")
 
 $msg -i:1 "Generating debug html page"
-./$html_gen
+./$html_gen \
+    --output-file="out.tmp.html" \
+    --image-suffix=".dot.$image_ext" \
+    --image-prefix="$flowchart_images/" \
+    --syntax-suffix=".synt" \
+    --syntax-prefix="$flowchart_images/" \
+    --files-glob="$split_methods_dir/*" \
+    --files-prefix="$split_methods_dir/"
 
 image_files=""
 
@@ -62,8 +69,8 @@ while read -r flowchart
 do
     $msg -I:4 "Renaming $flowchart_images/$flowchart"
     oldname=$flowchart
-    newname=$(echo $oldname | sed 's/\./_/g').$image_ext
-    cp $flowchart_images/$oldname $final_dir/$newname
+    newname="${oldname//'.'/'_'}.$image_ext"
+    cp "$flowchart_images/$oldname" "$final_dir/$newname"
     image_files="$image_files,$newname"
 done < <(find $flowchart_images -type f -name "*.$image_ext" -printf "%f\n")
 
@@ -90,9 +97,9 @@ $msg -i:1 "Building pdf"
 
 cd $final_dir
 
-latexmk -C report.tex
-latexmk -latexoption="-shell-escape" \
-        -pdflua --interaction=nonstopmode report.tex > \
-        /dev/null
+# latexmk -C report.tex
+# latexmk -latexoption="-shell-escape" \
+#         -pdflua --interaction=nonstopmode report.tex > \
+#         /dev/null
 
 $msg -i:3 "Done"
