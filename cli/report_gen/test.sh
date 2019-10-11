@@ -21,6 +21,9 @@ mkdir -p $split_methods_dir
 
 find . -type f -name "*.tmp.*" -print0 | xargs -0 rm
 
+colecho -g -i:3 "Starting"
+
+
 $msg -i:1 "Splitting files in directory '$in_file_dir'"
 while read -r class_file
 do
@@ -28,20 +31,39 @@ do
     ./$method_gen \
         --verbose \
         --input-file:"$in_file_dir/$class_file" \
-        --output-dir:"$split_methods_dir"
+        --output-dir:"$split_methods_dir" \
+        --maxlen:200 \
+        --ignored-methods:"initComponents,main" \
+        --debug
+
 done < <(find $in_file_dir -type f -printf "%f\n")
+
+$msg -i:1 "Formatting generated files"
+while read -r method_file
+do
+    clang-format -i -style=file -verbose "$method_file"
+done < <(find $split_methods_dir -type f)
 
 $msg -i:1 "Generating flowcharts for files in directory '$split_methods_dir'"
 while read -r method_file
 do
     $msg -I:4 "Working with '$method_file'"
-    ./$flowchart_gen \
-        --input:"$split_methods_dir/$method_file" \
-        --output:"$flowchart_images/$method_file.dot"
+    abs_method="$split_methods_dir/$method_file"
 
+    $msg -I:8 "generate dot file ..."
+    if ! ./$flowchart_gen \
+         --input:"$abs_method" \
+         --output:"$flowchart_images/$method_file.dot"
+       then
+        $msg -I:8 -e "Error ocurred duing file parse:"
+        bat "$abs_method"
+        exit
+    fi
+
+    $msg -I:8 "generate synt file ..."
     ./$flowchart_gen \
         --dump-tree \
-        --input:"$split_methods_dir/$method_file" \
+        --input:"$abs_method" \
         --output:"$flowchart_images/$method_file.synt"
 
 done < <(find $split_methods_dir -type f -printf "%f\n")
@@ -50,7 +72,12 @@ $msg -i:1 "Generating images for files in directory '$flowchart_images'"
 while read -r dot_file
 do
     $msg -I:4 "Working with '$dot_file'"
-    dot -T$image_ext "$dot_file" > "$dot_file.$image_ext"
+    if ! dot -T$image_ext "$dot_file" > "$dot_file.$image_ext"
+       then
+           $msg -I:8 -e "Error ocurred during file conversion"
+           bat "$dot_file"
+           exit
+    fi
 done < <(find $flowchart_images -type f -name "*.dot")
 
 $msg -i:1 "Generating debug html page"

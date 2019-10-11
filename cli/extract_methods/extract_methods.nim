@@ -1,11 +1,14 @@
 import pegs
 import macros, ../../lib/argparse
+import options
 import os
 import re
 import strutils
 import strformat, sequtils
 
 
+var ignoredMethods: seq[string]
+var linelimit = 10000
 
 func getbalance(str: string): int = str.count('{') - str.count('}')
 
@@ -52,13 +55,18 @@ proc splitClass(str: string): seq[tuple[
           else:
             notrail
 
-      currentBody.add(noComm)
+
+      if nocomm.len < linelimit:
+        currentBody.add(noComm)
 
       if (parenBalance == 0):
         methstarted = false
-        result.add((
-          className & "." & currentName,
-          currentBody[1..^2].join("\n")))
+        if currentName notin ignoredMethods and
+           (className & "." & currentName) notin ignoredMethods and
+           currentbody.len > 0:
+          result.add((
+            className & "." & currentName,
+            currentBody[1..^2].join("\n")))
         currentBody = @[]
 
 
@@ -75,7 +83,40 @@ parseArgs:
     name: "verbose"
     opt: ["--verbose", "-v"]
     help: "verbose"
+  opt:
+    name: "ignored-methods"
+    opt: ["--ignored-methods", "+takes_value"]
+    help: "Comma-separated list of method names to ignore"
+  opt:
+    name: "maxlen"
+    opt: ["--maxlen", "+takes_value"]
+    help: "Max threshol for line length. Lines longer will be ignored"
+    parseto: int
+  opt:
+    name: "debug"
+    opt: ["--debug"]
+    help: "Dump debug information"
 
+if "debug".kp:
+  if "maxlen".kp: echo "maxlen: ", "maxlen".k.toint
+  if "ignored-methods".kp: echo "ignored: ",
+     "ignored-methods".k.tostr.split(",")
+
+if "ignored-methods".kp:
+  ignoredMethods = "ignored-methods".k.tostr.split(",")
+
+if "maxlen".kp:
+  lineLimit = "maxlen".k.toint
+
+proc allof[T](arr: openarray[T], item: T): bool =
+  result = true
+  for it in arr:
+    result = result and it == item
+
+proc allof[T](arr: openarray[T], st: set[T]): bool =
+  result = true
+  for it in arr:
+    result = result and (it in st)
 
 if "input-file".kp and "output-dir".kp:
   let infile = "input-file".k.tostr
@@ -87,4 +128,5 @@ if "input-file".kp and "output-dir".kp:
     if "verbose".kp:
       echo outPath
 
-    outpath.writefile("{\n" & meth.body & "\n}")
+    if meth.body.len > 0 and not meth.body.allof({' ', '\n'}):
+      outpath.writefile("{\n" & meth.body & "\n}")

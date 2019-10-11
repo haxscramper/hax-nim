@@ -1,6 +1,6 @@
 import moustachu
-import fsmonitor
-import argparse
+import ../lib/fsmonitor
+import ../lib/argparse
 import parsetoml
 import sequtils
 import strformat
@@ -17,17 +17,16 @@ import options
 import times
 
 
-import termformat
-import colecho_lib
-import colecho_types
-import helpers
-import uprompt
-import argparse
+import ../lib/termformat
+import ../lib/colecho_lib
+import ../lib/colecho_types
+import ../lib/helpers
+import ../lib/uprompt
 import macros
-import strparser
+import ../lib/strparser
 import logging
 import create_script
-import colecho_types
+import ../lib/colecho_types
 
 var utilityPid: Pid
 
@@ -133,7 +132,7 @@ proc parseCMDLine(): CmdParsed =
   result.waitUtil =
     if "wait-util".kp:
       "wait-util".k.toBool()
-    else: true
+    else: false
 
 
 #~#==== Build options config parsing
@@ -318,7 +317,7 @@ proc getBuildOpts(inputFile: string): seq[BuildOption] =
 #~#==== File change loops
 proc startBuilder(
   selected: BuildOption,
-  waitUtil: bool = true,
+  waitUtil: bool = false,
   maxRepeat: Opt[int]) {.async.} =
     var monitor = newMonitor()
     ceUserInfo0("List of watched files:")

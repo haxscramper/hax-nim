@@ -1,9 +1,9 @@
 import parsetoml, sequtils, parseutils, strutils, os, macros
 import moustachu
-import argparse
-import helpers, uprompt
+import ../lib/argparse
+import ../lib/helpers, ../lib/uprompt
 import posix
-import colecho_lib
+import ../lib/colecho_lib
 import strformat
 
 

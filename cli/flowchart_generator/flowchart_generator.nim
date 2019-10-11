@@ -502,6 +502,12 @@ parseArgs:
     name: "dump-tree"
     opt: ["--dump-tree"]
     help: "Dump syntax tree of input file to output file instead of generatig dot diagram"
+  opt:
+    name: "graph-image-dpi"
+    opt: ["--graph-dpi", "+takes_value"]
+    help: "Passed to resulting dot file as 'graph [ dpi = <val> ];'"
+    default: "200"
+    parseto: int
 
 if hasErrors:
   quit(1)
@@ -512,6 +518,15 @@ if "input-file".kp and "output-file".kp:
   let outputFile = "output-file".k.toStr()
 
   let body: Option[Scope] = chartBuilder(readFile(inputFile).string)
+
+  let dpiVal =
+    # TODO add macro for branching on CLI key presence
+    if "graph-image-dpi".kp: "graph-image-dpi".k.tostr
+    else: "200"
+
+  let graphHead = &"digraph G {{ graph[dpi={dpiVal}];\n"
+
+
   if body.isSome:
     if "dump-tree".kp:
       let scopeDump = body.get.mapItBFStoSeq(
@@ -527,12 +542,13 @@ if "input-file".kp and "output-file".kp:
       let gviz = scopeToGviz(body.get)
       let conf = "splines=spline;nodesep=0.5;ranksep=0.7;\n"
       let res = gviz.topGVizToDot()
-      writeFile(outputFile, "digraph G { graph [ dpi = 300 ]; \n" & conf & $res & "}")
+      writeFile(
+        outputFile, graphHead & conf & $res & "}")
   else:
     if "dump-tree".kp:
       writeFile(outputFile, "Failed to parse input file")
     else:
-      writeFile(outputFile, "digraph G {  graph [ dpi = 300 ];  fail[label=\"failed to parse\"]; }")
+      writeFile(outputFile, graphHead & "fail[label=\"failed to parse\"]; }")
 
 elif "test-line".kp():
   let file = "test-line".k.toStr()

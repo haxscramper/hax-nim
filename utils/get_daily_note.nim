@@ -50,7 +50,7 @@ proc createNewNote(note: string): void =
     now().format("yyyy-MM-dd") &
     "; " & getTimeStampNow() & "\n\n"
 
-  let org_time = now().format("yyyy-MM-dd ddd hh:mm")
+  let org_time = now().format("yyyy-MM-dd ddd") & " 23:55"
   let tail = &"""
 * TODO Tasks [/]
   DEADLINE: <{org_time}>
