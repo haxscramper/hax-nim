@@ -46,6 +46,8 @@ while (call1()) { }
 { if (k == true) { } }
 { double half_p = (a + b + c) / 2; }
 { (a + b + c) / 2; }
-{ a / 2; }
-{ a + b / 2; }
-{ (b) / 2; }
+{ a = a / 2; }
+{ a = a + b / 2; }
+{ a = (b) / 2; }
+{ a = (b); }
+{ a = 341f1 3f1f13f; }
