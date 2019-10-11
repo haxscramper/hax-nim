@@ -21,25 +21,27 @@ call <- ident "(" (ws_expr ("," ws_expr)* )? ")"
 assgn <- ident ws ident ws "=" ws expr / ident ws "=" ws expr
 ws_expr <- ws (expr ws)?
 
-meth_call <- primary ( "." ( call / ident ) )+
-primary <- ident / call
-expr <- literal /
-     ident ( binop / relop / logop ) expr /
-     unop ident /
-     ident unop /
+meth_call <- ident ( "." ( call / ident ) )+
+expr <-
+     term (op2 term)* /
+     expr op2 term /
      assgn /
-     call /
      meth_call /
-     "(" ws expr ws ")" /
-     ident
+     call
 
-binop <- ws ( "+" / "-" / "*" / "/") ws
+term <- factor (op2 factor)*
+factor <- primary / op2 factor
+
+primary <- ident / strlit / intcon / ws "(" ws expr ws ")" ws
+op2 <- ws ( binop / relop / logop ) ws
+
+binop <- ws ( "+" / "-" / "*" / "/" ) ws
 relop <- ws ( "<" / ">" / "==" / "!=" ) ws
-unop <- ws ( "--" / "++" ) ws
+# unop <- ws ( "--" / "++" ) ws
 logop <- ws ( "||" / "&&" ) ws
 
-literal <- strlit / intcon
+ident <- ws {\ident} ws
+intcon <- ws \d+ ws
 strlit <- ws "\"" ( "\\\"" / ( !"\"" .))* "\"" ws
-ident <- {\ident}
+
 ws <- \s*
-intcon <- \d+

@@ -42,3 +42,10 @@ while (call1()) { }
 { outNumber_fld.setText(Double.toString(Long.valueOf(bits.k.toNum()).doubleValue() + bits.v.toDbl())); }
 { Long.valueOf(bits.k.toNum()).doubleValue() + bits.v.toDbl(); }
 { Long.valueOf(bits.k.toNum()).doubleValue(); }
+{ double  a = Double.parseDouble(Text1.getText()); }
+{ if (k == true) { } }
+{ double half_p = (a + b + c) / 2; }
+{ (a + b + c) / 2; }
+{ a / 2; }
+{ a + b / 2; }
+{ (b) / 2; }

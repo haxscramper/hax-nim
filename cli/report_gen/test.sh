@@ -44,6 +44,7 @@ do
     clang-format -i -style=file -verbose "$method_file"
 done < <(find $split_methods_dir -type f)
 
+
 $msg -i:1 "Generating flowcharts for files in directory '$split_methods_dir'"
 while read -r method_file
 do
