@@ -1,5 +1,5 @@
 import strformat, strutils, sequtils
-import ../cli/argparse
+import ../lib/argparse
 import macros
 
 import re
@@ -15,7 +15,7 @@ proc getCurrentNote(fileDirectory: string): string =
   if time.hour < newDayAfter:
     time.monthday = time.monthday - 1
 
-  fileDirectory & "/" & time.format("yyyy-MM-dd") & ".org"
+  fileDirectory.joinPath(time.format("yyyy-MM-dd") & ".org")
 
 proc noteAppendRequired(note: string): bool =
   var lastHour = 0
@@ -52,10 +52,9 @@ proc createNewNote(note: string): void =
 
   let org_time = now().format("yyyy-MM-dd ddd hh:mm")
   let tail = &"""
-* Tasks
-** TODO [/]
-   DEADLINE: <{org_time}>
-*** TODO <++>
+* TODO Tasks [/]
+  DEADLINE: <{org_time}>
+** TODO <++>
 
 * Logs
 
