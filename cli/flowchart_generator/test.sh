@@ -17,4 +17,6 @@ nim c                 \
     -o:"$f.bin"       \
     $f
 
-./$bin --test-line:"tests/simple.txt"
+str="a = 1; b = 2; call(2);"
+./$bin --verbose-parse:"$str"
+# ./$bin --debug-parse:"$str"

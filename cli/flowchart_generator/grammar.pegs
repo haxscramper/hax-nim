@@ -4,8 +4,8 @@ stmt <-
      cond_stmt /
      for_loop /
      while_loop /
-     expr ";" /
      assgn ";" /
+     expr ";" /
      ( "{" ws ( stmt ws?  )* ws "}" )
 
 end_stmt <- ws ( stmt ws / ";" ws )
@@ -20,10 +20,9 @@ while_loop <- "while" ws "(" ws_expr? ")" end_stmt
 
 call <- ident "(" (ws_expr ("," ws_expr)* )? ")"
 assgn <-
-      # ident ws ident ws "=" ws expr /
-      # ident ws "=" ws expr /
       ident ws "=" (!";" _)+ /
       ident ws ident ws "=" (!";" _)+
+
 ws_expr <- ws (expr ws)?
 
 meth_call <- primary ( "." ( call / ident ) )+
