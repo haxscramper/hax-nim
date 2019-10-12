@@ -182,6 +182,10 @@ proc placeChildNode(stack: var seq[Scope], child: Scope) =
   # NOTE we do not differentiate between expressions etc. when placing
   # child nodes. The difference is only used when drawing final graph
   # --- then we put some of the child scopes as description for nodes.
+
+  # if stack[^1].kind in cnkExpr .. cnkAssgn:
+  #   stack.add(child)
+  # else:
   stack[^1].children.add(child)
 
 
@@ -198,25 +202,23 @@ proc chartBuilder(str: string, verbose: bool = false): Option[Scope] =
     pkNonTerminal:
       enter:
         if not done and p.nt.name in allowed:
-          # echoi stack.len, &"add {p.nt.name} to stack"
           stack.add(Scope(
             name: getName(stack) & p.nt.name & "_",
             kind: p.nt.name.toNodeKind
           ))
-        # elif p.nt.name notin allowed:
-        #   echoi 1, "Skipping", p.nt.name
       leave:
         if not done and p.nt.name in allowed:
-          if verbose:
-            showArrow(
-              "  ".repeat(stack.len),
-              s,
-              start + length,
-              annot = &"[ {p.nt.name} ] " &
-                $tern(length > 0, togreen("ok"), tored("fail")),
-              reflow = true)
-
           if length > 0:
+            if verbose:
+              showArrow(
+                "  ".repeat(stack.len),
+                s,
+                start + length,
+                annot = &"[ {p.nt.name} ] " &
+                  $tern(length > 0, togreen("ok"), tored("fail")),
+                reflow = true)
+
+
             var child = stack.pop()
 
             if stack.len > 0:
@@ -512,11 +514,11 @@ proc runTestCases() =
 parseArgs:
   opt:
     name: "input-file"
-    opt: ["--input", "+takes_value"]
+    opt: ["--input", "--input-file", "+takes_value"]
     help: "Input file name"
   opt:
     name: "output-file"
-    opt: ["--output", "+takes_value"]
+    opt: ["--output", "--output-file", "+takes_value"]
     help: "output file name"
   opt:
     name: "test-line"
@@ -544,6 +546,10 @@ parseArgs:
     name: "verbose-parse"
     opt: ["--verbose-parse", "+takes_value"]
     help: "Run verbose parse of the string. Less info than debug"
+  opt:
+    name: "from-string"
+    opt: ["--from-string", "+takes_value"]
+    help: "Generate flowchart from string"
 
 
 if hasErrors:
@@ -556,11 +562,14 @@ if "verbose-parse".kp:
   else:
     echo "parse fail"
 
-if "input-file".kp and "output-file".kp:
-  let inputFile = "input-file".k.toStr()
+if ("input-file".kp or "from-string".kp) and "output-file".kp:
+  let sourceString =
+    if "input-file".kp: readFile("input-file".k.tostr()).string
+    else: "from-string".k.tostr()
+
   let outputFile = "output-file".k.toStr()
 
-  let body: Option[Scope] = chartBuilder(readFile(inputFile).string)
+  let body: Option[Scope] = chartBuilder(sourceString)
 
   let dpiVal =
     # TODO add macro for branching on CLI key presence

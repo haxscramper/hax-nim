@@ -283,3 +283,10 @@ uname = "emacs_elisp"
 ext = "el"
 build_command = ""
 run_command = "emacs --script {{input_file}}"
+
+[[build]]
+name = "Plantuml"
+uname = "plantuml"
+ext = "plantuml"
+build_command = "plantuml {{input_file}}"
+run_command = "true"

@@ -17,6 +17,10 @@ nim c                 \
     -o:"$f.bin"       \
     $f
 
-str="a = 1; b = 2; call(2);"
+str="if (a) { 123; }"
 ./$bin --verbose-parse:"$str"
+./$bin --from-string:"$str" --output-file:"out.tmp.dot"
+./$bin --from-string:"$str" --dump-tree --output-file:"out.tmp.synt"
+bat -lyaml "out.tmp.synt"
+bat "out.tmp.dot"
 # ./$bin --debug-parse:"$str"

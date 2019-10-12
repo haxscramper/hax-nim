@@ -62,9 +62,9 @@ rows = []
 for f in files:
     rows.append("""
         <tr>
+        <td><b>{}</b></td>
         <td><b>non</b></td>
         <td>file:</td>
-        <td><b>{}</b></td>
         </tr>""".format(f))
 
     code_filename = f[len(args.files_prefix):]
@@ -82,7 +82,7 @@ for f in files:
 
     imag = "<img src=\"{}\"></img>".format(image_file)
 
-    row = "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(code, synt, imag)
+    row = "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(code, imag, synt)
 
     rows.append(row)
 
