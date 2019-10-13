@@ -1,4 +1,4 @@
-# version 1.2
+# version 1.3
 import ../lib/argparse
 import ../lib/colecho_lib
 
@@ -15,7 +15,7 @@ parseArgs:
     help: "Print last suffix for filename"
   opt:
     name: "all-suffixes"
-    opt: ["--all-suffixes"]
+    opt: ["--all-suffixes", "--all-suffices"]
     help: "Print all suffixes for file"
   opt:
     name: "dirname"
@@ -47,11 +47,11 @@ else:
 
   if "last-suffix".kp:
     echo suffices[^1]
-  elif "all-suffixes".kp:
+  if "all-suffixes".kp:
     echo suffices.join(".")
-  elif "dirname".kp:
+  if "dirname".kp:
     echo dir
-  elif "name".kp:
+  if "name".kp:
     echo name
-  elif "basename".kp:
+  if "basename".kp:
     echo name & ext
