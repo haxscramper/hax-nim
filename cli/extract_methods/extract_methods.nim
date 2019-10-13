@@ -66,7 +66,7 @@ proc splitClass(str: string): seq[tuple[
            currentbody.len > 0:
           result.add((
             className & "." & currentName,
-            currentBody[1..^2].join("\n")))
+            currentBody[1..^1].join("\n")))
         currentBody = @[]
 
 

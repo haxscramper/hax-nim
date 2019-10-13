@@ -22,7 +22,8 @@
 \section{Исходный код}
 
 [% FOREACH class IN files %]
-   \subsection{[% class %]}
+   \subsection{[% class.remove(class_prefix) %]}
+   %%[% class %]
    \begin{minted}[framesep=2mm, linenos,breaklines]{java}
 [% INSERT $class %]
    \end{minted}

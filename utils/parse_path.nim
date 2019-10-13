@@ -1,9 +1,12 @@
+# version 1.2
 import ../lib/argparse
 import ../lib/colecho_lib
 
 import macros
 import os
 import strutils
+
+# TODO Add suport for reading from stdin
 
 parseArgs:
   opt:
@@ -37,8 +40,11 @@ elif argParsed.len != 1:
   ceUserError0("need exactly one file name")
   quit(1)
 else:
-  let (dir, name, ext) = argParsed[0].splitFile()
-  let suffices = ext.split('.')
+  var (dir, name, ext) = argParsed[0].splitFile()
+  var suffices = (name & ext).split('.')
+  name = suffices[0]
+  suffices = suffices[1..^1]
+
   if "last-suffix".kp:
     echo suffices[^1]
   elif "all-suffixes".kp:
