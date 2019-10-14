@@ -1,8 +1,8 @@
 import terminal, times, sequtils, strutils, options, parseopt, tables, os, math
 import macros
 
-import termformat, argparse, colecho_types, colecho_lib
-import helpers
+import ../lib/termformat, ../lib/argparse, ../lib/colecho_types, ../lib/colecho_lib
+import ../lib/helpers
 
 parseArgs:
 #~#== Color style
