@@ -112,8 +112,7 @@ ext = "cpp"
 uname = "g++_json"
 build_file = "{{input_file}}.bin"
 build_command = """
-g++ -o {{build_file}} -fdiagnostics-format=json {{input_file}} 2>&1 | \
-jq .[].message"""
+"""
 file_globs = [ "{{input_file}}" ]
 
 [[build]]

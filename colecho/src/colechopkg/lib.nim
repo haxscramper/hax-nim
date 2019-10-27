@@ -1,6 +1,6 @@
-import colecho_types, terminal, options, sequtils, strutils, parseopt
-import helpers, os, times, math
-import termformat
+import types, terminal, options, sequtils, strutils, parseopt
+import hmisc/helpers, os, times, math
+import hmisc/termformat
 
 
 

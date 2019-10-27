@@ -3,9 +3,9 @@ import math
 import terminal
 import algorithm
 
-import strparser
-import termformat
-import helpers
+import hmisc/strparser
+import hmisc/termformat
+import hmisc/helpers
 
 #~#==== Type definitions
 type

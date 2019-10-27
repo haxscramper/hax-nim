@@ -1,6 +1,4 @@
 import moustachu
-import ../lib/fsmonitor
-import ../lib/argparse
 import parsetoml
 import sequtils
 import strformat
@@ -17,16 +15,20 @@ import options
 import times
 
 
-import ../lib/termformat
-import ../lib/colecho_lib
-import ../lib/colecho_types
-import ../lib/helpers
-import ../lib/uprompt
-import macros
-import ../lib/strparser
-import logging
+import hmisc/termformat
+import hmisc/helpers
+import hmisc/uprompt
+import hmisc/strparser
+import hmisc/fsmonitor
+
 import create_script
-import ../lib/colecho_types
+import hargparse
+
+import colechopkg/lib
+import colechopkg/types
+
+import macros
+import logging
 
 var utilityPid: Pid
 
