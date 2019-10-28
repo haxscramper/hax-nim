@@ -32,239 +32,10 @@ import logging
 
 var utilityPid: Pid
 
+import cli_parser
+import file_watcher
+import build_parser
 
-
-proc dlog(args: varargs[string, `$`]): void =
-  discard
-  # log1.log(lvlAll, args.join(" "))
-  # log1.file.flushFile()
-
-#~#=== Command line parsing
-type
-  OperationMode = enum
-    watchChanges
-    doRunDev
-    createFiles
-    runSingleBuild
-    defaultMode
-
-  CmdParsed = object
-    optParsed: Table[string, CmdArg]
-    argParsed: seq[string]
-    maxRepeat: Opt[int]
-    waitUtil: bool
-    verbose: bool
-    case kind: OperationMode:
-      of doRunDev:
-        targetFile: string
-      of watchChanges:
-        targetFiles: seq[string]
-      of createFiles:
-        testShName: string
-        fileToCreate: string
-      of runSingleBuild:
-        buildUname: string
-        newFile: string
-      of defaultMode:
-        nil
-
-
-proc parseCMDLine(): CmdParsed =
-  parseArgs:
-    opt:
-      name: "create-test"
-      opt: ["--create"]
-      help: "Generate test.sh or update if already exits"
-    opt:
-      name: "listen"
-      opt: ["--listen"]
-      help: "Listen for changes and emit them"
-    opt:
-      name: "uname"
-      opt: ["--uname", "+takes_value"]
-      help: "Unique name of build config"
-    opt:
-      name: "verbose-mode"
-      opt: ["--verbose", "-v"]
-      help: "Parse configuration verbosely"
-  #   opt:
-  #     name: "run-dev"
-  #     opt: ["--dev", "--run-dev", "+takes_value"]
-  #     help: """Start build-and-run loop for a file (single file). If file
-  # does not exist user will be asked whether he wants to create new file.
-  # New file will be created using default script templates.
-  # """
-
-  result =
-    if argParsed.len >= 2 and argParsed[0] == "dev":
-      # "Running fsm-build dev on ", argParsed[1]
-      CmdParsed(kind: doRunDev, targetFile: argParsed[1])
-      #runDev(argParsed[1])
-
-    elif argParsed.len >= 1 and argParsed[0] == "watch":
-      dlog("Starting watcher")
-      dlog("Input:", argParsed[1])
-      #startWatch(argParsed[1].toStrSeq())
-      CmdParsed(
-        kind: watchChanges,
-        targetFiles: argParsed[1].toStrSeq())
-    elif argParsed.len >= 1 and argParsed[0] == "build":
-      if "uname".kp:
-        dlog("Running build", "uname".k.toStr())
-      CmdParsed(
-        kind: runSingleBuild,
-        buildUname: "uname".k.toStr())
-    elif "create-test".kp:
-      dlog("Creating files")
-      dlog("Input:", "create-test".k.toStr())
-      let files: (string,string) = toTuple[string]("create-test".k.toStr())
-      #files[1].writeFile(generateTestScript(files[0]))
-      CmdParsed(
-        kind: createFiles,
-        testShName: files[1],
-        fileToCreate: files[0])
-    else:
-      CmdParsed(kind: defaultMode)
-
-  if "test".kp:
-    result.maxRepeat = "test".k.toInt()
-
-  result.verbose = "verbose-mode".kp();
-
-  result.waitUtil =
-    if "wait-util".kp:
-      "wait-util".k.toBool()
-    else: false
-
-
-#~#==== Build options config parsing
-type
-  BuildOption = object
-    name: string
-    uname: string
-    files: seq[string]
-    buildCommand: string
-    runCommand: string
-
-
-
-proc checkList(list: openArray[
-  tuple[p: bool,m: string,l: MessageType]]):
-    bool =
-
-  result = true
-  for it in list:
-    if not it.p:
-      if it.l == mError: ceUserError0(it.m)
-      if it.l == mWarn: ceUserWarn(it.m)
-      result = false
-
-
-proc parseSingleBuild(
-  build: TomlValueRef,
-  langExt: string,
-  c: var Context,
-  parseConf: tuple[verbose: bool] = (verbose: false)
-     ): Option[BuildOption] =
-
-  if not build.hasKey("name"):
-    ceUserError0("Missing name")
-    return
-
-  let name = build["name"]
-
-  if not checkList(
-    # IDEA contracts + toml validation DSL. This can be similar to
-    # conditional expressions for argparse2
-    [(build.hasKey("ext") and build["ext"].getStr() == langExt,
-      "", mLog),
-     (build.hasKey("ext"),
-      fmt"Build '{name}' is missing 'ext'", mWarn),
-     (build.hasKey("uname"),
-      fmt"Build '{name}' is missing 'uname'", mError),
-     (build.hasKey("build_command"),
-      fmt"Build '{name}' is missing 'build_command'", mError)
-    ]):
-    return
-
-  if build.hasKey("build_file"):
-    c["build_file"] = build["build_file"].getStr().render(c)
-
-
-  let buildCommand = build["build_command"].getStr().render(c)
-  let runCommand = "$#" %
-      [if build.hasKey("run_command"):
-        build["run_command"].getStr().render(c)
-      else:
-        "./{{input_file}}".render(c)]
-  let watchedFiles: seq[string] = concat(
-    if build.hasKey("file_globs"):
-      let globs = build["file_globs"]
-      if globs.kind == Array:
-        globs.getElems()
-        .mapIt(
-          it
-          .getStr()
-          .render(c))
-        .mapIt(
-          toSeq(it.walkPattern))
-        .concat()
-      elif globs.kind == String:
-        toSeq(globs.getStr().walkPattern())
-      else:
-        ceUserError0(fmt"""
-Incorred format for file globs when parsing
-'{build["name"].getStr()}'. Expected string
-or array of strings""")
-        quit(1)
-    else:
-      @[]
-    ,
-    @["{{input_file}}".render(c)])
-
-  result = some(BuildOption(
-    name: build["name"].getStr(),
-    uname: build["uname"].getStr(),
-    files: watchedFiles,
-    buildCommand: buildCommand,
-    runCommand: runCommand
-  ))
-
-
-proc parseBuildOpts(
-  buildConf: string,
-  langExt: string,
-  context: var Context,
-  buildOpts: seq[BuildOption] = @[],
-  parseConf: tuple[verbose: bool] = (verbose: false)
-     ): seq[BuildOption] =
-
-  ceUserInfo0("Parsing config")
-
-  result = buildOpts
-
-  let buildConfToml = parsetoml.parseFile(buildConf)
-
-  for build in buildConfToml["build"].getElems():
-    let res = parseSingleBuild(build, langExt, context, parseConf)
-    if res.isSome:
-      result.add(res.get())
-
-proc startUtility(command: string): void =
-  let pid: Pid = fork()
-  if pid < 0:
-    ceUserError0 "Cannot fork"
-  elif pid > 0:
-    utilityPid = pid
-  else:
-    # TODO Add support for runing without use of bash, but by using
-    # exec. Add different build command options for build command
-    # templates (bash_build and exec_build).
-    printSeparator("upper")
-    let res = execShellCmd("/bin/bash -c \"$#\"" % command)
-    # TODO catch return value and print all errors
-    printSeparator("lower")
-    quit(0)
 
 proc startKeyListener() {.async.} =
   # TODO wip. I need to somehow read input from stdin even without RET
@@ -317,78 +88,6 @@ proc getBuildOpts(inputFile: string): seq[BuildOption] =
 
 
 #~#==== File change loops
-proc startBuilder(
-  selected: BuildOption,
-  waitUtil: bool = false,
-  maxRepeat: Opt[int]) {.async.} =
-    var monitor = newMonitor()
-    ceUserInfo0("List of watched files:")
-
-    for file in selected.files.sorted.deduplicate(true):
-      ceUserLog0(file)
-      monitor.add(file, {MonitorModify})
-
-    proc doBuild(cmd: string): bool =
-      printSeparator("upper")
-      #echo  "Building using:", cmd
-      result = execShellCmd("/bin/bash -c \"$#\"" % cmd) == 0
-      printSeparator("lower")
-
-    proc doRunBuild(): bool =
-      if doBuild(selected.buildCommand):
-        ceUserInfo0("Build succeded, running")
-        if selected.runCommand != "":
-          startUtility(selected.runCommand)
-        true
-      else:
-        ceUserWarn("Build failed")
-        false
-
-
-
-
-
-    let cooldownSec: float = 1
-    var lastBuild: float = epochTime()
-
-    ceUserInfo0("Initial build")
-    discard doRunBuild()
-
-
-
-    var lastBuildState: bool = true
-
-    # TODO Print message about waiting for changes in according places
-    while true:
-      let events: seq[MonitorEvent] = await monitor.read()
-      # TODO analyze list of changes and reduce list of events to
-      # avoid repetitive rebuilds or wait at least certain amount of
-      # time between rebuilds ignoring all changes to ignore events
-      # that happened in sequence but in different event batches
-      if events.mapIt(it.kind == MonitorModify).foldl(a or b) and
-         lastBuild + cooldownSec < epochTime():
-        block: # Kill utility if needed
-          if utilityPid != 0 and waitUtil:
-            var statVal: cint
-            let res = waitpid(utilityPid, statVal, 0)
-            ceUserInfo0("Run finished")
-          elif utilityPid != 0 and not waitUtil:
-            var null: cint = 0
-            let testRes = waitpid(utilityPid, null, WNOHANG)
-            if testRes == 0:
-              ceUserInfo0("New change, killing utility ...")
-              let res = kill(utilityPid, SIGTERM)
-              ceUserLog0("Done")
-            elif lastBuildState:
-              ceUserInfo0("Run finished")
-
-        block: # Rebuild and restart
-          lastBuild = epochTime()
-          ceUserInfo0 "Rebuilding ..."
-
-          lastBuildState = doRunBuild()
-          if not lastBuildState:
-            ceUserInfo0 "Waiting for new changes"
 
 
 proc runDev(opts: CmdParsed) =
@@ -431,17 +130,13 @@ proc listenChanges(files: seq[string]) {.async.} =
   ## Listen for changes in files (and associated with them) and print
   ## to stdout
   # TODO monitor directory and add new files for watching
-  dlog "Starting change listener on:", files[0]
   var monitor = newMonitor()
   for file in files:
     monitor.add(file, {MonitorModify})
 
   while true:
-    dlog "Waiting for events"
     let events: seq[MonitorEvent] = await monitor.read()
-    dlog $events
     for ev in events:
-      dlog "Event" & $ev
       case ev.kind:
         of MonitorModify: echo ev.name
         else: discard
@@ -449,6 +144,7 @@ proc listenChanges(files: seq[string]) {.async.} =
 proc startWatch(files: seq[string]) =
   asyncCheck listenChanges(files)
   runForever()
+
 
 
 #~#==== Test script generations
@@ -548,6 +244,8 @@ when isMainModule:
           parseResults.fileToCreate))
     of defaultMode:
       discard
+    of debugDump:
+      dumpDebugInfo()
 
 # IDEA hide cursor in terminal on start and show it when program is
 # terminated. Requires to catch shortcuts.

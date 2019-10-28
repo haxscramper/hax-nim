@@ -19,3 +19,6 @@ requires "hargparse >= 0.1.0"
 
 after install:
   exec "ln -sf ~/.nimble/bin/fsm_build ~/.nimble/bin/fsm-build"
+
+after test:
+  exec "cd tests && nim t*.nims && bash t*.sh"
