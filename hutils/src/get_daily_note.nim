@@ -1,5 +1,5 @@
 import strformat, strutils, sequtils
-import ../lib/argparse
+import hargparse
 import macros
 
 import re

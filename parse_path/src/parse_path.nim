@@ -1,6 +1,6 @@
 # version 1.3
-import ../lib/argparse
-import ../lib/colecho_lib
+import hargparse
+import colechopkg/lib
 
 import macros
 import os
