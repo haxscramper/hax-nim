@@ -44,14 +44,18 @@ proc parseTemplates(
 func getLastExt*(file: string): string =
   file.splitFile()[2].split(".")[^1]
 
+proc getExtTemplates(langExt: string): seq[string] =
+  ## Find all templates in ~/.config/create-script
+  @[]
+
 proc templateFromExt*(langExt: string): tuple[name, body: string] =
   let context = getContext()
 
-  let conf = getCallPath().splitPath()[0] & "/config/script_templates.toml"
-
+  # let conf = getCallPath().splitPath()[0] & "/config/script_templates.toml"
+  let conf = ""
 
   let templates = parseTemplates(
-    confFile = conf ,
+    confFile = conf,
     context = context,
     langExt = langExt)
 

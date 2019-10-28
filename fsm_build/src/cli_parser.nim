@@ -52,12 +52,19 @@ proc parseCMDLine*(): CmdParsed =
       name: "verbose-mode"
       opt: ["--verbose", "-v"]
       help: "Parse configuration verbosely"
+    opt:
+      name: "help"
+      opt: ["--help", "-h", "-?"]
+      help: "Print help message"
+
+  if "help".kp():
+    cmdPrintHelp(helpTable)
 
   result =
     if argParsed.len >= 2 and argParsed[0] == "dev":
       CmdParsed(kind: doRunDev, targetFile: argParsed[1])
 
-    elif argParsed.len >= 2 and argParsed[0] == "debug":
+    elif argParsed.len >= 1 and argParsed[0] == "debug":
       CmdParsed(kind: debugDump)
 
     elif argParsed.len >= 1 and argParsed[0] == "watch":

@@ -123,5 +123,19 @@ proc parseBuildOpts*(
     if res.isSome:
       result.add(res.get())
 
+proc getBuildOpts*(inputFile: string): seq[BuildOption] =
+  # var context: Context = newContext()
+
+  # context["input_file"] = inputFile
+  # context["fsm_build_bin_dir"] = getCallPath().splitPath()[0]
+  # let ext = inputFile.getLastExt()
+  # let conf = getCallPath().splitPath()[0] & "/config/build_commands.toml"
+
+  # result = conf.parseBuildOpts(langExt = ext, context = context, parseConf = (verbose: false))
+
+  result = @[]
+
+
+
 proc dumpDebugInfo*(): void =
-  echo "parsing ..."
+  echo ":no"

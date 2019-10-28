@@ -75,17 +75,6 @@ proc select(
   result = buildOpts[selected]
 
 
-proc getBuildOpts(inputFile: string): seq[BuildOption] =
-  var context: Context = newContext()
-
-  context["input_file"] = inputFile
-  context["fsm_build_bin_dir"] = getCallPath().splitPath()[0]
-  let ext = inputFile.getLastExt()
-  let conf = getCallPath().splitPath()[0] & "/config/build_commands.toml"
-
-  result = conf.parseBuildOpts(langExt = ext, context = context, parseConf = (verbose: false))
-
-
 
 #~#==== File change loops
 
@@ -227,7 +216,6 @@ $msg "Starting test script"
 
 """
   return templ
-
 
 when isMainModule:
   let parseResults = parseCMDLine()
