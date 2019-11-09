@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.0.0"
+version       = "1.4.0"
 author        = "haxscramper"
 description   = "Simple filename pare utility"
 license       = "BSD-3-Clause"
