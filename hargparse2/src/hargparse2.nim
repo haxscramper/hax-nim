@@ -6,138 +6,44 @@ import options
 import deques
 
 type
-  Opt = object
+  OptDesc = object
+    name: string ## name of the command, used when acessing it in code
+    help: string ## Help string
+    pfix: seq[string] ## Possible prefixes to set given option (--opt)
+
+    maxValues: int ## Maximum number of times option can be set. If
+                   ## this equals zero option type will be `bool`. One
+                   ## for `T`. Two or more will create `seq[T]`.
+
+
+    exclRules: Option[NimNode] ## Boolean expression to check whether
+                               ## or not it is possible to use command
+                               ## (is it mutally exclisive with some
+                               ## other command or not)
+
+    parsecheck: Option[NimNode] ## Code that will be evaluated to
+                                ## check validity of the argument.
+
+    parseto: Option[typedesc] ## Type that *single* use of the option
+                              ## can be parsed to. This is `T` in
+                              ## `maxValues`
+
+  ArgDesc = object
+    name: string ## name of the command, used when acessing it in code
+    help: string ## Help string
+    parsecheck: Option[NimNode]
+    parseto: Option[typedesc]
+
+  CommandDesr = object
     name: string
-    conf: seq[string]
+    help: string
+    args: seq[ArgDesc]
+    opts: seq[OptDesc]
 
-  Arg = object
-    name: string
+# The same is for `arg`
+macro opt(name: static[string]): typed =
+  ## Replace with call to correct getter function with type signature
+  ## corresponding to `parseto` field in `OptDesc`
+  quote do:
+    echo "test"
 
-  SubTree = ref object
-    name: string
-    opts: seq[Opt]
-    args: seq[Arg]
-    subs: seq[SubTree]
-
-
-proc getItem(
-  topNode: NimNode,
-  itemName: string): Option[NimNode] =
-    for s in topNode:
-      if s[0] == ident(itemName):
-        return s[1]
-
-
-proc getItemStr(
-  topNode: NimNode,
-  itemName: string):
-    Option[string] =
-  let s = getItem(topNode, itemName)
-  result =
-    if s.isSome:
-      some(s.get().toStrLit().strVal[2..^2])
-    else:
-      none(string)
-
-
-proc checkSubItems(node: NimNode, allowed: seq[string]): void =
-  for child in node:
-    if child.kind == nnkCall and child[0].kind == nnkIdent:
-      doAssert(
-        allowed.find(child[0].strVal) != -1,
-        "Found unexpected child name: " &
-          child[0].strVal & ". Expected values are: " & $allowed)
-
-proc extractOpts(opts: NimNode): seq[Opt] =
-  opts.checkSubItems(@["opt"])
-  for node in opts:
-    result.add(Opt(name: node[1].getItemStr("name").get()))
-
-
-proc extractArgs(args: NimNode): seq[Arg] =
-  args.checkSubItems(@["arg"])
-  for node in args:
-    discard
-
-
-proc getSubTree(body: NimNode): SubTree =
-  result = SubTree(
-    name: body.getItemStr("name").get(""))
-  body.checkSubItems(@["name", "opts", "args", "subs"])
-
-  for node in body:
-    case node[0].strVal:
-      of "opts": result.opts.add(node[1].extractOpts())
-      of "args": result.args.add(node[1].extractArgs())
-      of "subs":
-        for sub in node[1]:
-          result.subs.add(sub[1].getSubTree())
-      of "name": discard
-      else:
-        assert(false, "invalid identifier name")
-
-
-proc toEnumField(str: string, prefix: string): string =
-  prefix & str.replace('-', '_').capitalizeAscii()
-
-
-proc generateEnum(
-  subName: string,
-  opts: seq[string],
-  prefix: string = ""
-     ): NimNode =
-  ## Generate enum for each option in subcommand
-  result = newEnum(
-    name = ident(subName.capitalizeAscii()),
-    fields = opts.mapIt(ident(it.toEnumField(prefix))),
-    public = true,
-    pure = true)
-
-
-proc generateSubEnums(sub: SubTree, prefix = "Main"): NimNode =
-  result = newStmtList(
-    sub.mapItBFStoSeq(
-      subs,
-      generateEnum(
-        subName =
-        tern(lv == 0, prefix, "Sub".repeat(lv)) &
-          it.name.capitalizeAscii(),
-        opts = it.opts.mapIt(it.name),
-        prefix = "opt")))
-
-macro parseArgsTyped(body: untyped): untyped =
-  defer:
-    "argparse2.nim.tmp".writeFile($result.toStrLit())
-
-  let subTree = getSubTree(body)
-
-  result = quoteDoInterpolStmt:
-    # echo "test"
-    `"generateSubEnums(subTree)"`
-
-    proc parseArguments(args: string): string =
-      "TMP"
-
-
-
-
-when isMainModule:
-  parseArgsTyped:
-    opts:
-      opt:
-        name: "test"
-        conf: ["--test", "+takes_value"]
-      opt:
-        name: "wtest"
-        conf: ["--wtest", "+takes_value"]
-    args:
-      arg:
-        name: "FILE"
-        conf: ["+required"]
-    subs:
-      sub:
-        name: "firstSub"
-        opts:
-          opt:
-            name: "sub-opt"
-            conf: ["--sub-opt"]

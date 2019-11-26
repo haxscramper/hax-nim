@@ -84,6 +84,7 @@ sub:
       - name :: name of command. For toplevel command it might be
                 empty. All lower-level have to have non-zero name
                 length
+      - on_match :: proc/code to run if subcommand is called.
       - options :: list of options for the command.
         - takes_value :: =bool=. optional, defaults to false
         - name :: =string=. required
@@ -98,7 +99,12 @@ sub:
                         use of default functions (~fileTest~) and
                         generate better help messages.
         - parseto :: =type= - check if argument can be parsed into it
-                     (things like ~int, float, double~ etc)
+                     (things like ~int, float, double~ etc). NOTE:
+                     this requires to somehow generate list of all
+                     parsing functions (overloads for parsing
+                     funcsions). Is it possible to get list of all
+                     defined functions at compile-time using nim
+                     macro?
       - args :: positional arguments for the command
       - commands :: list of subcommands
 - *Validation*
@@ -122,6 +128,28 @@ sub:
     - Evaluate reaction procs in the order of their definition (during
       code generation they have been stored in input data as nim nodes)
     - Return result table to toplevel
+  - User interactions
+    - two uses for subcommands: define proc that will be called when
+      command is used, org work with parsed options tree.
+    - *issues:*
+      - How user can get value of the command? There is two options
+        (everything else is mix of either of two):
+        - Generate lots of enums for all commands, subcommands,
+          arguments etc. and use them to get values from tommand
+          table. This does not solve issue of getting *typed* value
+          from argumen.
+        - Write macro that takes name of the argument/option etc,
+          performs all checks at compile-time and substitutes
+          corresponding function call with correct signature. To get
+          value of the toplevel command option I will need to write
+          ~%%$"option"~. To check whether or not value is present i
+          can either use ~%%?"option"~ or declare return result of the
+          ~%%$~ as =Option= *type*. This allows me to use ~if_let~.
+          Arguments in subcommands can be accessed via
+          ~"comm::comm2::opt"~ *or* inside macro/proc pragma
+          ~asSubcommand~ (in this case all options will default to
+          searching in the said subcommand. To access top-level
+          command you need to use ~::~ prefix)
 
 * TODO todo [0/25]
 
