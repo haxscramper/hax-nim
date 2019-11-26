@@ -87,7 +87,7 @@ some command line arguments for testing. My actions:
 #+HEADERS: :noeval
 #+BEGIN_SRC txt
 vvvvvvvvvvvvvvvvvvv
->>>> SOme text <<<<
+>>>> Some text <<<<
 >>>> goes here <<<<
 ^^^^^^^^^^^^^^^^^^^
 #+END_SRC
