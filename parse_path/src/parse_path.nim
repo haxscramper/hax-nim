@@ -8,6 +8,7 @@ import os
 import strutils
 
 # TODO Add suport for reading from stdin
+# TODO wrap all actions in proc so they can be used as a functions
 
 parseArgs:
   opt:

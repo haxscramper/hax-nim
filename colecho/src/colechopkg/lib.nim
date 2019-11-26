@@ -361,9 +361,9 @@ proc ceUserInfo0*(str: string): void =
 proc ceUserInfo2*(str: string): void =
   ceWrite(str = str, mtype = mInfo, level = 2, style = sDefault, 0)
 
-proc ceUserLog0*(str: string): void =
+proc ceUserLog0*(str: string, ind = 0): void =
   ## Fancier echo, nothing useful
-  ceWrite(str = str, mtype = mLog, level = 0, style = sDefault, 0)
+  ceWrite(str = str, mtype = mLog, level = 0, style = sDefault, indent = ind)
 
 proc ceUserError0*(str: string): void =
   ## When multiple errors of that type are expected. For example when

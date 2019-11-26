@@ -217,6 +217,7 @@ $msg "Starting test script"
 """
   return templ
 
+
 when isMainModule:
   let parseResults = parseCMDLine()
   case parseResults.kind:

@@ -502,6 +502,11 @@ macro parseArgs*(body: untyped): untyped =
         of cmdEnd:
           `endParserCase`
 
+
+    if optParsed.hasKey("get-help"):
+      cmdPrintHelp(helpTable)
+      quit(0)
+
   "aragparse_loop.nim.tmp".writeFile(
     $toStrLit(result))
 
