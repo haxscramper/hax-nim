@@ -1,4 +1,4 @@
-import terminal, sequtils, strutils, helpers
+import terminal, sequtils, strutils, helpers, unicode
 
 proc justifyFitTerminal*(
   str: string,
@@ -10,14 +10,14 @@ proc justifyFitTerminal*(
     let strSplit = str
     .replace("\n", " ")
     .split(' ')
-    .mapIt(strip(it))
+    .mapIt(unicode.strip(it))
     .filterIt(it.len != 0)
 
     var buf: string
 
     for s in strSplit:
-      if buf.len + s.len <= width:
-        buf.add(tern(buf.len == 0, "", " ") & s)
+      if buf.runelen + s.runelen <= width:
+        buf.add(tern(buf.runelen == 0, "", " ") & s)
       else:
         result.add(buf)
         buf = s
