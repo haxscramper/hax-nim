@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.1.1"
 author        = "haxscramper"
 description   = "Colorful alternative to echo"
 license       = "BSD-3-Clause"

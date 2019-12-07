@@ -71,7 +71,7 @@ proc getPrefixString*(
   style: MessageStyle): string =
     defer:
       if style == sLog:
-        result = $(now().format("[HH:mm:ss:fff]")) & result
+        result = $(now().format("[HH:mm:ss]")) & result
 
     result = case messageType:
       of mLog:
@@ -301,7 +301,9 @@ template printLine*(
   lprefix: ColoredString,
   line: string|ColoredString,
   ellipis: bool = false,
-  indentSize: int = 0): void =
+  indentSize: int = 0,
+  prefixSpacing: string = " "
+         ): void =
     var prefix = lprefix
     prefix.str = if idx == 0:
                    prefix.str
@@ -310,7 +312,12 @@ template printLine*(
                      ".".repeat(3)
 
 
-    echo "$#$# $#" % [" ".repeat(indentSize), $prefix, $line]
+    echo "$#$#$#$#" % [
+      " ".repeat(indentSize),
+      $prefix,
+      $prefixSpacing,
+      $line
+    ]
 
 
 proc ceWrite(

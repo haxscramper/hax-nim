@@ -6,6 +6,7 @@ import hmisc/helpers
 import hargparse
 import colechopkg/types
 import colechopkg/lib
+import strformat
 
 parseArgs:
 #~#== Color style
@@ -91,6 +92,15 @@ Show only <n> last characters in prefix. With `--rtr:2` instead
     name: "style-uniform"
     opt: ["-u", "--uniform"]
     help: "Use the same color scheme for prefix and message"
+  opt:
+    name: "prefix"
+    opt: ["-p", "--prefix"]
+    help: """
+Prefix displayed in log message before all other text. Should be used
+for differentiating between different outputs in `log` style. In other
+modes it is prepended to the actual message as-is. In `log` style it
+is left-justified to at lest 12 characters and wrapped in parenthesis.
+"""
 
 if hasErrors:
   quit(1)
@@ -168,4 +178,14 @@ for idx, line in message:
       idx != 0,
       indent)
   else:
-    printLine(prefix, line, idx != 0, indent)
+    if prefStyle == sLog and "prefix".kp:
+      let progPrefix = "prefix".k.toStr()
+      let progPrefixMsg =
+        if progPrefix.len > 12:
+          progPrefix
+        else:
+          progPrefix.alignLeft(12, '.')
+
+      printLine(prefix, line, idx != 0, indent, &"({progPrefixMsg}) ")
+    else:
+      printLine(prefix, line, idx != 0, indent)
