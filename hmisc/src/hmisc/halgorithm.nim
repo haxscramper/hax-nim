@@ -1,3 +1,6 @@
+import algorithm
+import sequtils
+
 template mapItBFStoSeq*(
   topNode: typed,
   subNode: untyped,
@@ -62,6 +65,13 @@ template mapItBFStoSeq*(
     result
 
 template mergeUniqByIt*(sequence, operation: untyped): untyped =
+  ## For each element in sequence apply `operation` and compare
+  ## results. Consequent items from `sequence` with equal results will
+  ## be added into single subsequence
+  runnableExamples:
+    echo @[1,2,3,4,4,5].mergeUniqByIt(it)
+    echo @[(1,2), (1,2), (1,4)].mergeUniqByIt(it[0])
+
   let s = sequence
   var prev =
     block:
@@ -85,3 +95,27 @@ template mergeUniqByIt*(sequence, operation: untyped): untyped =
 
   result.add equal
   result
+
+template twoPassSortByIt*(
+  sequence, operation1, operation2: untyped
+         ): untyped =
+  ## Sort input sequence using firt `operation1`, then group into
+  ## 2d-sequence based on result of `operation1` and sort each
+  ## subsequence using `operation2`
+  runnableExamples:
+    # Sort by first field and then by second
+    echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
+
+  let s = sequence
+  let firstSorted = sortedByIt(sequence, operation1)
+
+  var secondSorted: seq[type(@[s[0]])]
+  for equal in firstSorted.mergeUniqByIt(operation1):
+    secondSorted.add(equal.sortedByIt(operation2))
+
+  secondSorted
+
+when isMainModule:
+  echo @[1,2,3,4,4,5].mergeUniqByIt(it)
+  echo @[(1,2), (1,2), (1,4)].mergeUniqByIt(it[0])
+  echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
