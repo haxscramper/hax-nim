@@ -81,28 +81,28 @@ proc getPrefixString*(
           of sDefault : "  -"
           of sVerbose : "Log 0"
           of sGtest   : "[          ]"
-          of sLog  : "[log:__0]"
+          of sLog  : "[L0]"
           of sBright  : "---"
         of 1:
           case style:
           of sDefault : "---"
           of sVerbose : "Log 1"
           of sGtest   : "[----------]"
-          of sLog  : "[log:__1]"
+          of sLog  : "[L1]"
           of sBright  : "---"
         of 2:
           case style:
           of sDefault : "***"
           of sVerbose : "Log 2"
           of sGtest   : "[**********]"
-          of sLog  : "[log:__2]"
+          of sLog  : "[L2]"
           of sBright  : "---"
         of 3:
           case style:
           of sDefault : ">>>"
           of sVerbose : "Log 3"
           of sGtest   : "[>>>>>>>>>>]"
-          of sLog  : "[log:__3]"
+          of sLog  : "[L3]"
           of sBright  : "---"
         else: ""
       of mInfo:
@@ -112,28 +112,28 @@ proc getPrefixString*(
           of sDefault : "  >"
           of sVerbose : "Inf 0"
           of sGtest : "[->->->->->]"
-          of sLog : "[info:_0]"
+          of sLog : "[I0]"
           of sBright : "~~~"
         of 1:
           case style
           of sDefault : " ->"
           of sVerbose : "Inf 1"
           of sGtest : "[->->->->->]"
-          of sLog : "[info:_1]"
+          of sLog : "[I1]"
           of sBright : "~~~"
         of 2:
           case style
           of sDefault : "-->"
           of sVerbose : "Inf 2"
           of sGtest : "[->>->>->>-]"
-          of sLog : "[info:_2]"
+          of sLog : "[I2]"
           of sBright : "III"
         of 3:
           case style
           of sDefault : "-->"
           of sVerbose : "Inf 3"
           of sGtest : "[->>->>->>-]"
-          of sLog : "[info:_3]"
+          of sLog : "[I3]"
           of sBright : "III"
         else : ""
       of mWarn:
@@ -143,28 +143,28 @@ proc getPrefixString*(
           of sDefault : "==>"
           of sVerbose : "Wrn 0"
           of sGtest : "[=>>=>>=>>=]"
-          of sLog : "[warn:_0]"
+          of sLog : "[W0]"
           of sBright : ">>>"
         of 1:
           case style
           of sDefault : "==>"
           of sVerbose : "Wrn 1"
           of sGtest : "[=>>=>>=>>=]"
-          of sLog : "[warn:_1]"
+          of sLog : "[W1]"
           of sBright : ">>>"
         of 2:
           case style
           of sDefault : "=>>"
           of sVerbose : "Wrn 2"
           of sGtest : "[=>>=>>=>>=]"
-          of sLog : "[warn:_2]"
+          of sLog : "[W2]"
           of sBright : "WWW"
         of 3:
           case style
           of sDefault : "=>>"
           of sVerbose : "Wrn 3"
           of sGtest : "[=>>=>>=>>=]"
-          of sLog : "[warn:_3]"
+          of sLog : "[W3]"
           of sBright : "WWW"
         else : ""
       of mError:
@@ -174,28 +174,28 @@ proc getPrefixString*(
           of sDefault : "###"
           of sVerbose : "Err 0"
           of sGtest :   "[##########]"
-          of sLog :  "[error:0]"
+          of sLog :  "[E0]"
           of sBright :  "!!!"
         of 1:
           case style
           of sDefault : "!!!"
           of sVerbose : "Err 1"
           of sGtest :   "[!!!!!!!!!!]"
-          of sLog :  "[error:1]"
+          of sLog :  "[E1]"
           of sBright :  "!!!"
         of 2:
           case style
           of sDefault : "!!!"
           of sVerbose : "Err 2"
           of sGtest :   "[!!!!!!!!!!]"
-          of sLog :  "[error:2]"
+          of sLog :  "[E2]"
           of sBright :  "EEE"
         of 3:
           case style
           of sDefault : "!!!"
           of sVerbose : "Err 3"
           of sGtest :   "[!!!!!!!!!!]"
-          of sLog :  "[error:3]"
+          of sLog :  "[E3]"
           of sBright :  "EEE"
         else :          ""
 
