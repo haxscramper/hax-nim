@@ -1,5 +1,10 @@
-import algorithm
 import sequtils
+
+import algorithm
+export algorithm
+
+import deques
+export deques
 
 template mapItBFStoSeq*(
   topNode: typed,
@@ -20,7 +25,6 @@ template mapItBFStoSeq*(
     ## or something like that). `lv` starts at 0 and is incremented
     ## each on each iteration.
     runnableExamples:
-      import deques
       type
         Tree = ref object
           name: string
@@ -69,8 +73,11 @@ template mergeUniqByIt*(sequence, operation: untyped): untyped =
   ## results. Consequent items from `sequence` with equal results will
   ## be added into single subsequence
   runnableExamples:
-    echo @[1,2,3,4,4,5].mergeUniqByIt(it)
-    echo @[(1,2), (1,2), (1,4)].mergeUniqByIt(it[0])
+    assert @[1,2,3,4,4,5].mergeUniqByIt(it) ==
+           @[@[1], @[2], @[3], @[4, 4], @[5]]
+
+    assert @[(1,2), (1,2), (1,4), (2,3)].mergeUniqByIt(it[0]) ==
+           @[@[(1, 2), (1, 2), (1, 4)], @[(2, 3)]]
 
   let s = sequence
   var prev =
@@ -104,7 +111,9 @@ template twoPassSortByIt*(
   ## subsequence using `operation2`
   runnableExamples:
     # Sort by first field and then by second
-    echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
+    assert @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1]) ==
+           @[@[(1, 2), (1, 3), (1, 9)], @[(4, 32)]]
+
 
   let s = sequence
   let firstSorted = sortedByIt(sequence, operation1)
@@ -116,6 +125,4 @@ template twoPassSortByIt*(
   secondSorted
 
 when isMainModule:
-  echo @[1,2,3,4,4,5].mergeUniqByIt(it)
-  echo @[(1,2), (1,2), (1,4)].mergeUniqByIt(it[0])
   echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
