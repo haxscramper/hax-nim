@@ -126,3 +126,20 @@ template twoPassSortByIt*(
 
 when isMainModule:
   echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
+
+
+# TODO implement
+# template maxIt(sequence, operation: untyped): untyped  =
+#   assert sequence.len > 0, "cannot find max of empty sequence"
+#   var result: type(sequence[0]) = sequence[0]
+#   for i in 1..<sequence.len:
+#     let
+#       lhs {.inject.} = result
+#       rhs {.inject.} = sequence[i]
+
+#     if operation: # lhs is 'smaller' than rhs
+#       result = lhs
+#     else:
+#       result = rhs
+
+#   return result
