@@ -1,4 +1,5 @@
 import options, sequtils
+import random
 import std/wordwrap
 import strutils
 import macros
@@ -183,3 +184,9 @@ proc enclosedIn*(
     bool =
   return str.startsWith(delim.left) and
     str.endsWith(delim.right)
+
+proc getRandomBase64*(length: int): string =
+  newSeqWith(
+    length,
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".
+    sample()).join("")
