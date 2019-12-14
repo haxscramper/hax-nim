@@ -7,6 +7,9 @@ import hmisc/strparser
 import hmisc/termformat
 import hmisc/helpers
 
+export macros
+export tables
+
 #~#==== Type definitions
 type
   CmdArgKind* = enum
