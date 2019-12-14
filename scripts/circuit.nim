@@ -11,6 +11,7 @@ import os
 import re
 import random
 import hmisc/hfile
+import hmisc/helpers
 import strformat
 
 setShellDebugConfig({})
@@ -71,13 +72,16 @@ dlog "Output file:", targetFile
 dlog "Circuit dir:", circuitDir
 dlog "Target ext:", targetExt
 
-let macroResult =
+proc gettmp(): string = 
   mktemp(
     templ = "circuit.tmp.XXXXXXXXX",
     dir = "/tmp/circuit/"
   )
 
-proc createPngUsingSVG(inFile, outFile: string) = 
+
+
+proc createPngUsingSVG(inFile, outFile: string) =
+  let macroResult = gettmp()
   var width = 400
   var height = 400
   shell:
@@ -118,15 +122,36 @@ proc createTexStandalone(inFile, outFile: string) =
 \end{{document}}
 """)
 
-proc createPngUsingTex(inFile, outFile: string) =
+proc createPdfUsingTexTikz(inFile, outFile: string) =
+  let macroResult = gettmp()
   let texfile = macroResult & ".tex"
+  let pdffile = macroResult & ".pdf"
   dlog "Creating png using latex, outputting into", texfile
   dlog "Output file is", outFile
   createTexStandalone(inFile, texfile)
   let (res, code) = shellVerbose {dokCommand, dokError, dokRuntime}:
     # latexmk -cd -C ($texfile)
     latexmk -cd -pdf "-latexoption='-shell-escape'" "--interaction='nonstopmode'" ($texfile)
-    gm convert -density 150 ($macroResult".pdf") -quality 90 ($outFile)
+    cp ($pdffile) ($outFile)
+
+
+proc createEpsUsingTex(inFile, outFile: string) =
+  let macroResult = gettmp()
+  let pdfFile = macroResult & ".pdf"
+  createPdfUsingTexTikz(inFile, pdfFile)
+
+  let (res, code) = shellVerbose (doDebug.tern({dokCommand}, {})):
+    gm convert ($inFile) ($outFile)
+
+  dlog "Output code is", code
+
+proc createPngUsingTex(inFile, outFile: string) =
+  let macroResult = gettmp()
+  let pdfFile = macroResult & ".pdf"
+  createPdfUsingTexTikz(inFile, pdfFile)
+
+  let (res, code) = shellVerbose (doDebug.tern({dokCommand}, {})):
+    gm convert -density 150 ($pdfFile) -quality 90 ($outFile)
 
   dlog "Output code is", code
 
@@ -147,6 +172,9 @@ case targetExt:
       targetFile.writeFile(createTexTikzpicture(sourceFile))
     else:
       createTexStandalone(sourceFile, targetFile)
+
+  of "eps":
+      createEpsUsingTex(sourceFile, targetFile)
   else:
     ceUserError0 "Unknown extension " & targetExt
 

@@ -13,3 +13,5 @@ nimcache/
 **/*.tmp
 **/*.html
 
+/scripts/.circuit
+/scripts/.latex
