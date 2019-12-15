@@ -299,7 +299,7 @@ proc printAllArgs*(): void =
 
 template printLine*(
   lprefix: ColoredString,
-  line: string|ColoredString,
+  line: string | ColoredString,
   ellipis: bool = false,
   indentSize: int = 0,
   prefixSpacing: string = " "
@@ -308,8 +308,8 @@ template printLine*(
     prefix.str = if idx == 0:
                    prefix.str
                  else:
-                   " ".repeat(max(prefix.str.len - 3, 0)) &
-                     ".".repeat(3)
+                   " ".repeat(max((prefix.str.len) - 4, 0)) &
+                     ".".repeat(3) & " "
 
 
     echo "$#$#$#$#" % [

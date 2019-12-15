@@ -162,9 +162,18 @@ if "rtrim-prefix".kp and prefStyle != sLog:
 
 proc len(str: ColoredString): int = str.str.len
 
+let progPrefix =
+  if prefStyle == sLog and "prefix".kp:
+    let tmp = "prefix".k.toStr()
+
+    if tmp.len > 12: tmp
+    else: tmp.alignLeft(12, '.')
+
+  else: ""
+
 let message = argParsed
   .join(" ")
-  .justifyFitTerminal((prefix.len + indent + 1, 0))
+  .justifyFitTerminal((prefix.len + indent + 1 + progPrefix.len, 0))
 
 for idx, line in message:
   if "style-uniform".kp:
@@ -179,13 +188,6 @@ for idx, line in message:
       indent)
   else:
     if prefStyle == sLog and "prefix".kp:
-      let progPrefix = "prefix".k.toStr()
-      let progPrefixMsg =
-        if progPrefix.len > 12:
-          progPrefix
-        else:
-          progPrefix.alignLeft(12, '.')
-
-      printLine(prefix, line, idx != 0, indent, &"({progPrefixMsg}) ")
+      printLine(prefix, line, idx != 0, indent, &"({progPrefix}) ")
     else:
       printLine(prefix, line, idx != 0, indent)

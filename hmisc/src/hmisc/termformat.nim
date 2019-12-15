@@ -3,9 +3,9 @@ import terminal, sequtils, strutils, helpers, unicode
 proc justifyFitTerminal*(
   str: string,
   padding: tuple[left: int, right: int] = (0,0),
-  maxWidth: int = 120): seq[string] =
+  maxWidth: int = 80): seq[string] =
     let width = min(terminalWidth(), maxWidth) -
-    padding.left - padding.right
+    (padding.left + padding.right)
 
     let strSplit = str
     .replace("\n", " ")

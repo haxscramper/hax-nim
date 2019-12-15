@@ -16,7 +16,8 @@ import strformat
 
 setShellDebugConfig({})
 
-const testing = true
+const testing = false
+
 
 parseArgs:
   opt:
@@ -37,7 +38,15 @@ parseArgs:
 
 let doDebug = testing or "debug".kp
 proc dlog(args: varargs[string, `$`]): void =
-  ceUserLog0 args.join(" ")
+  if doDebug:
+    ceUserLog0 args.join(" ")
+
+dlog ">>>> ========"
+
+if doDebug:
+  echo "Arguments"
+  for k, v in optParsed:
+    echo k, " ", v
 
 let (sourceFile, targetFile, circuitDir, targetExt) =
   block:
@@ -66,13 +75,12 @@ let (sourceFile, targetFile, circuitDir, targetExt) =
 
     (sourceFile, targetFile, circuitDir, targetExt)
 
-
 dlog "Input file:", sourceFile
 dlog "Output file:", targetFile
 dlog "Circuit dir:", circuitDir
 dlog "Target ext:", targetExt
 
-proc gettmp(): string = 
+proc gettmp(): string =
   mktemp(
     templ = "circuit.tmp.XXXXXXXXX",
     dir = "/tmp/circuit/"
@@ -81,24 +89,48 @@ proc gettmp(): string =
 
 
 proc createPngUsingSVG(inFile, outFile: string) =
+  dlog "Using svg"
   let macroResult = gettmp()
   var width = 400
   var height = 400
-  shell:
-    m4 -I ($circuitDir) "svg.m4" ($inFile) > ($macroResult".pic")
-    dpic -v ($macroResult".pic") > ($macroResult".svg")
 
-  let (dim, code) = shellVerbose:
-    grep "\"<!-- width=\"" ($macroResult".svg")
+  block:
+    let
+      svgfile = macroResult & ".svg"
+      picfile = macroResult & ".pic"
 
-  if not scanf(dim, "<!-- width=\"$i\" height=\"$i\" -->", width, height):
-    echo dim, "does not match"
+    dlog &"{picfile} -> {svgfile}"
+    let (res, code) = shellVerbose (if doDebug: {dokRuntime} else: {}):
+      m4 -I ($circuitDir) "svg.m4" ($inFile) > ($picfile)
+      dpic -v ($picfile) > ($svgfile)
+
+    if code != 0:
+      dlog "Error duing m4 or dpic execution"
+      dlog res
+    else:
+      dlog "m4 and Pic generation ok"
+
+  block:
+    let (dim, code) = shellVerbose:
+      grep "\"<!-- width=\"" ($macroResult".svg")
+
+    if not scanf(dim, "<!-- width=\"$i\" height=\"$i\" -->", width, height):
+      dlog dim, "does not match"
+    else:
+      dlog &"width: {height} height: {width}"
 
   width *= 3
   height *= 3
 
-  shell:
-    inkscape -z -e ($outFile) -w ($width) -h ($height) ($macroResult".svg")
+  block:
+    let (res, code) = shellVerbose:
+      inkscape -z -e ($outFile) -w ($width) -h ($height) ($macroResult".svg")
+
+    if code != 0:
+      dlog "Error durink inkscape execution"
+      dlog res
+    else:
+      dlog "Inkscape ok"
 
 
 proc createTexTikzpicture(inFile: string): string =
@@ -157,6 +189,7 @@ proc createPngUsingTex(inFile, outFile: string) =
 
 case targetExt:
   of "png":
+    dlog "Creating png target"
     when testing:
       createPngUsingTex(sourceFile, targetFile)
     else:
@@ -168,17 +201,17 @@ case targetExt:
           of "svg": createPngUsingSVG(sourceFile, targetFile)
 
   of "tex":
+    dlog "Creating tex target"
     if "tex-tikzpicture".kp:
       targetFile.writeFile(createTexTikzpicture(sourceFile))
     else:
       createTexStandalone(sourceFile, targetFile)
 
   of "eps":
-      createEpsUsingTex(sourceFile, targetFile)
+    dlog "Creating eps target"
+    createEpsUsingTex(sourceFile, targetFile)
   else:
     ceUserError0 "Unknown extension " & targetExt
 
 
-
-when not testing:
-  removeFile(macroResult)
+dlog "<<<< ========"
