@@ -14,10 +14,9 @@ import hmisc/hfile
 import hmisc/helpers
 import strformat
 
-setShellDebugConfig({})
-
 const testing = false
 
+proc shellConfig(): set[DebugOutputKind] = {}
 
 parseArgs:
   opt:
@@ -44,6 +43,7 @@ proc dlog(args: varargs[string, `$`]): void =
 dlog ">>>> ========"
 
 if doDebug:
+  dlog "Debug enabled"
   echo "Arguments"
   for k, v in optParsed:
     echo k, " ", v
@@ -70,7 +70,7 @@ let (sourceFile, targetFile, circuitDir, targetExt) =
         if ext.len > 0:
           ext[1..^1]
         else:
-          ceUserError0("Target file has no extension")
+          ceUserError0(&"Target file {targetFile} has no extension")
           quit 1
 
     (sourceFile, targetFile, circuitDir, targetExt)
@@ -88,30 +88,43 @@ proc gettmp(): string =
 
 
 
-proc createPngUsingSVG(inFile, outFile: string) =
+proc createPngUsingSVG(inFile, outFile: string): bool =
   dlog "Using svg"
   let macroResult = gettmp()
   var width = 400
   var height = 400
+  let
+    picfile = macroResult & ".pic"
+    svgfile = macroResult & ".svg"
 
   block:
-    let
-      svgfile = macroResult & ".svg"
-      picfile = macroResult & ".pic"
-
-    dlog &"{picfile} -> {svgfile}"
-    let (res, code) = shellVerbose (if doDebug: {dokRuntime} else: {}):
+    dlog "Running m4"
+    dlog &"Outputting into {picfile}"
+    let (res, err, code) = shellVerboseErr shellConfig():
       m4 -I ($circuitDir) "svg.m4" ($inFile) > ($picfile)
+
+    if code != 0:
+      dlog "Error duing m4 execution"
+      dlog err
+      return false
+    else:
+      dlog "M4 ok"
+      dlog res
+
+  block:
+    let (res, err, code) = shellVerboseErr shellConfig():
       dpic -v ($picfile) > ($svgfile)
 
     if code != 0:
-      dlog "Error duing m4 or dpic execution"
-      dlog res
+      dlog "Error duing dpic execution"
+      dlog err
     else:
-      dlog "m4 and Pic generation ok"
+      dlog "pic generation ok"
+      dlog res
+      dlog err
 
   block:
-    let (dim, code) = shellVerbose:
+    let (dim, code) = shellVerbose shellConfig():
       grep "\"<!-- width=\"" ($macroResult".svg")
 
     if not scanf(dim, "<!-- width=\"$i\" height=\"$i\" -->", width, height):
@@ -123,7 +136,7 @@ proc createPngUsingSVG(inFile, outFile: string) =
   height *= 3
 
   block:
-    let (res, code) = shellVerbose:
+    let (res, code) = shellVerbose shellConfig():
       inkscape -z -e ($outFile) -w ($width) -h ($height) ($macroResult".svg")
 
     if code != 0:
@@ -134,12 +147,33 @@ proc createPngUsingSVG(inFile, outFile: string) =
 
 
 proc createTexTikzpicture(inFile: string): string =
-  let (res, code) = shellVerbose:
-    pipe:
-      m4 -I ($circuitDir) pgf.m4 ($inFile)
-      dpic -g
+  let picfile =  gettmp() & ".pic"
+  dlog &"M4 -> tikz ({inFile} -> {picfile})"
+  let (m4res, m4err, m4code) = shellVerboseErr shellConfig():
+    m4 -I ($circuitDir) pgf.m4 ($inFile) > ($picfile)
 
-  result = res
+  if m4code != 0 and doDebug:
+    dlog "Error during m4 execution"
+    echo m4res
+    echo m4err
+
+  let (picRes, picErr, picCode) = shellVerboseErr shellConfig():
+    dpic -g ($picfile)
+
+
+  if picCode != 0 and doDebug:
+    dlog "Error during pic execution"
+    echo picErr
+    dlog "Input file:"
+    if picfile.existsFile():
+      var idx = 1
+      for line in picfile.lines():
+        echo &"{idx:>3}| {line}"
+        inc idx
+    else:
+      echo &"{picfile} does not exist"
+
+  result = picRes
 
 
 proc createTexStandalone(inFile, outFile: string) =
@@ -154,38 +188,82 @@ proc createTexStandalone(inFile, outFile: string) =
 \end{{document}}
 """)
 
-proc createPdfUsingTexTikz(inFile, outFile: string) =
+proc createPdfUsingTexTikz(inFile, outFile: string): bool =
   let macroResult = gettmp()
   let texfile = macroResult & ".tex"
   let pdffile = macroResult & ".pdf"
   dlog "Creating png using latex, outputting into", texfile
   dlog "Output file is", outFile
   createTexStandalone(inFile, texfile)
-  let (res, code) = shellVerbose {dokCommand, dokError, dokRuntime}:
+  let (res, err, code) = shellVerboseErr shellConfig():
     # latexmk -cd -C ($texfile)
     latexmk -cd -pdf "-latexoption='-shell-escape'" "--interaction='nonstopmode'" ($texfile)
-    cp ($pdffile) ($outFile)
+
+  if code != 0:
+    dlog "Error duing latexmk execution"
+    # TODO parse error into something more usable
+    # dlog err
+    return false
+  else:
+    shell:
+      cp ($pdffile) ($outFile)
+
+    return true
+
 
 
 proc createEpsUsingTex(inFile, outFile: string) =
   let macroResult = gettmp()
   let pdfFile = macroResult & ".pdf"
-  createPdfUsingTexTikz(inFile, pdfFile)
+  if not createPdfUsingTexTikz(inFile, pdfFile):
+    dlog "Pdf creation using tikz failed"
+  else:
+    let (res, err, code) = shellVerboseErr shellConfig():
+      gm convert ($inFile) ($outFile)
 
-  let (res, code) = shellVerbose (doDebug.tern({dokCommand}, {})):
-    gm convert ($inFile) ($outFile)
+    if code != 0:
+      dlog "gm convert failed"
+      dlog err
 
-  dlog "Output code is", code
 
 proc createPngUsingTex(inFile, outFile: string) =
   let macroResult = gettmp()
   let pdfFile = macroResult & ".pdf"
-  createPdfUsingTexTikz(inFile, pdfFile)
+  if not createPdfUsingTexTikz(inFile, pdfFile):
+    dlog "Pdf creation using tikz failed"
+  else:
+    let (res, code) = shellVerbose shellConfig():
+      gm convert -density 300 ($pdfFile) -quality 150 ($outFile)
 
-  let (res, code) = shellVerbose (doDebug.tern({dokCommand}, {})):
-    gm convert -density 150 ($pdfFile) -quality 90 ($outFile)
+    dlog "Output code is", code
 
-  dlog "Output code is", code
+
+block:
+  let inFile = sourceFile
+  let file = inFile.open(fmRead)
+  var line: string
+  if file.readLine(line):
+    if line.startsWith(".PS"):
+      dlog "full-sized pic file"
+    else:
+      dlog "shortened pic file"
+      let fileString = inFile.readFile().string()
+      inFile.writeFile(&"""
+.PS
+cct_init
+{fileString}
+.PE
+""")
+
+      dlog &"Added wrapping for file {inFile}"
+      if doDebug:
+        echo inFile.readFile()
+  else:
+    dlog "cannot read first line from file", inFile
+
+  file.close()
+
+
 
 case targetExt:
   of "png":
@@ -194,11 +272,15 @@ case targetExt:
       createPngUsingTex(sourceFile, targetFile)
     else:
       if not "png-using".kp:
-        createPngUsingSVG(sourceFile, targetFile)
+        createPngUsingTex(sourceFile, targetFile)
       else:
         case "png-using".k.tostr:
           of "latex": createPngUsingTex(sourceFile, targetFile)
-          of "svg": createPngUsingSVG(sourceFile, targetFile)
+          of "svg":
+            let ok = createPngUsingSVG(sourceFile, targetFile)
+            if not ok:
+              dlog "Error generating png"
+
 
   of "tex":
     dlog "Creating tex target"
