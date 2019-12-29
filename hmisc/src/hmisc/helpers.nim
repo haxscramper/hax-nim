@@ -6,6 +6,8 @@ import macros
 import deques
 import posix
 
+export options
+
 #~#=== Optional type
 type Opt*[T] = Option[T]
 
@@ -190,3 +192,65 @@ proc getRandomBase64*(length: int): string =
     length,
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".
     sample()).join("")
+
+macro ifLet*(head: untyped, bodies: varargs[untyped]): untyped =
+  assert head.kind == nnkPar
+  assert head[0].kind == nnkAsgn
+
+  # defer:
+  #   echo result.toStrLit()
+
+  let varSymbol = head[0][0]
+  let varValue = head[0][1]
+
+  let ifBody = bodies[0]
+
+  var condBranch = newIfStmt(
+    ((quote do: optValue.isSome()),
+     quote do:
+       let `varSymbol` = optValue.get()
+       `ifBody`))
+
+  for body in bodies[1..^1]:
+    condBranch.add body
+
+  result = quote do:
+    block:
+      let optValue {.inject.} = `varValue`
+      `condBranch`
+
+func splitList*[T](s: openarray[T]): (T, seq[T]) =
+  assert s.len > 0
+  (s[0], s[1..^1])
+
+when isMainModule:
+  block:
+    let (head, tail) = @[1].splitList()
+    doAssert head == 1
+    doAssert tail.len == 0
+
+  block:
+    let (head, tail) = @[1,2].splitList()
+    doAssert head == 1
+    doAssert tail == @[2]
+
+  iflet (val = none(int)):
+    echo "none is something and it has value of ", val
+
+  for a in 1..3:
+    echo a
+
+  let final =
+    block:
+      iflet (val = none(int)):
+        echo "none is something and it has value of ", val
+        3
+      elif 2 == 3:
+        echo "pretty good at math?"
+        5
+      else:
+        echo "not really"
+        1
+
+
+  echo "and final value is ", final
