@@ -389,9 +389,7 @@ proc cmdPrintHelp*(
     if flag.len != 1 or help.len != 1:
       echo ""
 
-proc getHelpTable*(
-  body: NimNode):
-    static[Table[string,OptionHelp]] {.compileTime.} =
+proc getHelpTable*(body: NimNode): Table[string,OptionHelp] {.compileTime.} =
   for arg in body:
     if arg[0] == ident"opt" and arg[1].kind == nnkStmtList:
 

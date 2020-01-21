@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.1.0"
+version       = "1.2.0"
 author        = "haxscramper"
 description   = "Personal collection of simple utilities"
 license       = "BSD-3-Clause"

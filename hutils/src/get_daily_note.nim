@@ -1,21 +1,53 @@
-import strformat, strutils, sequtils
+import strformat, strutils
 import hargparse
 import macros
 
 import re
 import os
 import times
+import math
 
 const newDayAfter = 5
 const logMinDelay = 8
 
-proc getCurrentNote(fileDirectory: string): string =
+const testing = true
+proc dlog(args: varargs[string, `$`]): void =
+  when testing: echo args.join(" ")
+  else: discard
+
+type
+  NoteType = enum
+    ntDaily
+    ntWeekly
+    ntMonthly
+
+proc getWeekNum(time: DateTime): int =
+  ceil(
+    (
+      getDayOfYear(
+        monthday = time.monthday,
+        month = time.month,
+        year = time.year) +
+      getDayOfWeek(1, mJan, time.year).ord
+    ) / 7
+  ).toInt()
+
+
+proc getCurrentNote(fileDirectory: string, ntype: NoteType = ntDaily): string =
   ## Return path to current daily note
   var time = now()
   if time.hour < newDayAfter:
     time.monthday = time.monthday - 1
 
-  fileDirectory.joinPath(time.format("yyyy-MM-dd") & ".org")
+
+  result = fileDirectory.joinPath(
+    case ntype:
+      of ntDaily: time.format("yyyy-MM-dd") & ".org"
+      of ntWeekly: time.format("yyyy") &
+        "-W" &
+        ($time.getWeekNum()).align(2, '0') & ".org"
+      of ntMonthly: time.format("yyyy-MM") & ".org"
+  )
 
 proc noteAppendRequired(note: string): bool =
   var lastHour = 0
@@ -45,13 +77,16 @@ proc addNewLog(note: string): void =
   file.write("\n** " & getTimeStampNow() & "\n\n\n")
   file.close()
 
-proc createNewNote(note: string): void =
-  let head = "#+TITLE: @date:" &
-    now().format("yyyy-MM-dd") &
-    "; " & getTimeStampNow() & "\n\n"
+proc createNewNote(note: string, ntype: NoteType): void =
+  let body =
+    case ntype:
+      of ntDaily:
+        let head = "#+TITLE: @date:" &
+        now().format("yyyy-MM-dd") &
+        "; " & getTimeStampNow() & "\n\n"
 
-  let org_time = now().format("yyyy-MM-dd ddd") & " 23:55"
-  let tail = &"""
+        let org_time = now().format("yyyy-MM-dd ddd") & " 23:55"
+        let tail = &"""
 * TODO Tasks [/]
   DEADLINE: <{org_time}>
 ** TODO <++>
@@ -59,9 +94,18 @@ proc createNewNote(note: string): void =
 * Logs
 
 """ & "** " & getTimeStampNow() & "\n\n"
+        head & tail
+      of ntWeekly:
+        &"""
+#+title: Weekly note N{now().getWeekNum()}
+"""
+      of ntMonthly:
+        &"""
+#+title: Monthly note for {now().format("MMMM yyyy")}
+"""
 
   let file = note.open(fmWrite)
-  file.write(head & tail)
+  file.write(body)
   file.close()
 
 proc fileIsEmpty(note: string): bool =
@@ -81,7 +125,21 @@ parseArgs:
     name: "update-symlink"
     opt: ["--update-symlink"]
     help: "Udate symbolic link for 'today' note"
+  opt:
+    name: "period"
+    opt: ["--period"]
+    help: "Get daily, weekly or mothly note"
+    takes: @["week", "day", "month"]
 
+
+
+let ntype =
+  if not "period".kp or "period".k.toStr() == "day":
+    ntDaily
+  elif "period".k.toStr() == "week":
+    ntWeekly
+  else:
+    ntMonthly
 
 let fileDirectory =
   if "file-dir".kp:
@@ -89,16 +147,22 @@ let fileDirectory =
     if dir.endsWith("/"): dir[0..^2]
     else: dir
   else:
-    getHomeDir() & ".config/hax-local/dirs/personal/notes/daily/"
+    getHomeDir() &
+      ".config/hax-local/dirs/personal/notes/" &
+      (
+        case ntype:
+          of ntDaily: "daily/"
+          of ntWeekly: "weekly/"
+          of ntMonthly: "monthly/"
+      )
 
-
-let note = getCurrentNote(fileDirectory)
+let note = getCurrentNote(fileDirectory, ntype)
 
 if "modify-file".kp:
   if not fileExists(note) or note.fileIsEmpty():
-    createNewNote(note)
+    createNewNote(note, ntype)
 
-  if noteAppendRequired(note):
+  if ntype == ntDaily and noteAppendRequired(note):
     addNewLog(note)
 
 if "update-symlink".kp:

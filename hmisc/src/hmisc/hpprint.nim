@@ -19,21 +19,6 @@ proc updatePrintConf(): void =
 
 proc ind(lv: int): string = " ".repeat(lv * 2)
 
-type
-  Test1 = object
-    arrField: seq[int]
-    arr2Field: seq[bool]
-    strField: string
-
-  Test2 = ref object
-    recurse: seq[Test2]
-    sub: tuple[first: Test1, second: float]
-
-let t = Test2(
-  recurse: @[Test2()],
-  sub: (first: Test1(strField: "sdfsdf"), second: 0.99999)
-)
-
 proc pformat*(x: SomeInteger|SomeFloat|string|bool, lv: int): string =
   ind(lv) & $x
 
@@ -98,4 +83,21 @@ proc pformat*(x: ref object, lv: int): string =
   else:
     ind(lv) & ($typeof(x[])).split(":")[0] & prettyObj(x[], lv + 1)
 
-echo pformat(t, 0)
+when isMainModule:
+  type
+    Test1 = object
+      arrField: seq[int]
+      arr2Field: seq[bool]
+      strField: string
+
+    Test2 = ref object
+      recurse: seq[Test2]
+      sub: tuple[first: Test1, second: float]
+
+  let t = Test2(
+    recurse: @[Test2()],
+    sub: (first: Test1(strField: "sdfsdf"), second: 0.99999)
+  )
+
+
+  echo pformat(t, 0)
