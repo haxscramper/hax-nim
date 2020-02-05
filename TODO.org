@@ -1,0 +1,123 @@
+* general
+
+** workflow description
+
++ Two types of workflow: on a single script or on the multi-file
+  project
+
+Setup script to genrate all project files: set execution permissions
+on watch scripts, generate main project files, setup build commands
+etc.
+
+*** Single-file projects
+
+Single script called ="start-coding.sh"= or something along those
+lines. It accepts single argument - name of the file you want to start
+working on.
+
++ If the file does not exist it will be created
++ Along with project files ~test.sh~ script will be created and
+  launched.
+
+This script is launched by ~start-coding.sh~ and re-executed when
+necessary. It contains several auto-generated functions, one for each
+script/binary you want to test in this directory together with build
+options for each of them.
+
+**** Workflow example:
+
+I want to write perl script called ~temp.pl~ and then launch it with
+some command line arguments for testing. My actions:
+
+1. Run ~start-coding.sh temp.pl~
+2. Open auto-generated ~test.sh~ and go to the body of the function
+   called ="run_temp_pl"= and put my testing code here.
+3. Open file ~temp.pl~ in text editor of choice and start writing
+   code.
+4. When I save ~temp.pl~ i should see new test being ran immediately
+   by ~test.sh~
+
+**** Questions
+
++ What if I don't want to pollute each of the directory with test
+  scripts
+  + Fsm-build can be used as standalone tool without any additional
+    shell scripts. In this case it has more limited capabilities (it
+    only supports building using predefined set of build commands (can
+    be configured using toml file) and running tested application with
+    certain parameters (can be configured)). It does _not_ support
+    running test for multiple files at the same time.
++ What if I want to watch for more files than already provided?
+  + You can create ~test_conf.toml~ and put list of the files you want
+    to monitor. Additional configuration file will not be generated
+    automatically but if you add it it will be automatically detected
+    and files from it would be added to watch list. Any subsequent
+    changes to configuration file will also be accounted for.
++ How to exclute files from watch list?
+  + Put them into ="excluded"= section in the ~test_conf.toml~
++ How to start working on new script in the same directory while not
+  losing all of the changes in test script?
+  + Run ~start-coding.sh~ again with different arguments. All changes
+    will be added to the test script automatically whithout destroying
+    your previous work.
++ How to deal with scripts that might take forever to complete? What
+  happens if I accidentally write script that has endless loop? Or I'm
+  intentionally writing script with async loop?
+  + Automatically generated testing function includes call to
+    ~killall~ for your script. For running script is forked so that it
+    does not block execution of the test script.
++ Do I need to write commands for building everything each time?
+  + No. fsm-builder allows you to write predefined configuration file
+    with common build commands and then use them to build/run things.
+
+*** For multi-file projects
+
+* Circuit
+
+#+BEGIN_SRC dot :file circuit_flowchart.tmp.png
+digraph G {
+
+node[shape=box];
+
+input_body[label="Content of the\n#+src block"];
+header_conf[label="Header configuration\n(per-file and global)"];
+input_file[label="Save into\ninput file"];
+header_file[label="Save into\nheader file"];
+wrapped_body[label="Add missing\nparts"];
+final_text;
+conversion_tools[
+style=filled,
+label="Collection of procs,
+each procedure is selected
+using lookup table to form
+complete transformation path
+between source and target
+extension
+"
+];
+cmdline_options[label="Options passed\nusing command\nline args"];
+result_output[label="result"];
+target_specification[label=
+  "Target extension\nand specification\nfor conversion methof"];
+
+input_body -> input_file -> wrapped_body -> final_text;
+header_conf -> header_file -> final_text;
+{final_text, cmdline_options, target_specification} ->
+  conversion_tools;
+conversion_tools -> result_output;
+}
+#+END_SRC
+
+#+RESULTS:
+[[file:circuit_flowchart.tmp.png]]
+
+Each proc returns new intermediate file and list of files generated
+during it's work (for debugging and cleanup)
+
+- WHen converting between different formats provide support for
+  listing what command line options might affect it. For example m4
+  circuit -> png can be done via latex or via svg. There is a swithc
+  for that - I want to be able to ask ~convert file.m4circuit file.png
+  --help:switches~ to get list of only ones that affect this
+  particular conversion path (all intermediate states should be listed
+  too of course).
