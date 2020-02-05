@@ -1,4 +1,5 @@
 # version 1.3
+import colechopkg/lib
 import hargparse
 import hmisc/helpers
 
@@ -129,35 +130,37 @@ when testing:
     getname("/a/b.c") == "b"
     getdirname("/b/b/c") == "/b/b"
     delsuffix("a.b.c.d", 1) == "a.b.c"
+    delsuffix("Avenza - Could Be Worse-eaCdfcpla4c.mp3", 1) ==
+      "Avenza - Could Be Worse-eaCdfcpla4c"
 
+  quit(1)
 
+if hasErrors:
+  quit(1)
+elif argParsed.len != 1:
+  ceUserError0("need exactly one file name")
+  quit(1)
 else:
-  if hasErrors:
-    quit(1)
-  elif argParsed.len != 1:
-    ceUserError0("need exactly one file name")
-    quit(1)
-  else:
-    var path = argParsed[0]
+  var path = argParsed[0]
 
-    # var (dir, name, ext) = path.splitFile()
-    # let split = (name & ext).split('.')
+  # var (dir, name, ext) = path.splitFile()
+  # let split = (name & ext).split('.')
 
-    # name = suffices[0]
-    # let suffices = suffices[1..^1]
-    # let basename = ( @[name] & suffices ).join(".")
+  # name = suffices[0]
+  # let suffices = suffices[1..^1]
+  # let basename = ( @[name] & suffices ).join(".")
 
-    if "last-suffix".kp:
-      echo getLastExt(path)
-    if "del-suffix".kp:
-      echo delsuffix(path, "del-suffix".k.toInt())
-    if "all-suffixes".kp:
-      echo getAllSuffices(path)
-    if "dirname".kp:
-      echo getDirname(path)
-    if "name".kp:
-      echo getName(name)
-    if "basename".kp:
-      echo delSuffix(path, 0)
-    if "all".kp:
-      echo localPrefix & joinpath(@[dir, basename])
+  if "last-suffix".kp:
+    echo getLastExt(path)
+  if "del-suffix".kp:
+    echo delsuffix(path, "del-suffix".k.toInt())
+  if "all-suffixes".kp:
+    echo getAllSuffices(path)
+  if "dirname".kp:
+    echo getDirname(path)
+  if "name".kp:
+    echo getName(path)
+  if "basename".kp:
+    echo delSuffix(path, 0)
+  if "all".kp:
+    echo getall(path)
