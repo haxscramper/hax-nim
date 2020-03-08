@@ -72,6 +72,19 @@ proc noteAppendRequired(note: string): bool =
 proc getTimeStampNow(): string =
   "@time:" & now().format("HH:mm") & ";"
 
+proc thisWeekDays(): seq[string] =
+  let curr = now()
+  for day in WeekDay:
+    let nowIdx = cast[int](curr.weekday)
+    let dayIdx = cast[int](day)
+    let diff = dayIdx - nowIdx
+    let interval = TimeInterval(days: abs(diff))
+    let res =
+      if diff > 0: curr + interval
+      else: curr - interval
+
+    result.add res.format("yyyy-MM-dd dddd")
+
 proc addNewLog(note: string): void =
   let file = note.open(fmAppend)
   file.write("\n** " & getTimeStampNow() & "\n\n\n")
@@ -98,6 +111,9 @@ proc createNewNote(note: string, ntype: NoteType): void =
       of ntWeekly:
         &"""
 #+title: Weekly note N{now().getWeekNum()}
+
+{thisWeekDays().join("\n")}
+
 """
       of ntMonthly:
         &"""
