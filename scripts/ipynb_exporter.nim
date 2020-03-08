@@ -1,4 +1,6 @@
 import hargparse
+import re
+import strscans
 import strutils
 import shell
 import hmisc/helpers
@@ -89,39 +91,69 @@ let group = config.getConfOrDie("group")
 let task = config.getConfOrDie("task")
 
 
+proc anything(input: string, argument: var string, start: int): int =
+  let diff = input.len - start
+  argument = input[start..^1]
+  return diff
+
 proc exportCellOutput(outp, cell: JsonNode): string =
   let outtype = outp["output_type"].getStr()
   let execcount = cell["execution_count"].getInt()
-  ceUserLog0(&"Processing output #{execcount}", 2)
+  # ceUserLog0(&"Processing output #{execcount}", 2)
   if outtype == "stream":
     result = """
+% ---
 \begin{verbatim}
 $1
 \end{verbatim}
-""" % [outp["text"].getStr()]
-  elif outtype == "execute_result":
+% ---""" % [outp["text"].getStr()]
+  elif outtype == "execute_result" or outtype == "display_data":
     let data = outp["data"]
     if data.hasKey("image/png"):
       let base64 = data["image/png"].getStr()
       let hash = toMD5(base64)
-      let outf = $hash & ".png"
+      let outf = "sfdf" & $hash & ".png"
       let file = outf.open(fmWrite)
       file.write(decode(base64))
-      ceUserLog0(&"Wrote file {outf}", 2)
+      file.close()
+
+      let (res, _, code) = shellVerboseErr:
+        identify ($outf)
+
+      var
+        height: int
+        width: int
+
+      if res =~ re""".+ .+ (\d+)x(\d+).*""":
+        width = matches[0].parseInt()
+        height = matches[1].parseInt()
+      else:
+        echo res
+        echo "not ok"
+        die()
+
+
+      result = """
+\begin{center}
+\includegraphics[width=$1in]{$2}
+\end{center}
+""" % [$(width / 100), getCurrentDir().joinPath(outf)]
     else:
       result = """
-  \begin{verbatim}
-  $1
-  \end{verbatim}
-  """ % [outp["data"]["text/plain"].getStr()] #TODO export html tables?
+% ---
+\begin{verbatim}
+$1
+\end{verbatim}
+% ---""" % [outp["data"]["text/plain"].getStr()] #TODO export html tables?
 
 proc exportCodeCell(cell: JsonNode): string =
   let body = cell["source"].getElems().mapIt(it.getStr()).join("")
   result.add """
+% ---
 \begin{minted}{python}
 $1
 \end{minted}
-  """ % [body]
+% ---""" % [body]
 
   for res in cell["outputs"].getElems():
     result.add "\n"
@@ -144,7 +176,7 @@ proc exportMarkdownCell(cell: JsonNode): string =
   result = "file.tex".readFile().string()
 
 
-let outName = &"{author}_{group}_{task}.tex"
+let outName = "result_tex.tex"
 ceUserLog0(&"Writing result to file {outName}")
 let outFile = outName.open(fmWrite)
 
@@ -165,7 +197,8 @@ outFile.write """
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{minted}
-
+\usepackage{graphicx}
+\usepackage{grffile}
 
 \usepackage{fancyhdr}
 
@@ -193,11 +226,11 @@ for cell in nbJson["cells"].getElems():
     outfile.write exportMarkdownCell(cell)
 
 outFile.write """
+% ---
 \end{document}
 """
 
 outFile.close()
-
 
 
 let (res, err, code) = shellVerboseErr {dokCommand}:
@@ -208,3 +241,4 @@ if code != 0:
   echo err
 else:
   ceUserInfo0("Compilation ok")
+  copyFile(outName, &"{author}_{group}_{task}.pdf")
