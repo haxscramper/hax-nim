@@ -138,6 +138,19 @@ $1
 \includegraphics[width=$1in]{$2}
 \end{center}
 """ % [$(width / 100), getCurrentDir().joinPath(outf)]
+#     elif data.hasKey("text/html"):
+#       let body = data["text/html"].getStr()
+#       "tmp.html".writeFile(body)
+#       let (latex, err, code) = shellVerboseErr {dokCommand}:
+#         pandoc -f html -t latex "tmp.html" -o "table.tex"
+
+#       result = """
+# % ---
+# \begin{center}
+# $1
+# \end{center}
+# % ---
+# """ % ["table.tex".readFile()]
     else:
       result = """
 % ---
@@ -199,6 +212,7 @@ outFile.write """
 \usepackage{minted}
 \usepackage{graphicx}
 \usepackage{grffile}
+\usepackage{longtable}
 
 \usepackage{fancyhdr}
 
