@@ -114,7 +114,7 @@ sub:
     depending on the _value_ of the argument)
   - Help message generation (?)
 - *Code generation steps*
-  - 
+  -
 - *Generated code will do following*
   - Argument parsing and valiation
     - Check for possible values of the input string (can be parsed and
@@ -151,8 +151,12 @@ sub:
           searching in the said subcommand. To access top-level
           command you need to use ~::~ prefix)
 
-* TODO todo [0/25]
+* TODO todo [0/27]
 
++ [ ] Write macro to export procs to shell almost directly
++ [ ] Generate cli interface from parsing docopt string (I parse
+  everything to internale representaiton so it does not matter which
+  input format I use, I can support all of them without any problems)
 + [ ] Take version for the ~--version~ command from nimble package if
   possible
 + [ ] Add support for debugging parsing of command-line arguments
@@ -246,7 +250,7 @@ parsing (if multiple options in the same group were supplied)
 #+HEADERS: :noeval
 #+BEGIN_SRC nim
 opt:
-  
+
 #+END_SRC
 
 
@@ -262,3 +266,17 @@ Rules for exclusion/inclusion:
       %%?"f-ext" and not %%?"t-ext"
 #+END_SRC
 
+* Notes
+
+** macro orgnization
+
+#idea #code##nim #project##hargparse2 proc bound to flag might run
+/before/ or /after/ execution of main program. For this I will need to
+declare |main| function and pass it to parsing macro. To avoid
+convoluted shenanigans with function order definition I can separate
+CLI parsing macro into two parts: first one defines all types and
+structures, parses configuration into some inner data format. After,
+second one could be invoked anywhere in the code, and it will generate
+code that does actual parsing. This gives additional opportunities for
+user customization since data structure for commands is not used
+immediately and can be changed further if necessary.

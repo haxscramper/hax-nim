@@ -27,6 +27,14 @@ proc toRed*(str: string): ColoredString =
 proc toGreen*(str: string): ColoredString =
   ColoredString(str: str, fg: fgGreen)
 
+proc toDefault*(str: string): ColoredString =
+  ColoredString(str: str, fg: fgDefault)
+
+proc debug*(str: ColoredString) =
+  echo "str: ", str.str, " fg: ",
+     str.fg, " bg: ",
+     str.bg, " style:",
+     str.style
 
 proc `$`*(colored: ColoredString): string =
   let fgCode = if colored.fg.int != 0:

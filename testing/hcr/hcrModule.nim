@@ -1,4 +1,4 @@
 static:
-  echo "compiling module for 3 iteration"
+  echo "compiling module for 0 iteration"
 
-proc getIteration*(): string = "3"
+proc getIteration*(): string = "0"

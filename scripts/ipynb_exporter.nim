@@ -55,22 +55,6 @@ else:
   ceUserInfo0("Input directory exists")
   setCurrentDir(inputDir)
 
-proc findFirstFile(pattern: string, filePurpose: string, debug = true): string =
-  ## Find first file that matches glob
-  let notebooks = toSeq(walkFiles(pattern))
-  if notebooks.len < 1:
-    ceUserError0(&"No {filePurpose}s found in directory")
-    die()
-  elif notebooks.len > 1:
-    ceUserWarn(&"Multiple {filePurpose}s found in directory, using first")
-    for n in notebooks:
-      ceUserLog0(n, 2)
-    notebooks[0]
-  else:
-    ceUserInfo0(&"Found single {filePurpose}")
-    notebooks[0]
-
-
 let notebook = findFirstFile("*.ipynb", "notebook")
 let configuration =  findFirstFile("*.toml", "configuration file")
 
