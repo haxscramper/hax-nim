@@ -11,6 +11,7 @@ import sequtils
 import json
 import base64
 import md5
+import options
 
 
 const
@@ -34,7 +35,8 @@ type
     nboTextHtml
 
   NBCellOutput = object
-    data*: seq[tuple[text: string, kind: NBCellDataKind]]
+    dtype: NBCellDataKind
+    content: string
 
   NBCell = object
     case kind*: NBCellKind
@@ -54,9 +56,12 @@ type
     lnkMacroUse
     lnkEnviron
     lnkComment
+    lnkNodeList
 
   LatexNode = object
     case kind*: LatexNodeKind
+    of lnkNodeList:
+      nodes: seq[LatexNode]
     of lnkPlaintext, lnkComment:
       text: string ## Plaintext string
     of lnkMacroUse, lnkEnviron:
@@ -84,6 +89,7 @@ func toString(node: LatexNode): string =
   case node.kind:
     of lnkPlainText: node.text
     of lnkComment: "% " & node.text
+    of lnkNodeList: node.nodes.map(toString).join("\n")
     of lnkEnviron, lnkMacroUse:
       let optargs = (node.optargs.len > 0).tern(
         node.optargs.mapIt(it.toString()).join(",").wrapBrace('['),
@@ -123,6 +129,12 @@ func makeLtxMacro(name: string, gargs, optargs: seq[string] = @[]): LatexNode =
     optargs: optargs.map(makeLtxPlaintext)
   )
 
+func makeLtxNodeList(nodes: seq[LatexNode]): LatexNode =
+  LatexNode(
+    kind: lnkNodeList,
+    nodes: nodes
+  )
+
 func makeLtxEnviron(
   name: string,
   body: seq[LatexNode],
@@ -136,17 +148,61 @@ func makeLtxEnviron(
     optargs: optargs.map(makeLtxPlaintext)
   )
 
-func toLatex(cell: NBCell): LatexNode =
-  case cell.kind:
-    of nbcMarkdown: makeLtxPlaintext(cell.text) # TODO export using pandoc
-    of nbcCode:
-      makeLtxEnviron(
-        name = "minted",
-        gargs = @["python"],
-        body = @[makeLtxPlaintext(cell.source)]
+func markdownStringToLatex(str: string): LatexNode = makeLtxPlaintext(str)
+func htmlStringToLatex(str: string): LatexNode = makeLtxPlaintext(str)
+
+type Base64ImageSpec = tuple[path, content: string]
+
+proc toLatex(outp: NBCellOutput): tuple[
+  node: LatexNode,
+  encoded: Option[Base64ImageSpec]] =
+  ## Convert single cell output to latex node. If output contains
+  ## `image/png` it will be exported as base-64 string.
+  case outp.dtype:
+    of nboTextPlain:
+      (node: makeLtxEnviron(
+        name = "verbatim",
+        body = @[makeLtxPlaintext(outp.content)]),
+       encoded: none(Base64ImageSpec)
+      )
+    of nboTextHtml: (
+      node: htmlStringToLatex(outp.content),
+      encoded: none(Base64ImageSpec)
+    )
+    of nboImagePng:
+      let path = $toMD5(outp.content) & ".png"
+      let inclgr = makeLtxMacro(
+        name = "includegraphics",
+        optargs = @["width=0.5\\textwidth"],
+        gargs = @[path]
       )
 
-func toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument =
+      (
+        node: makeLtxEnviron(name = "center", body = @[inclgr]),
+        encoded: some((path, outp.content))
+      )
+
+proc toLatex(cell: NBCell): (LatexNode, seq[Base64ImageSpec]) =
+  ## Convert notebook cell to latex node. All images will be expored
+  ## as base64 with required paths.
+  case cell.kind:
+    of nbcMarkdown: (markdownStringToLatex(cell.text), @[])
+    of nbcCode:
+      let outputs = cell.outputs.map(toLatex)
+      let res1 = makeLtxNodeList(@[
+        makeLtxEnviron(
+          name = "minted",
+          gargs = @["python"],
+          body = @[makeLtxPlaintext(cell.source)])
+        ] &
+          outputs.mapIt(it[0])
+      )
+
+      (res1, outputs.filterIt(it.isSome).mapIt(it[1].get()))
+
+proc toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument =
+  ## Conter notebook document to latex document. Required images will
+  ## be exported seprateely as base64-encoded strings.
   result.preamble.add makeLtxMacro("documentclass", gargs = @["article"])
 
   let packages: seq[(seq[string], string)] = @[
@@ -186,7 +242,10 @@ func toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument
 
   result.content.add makeLtxMacro("maketitle")
 
-  result.content.add notebook.cells.map(toLatex)
+  let cells = notebook.cells.map(toLatex)
+  let images = cells.mapIt(it[1])
+
+  result.content.add cells.mapIt(it[0])
 
 parseArgs:
   opt:
