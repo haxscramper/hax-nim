@@ -1,9 +1,8 @@
 import hargparse
 import re
-import strscans
 import strutils
 import shell
-import hmisc/helpers
+import hmisc/[helpers, defensive]
 import colechopkg/lib
 import strformat
 import os
@@ -21,9 +20,173 @@ const
     when testing: defaultTemp
     else: "input"
 
-proc die() {.discardable, noreturn.} =
-  ceUserInfo2("Terminating program")
-  quit 1
+
+
+
+type
+  NBCellKind = enum
+    nbcMarkdown
+    nbcCode
+
+  NBCellDataKind = enum
+    nboTextPlain
+    nboImagePng
+    nboTextHtml
+
+  NBCellOutput = object
+    data*: seq[tuple[text: string, kind: NBCellDataKind]]
+
+  NBCell = object
+    case kind*: NBCellKind
+    of nbcMarkdown:
+      text*: string
+    of nbcCode:
+      source*: string
+      outputs*: seq[NBCellOutput]
+
+  NBDocument = object
+    cells*: seq[NBCell]
+
+
+type
+  LatexNodeKind = enum
+    lnkPlaintext
+    lnkMacroUse
+    lnkEnviron
+    lnkComment
+
+  LatexNode = object
+    case kind*: LatexNodeKind
+    of lnkPlaintext, lnkComment:
+      text: string ## Plaintext string
+    of lnkMacroUse, lnkEnviron:
+      name: string ## Macro name
+      optargs: seq[LatexNode] ## Optional arguments
+      gargs: seq[LatexNode] ## Braced arguments
+      body: seq[LatexNode] ## Body of the environment. Not used for macro
+
+  LatexDocument = object
+    preamble*: seq[LatexNode]
+    content*: seq[LatexNode]
+
+func wrapBrace(str: string, brace: char, padding: string = ""): string =
+  let closeb: char =
+    case brace:
+      of '[': ']'
+      of '{': '}'
+      of '(': ')'
+      of '<': '>'
+      else: brace
+
+  return brace & padding & str & padding & closeb
+
+func toString(node: LatexNode): string =
+  case node.kind:
+    of lnkPlainText: node.text
+    of lnkComment: "% " & node.text
+    of lnkEnviron, lnkMacroUse:
+      let optargs = (node.optargs.len > 0).tern(
+        node.optargs.mapIt(it.toString()).join(",").wrapBrace('['),
+        "")
+
+      let gargs = (node.gargs.len > 0).tern(
+        node.gargs.mapIt(it.toString().wrapBrace('{')).join(""),
+        "")
+
+      if node.kind == lnkEnviron:
+        let body = node.body.mapIt(it.tostring()).join("\n")
+        """
+  \begin{{{node.name}}}{optargs}{gargs}
+  {body}
+  \end{{{node.name}}}
+  """
+      else:
+        """\{node.name}{optargs}{gargs}""""
+
+func toString(doc: LatexDocument): string =
+  result &= doc.preamble.mapIt(it.toString()).join("\n")
+  result &= "\\begin{document}\n"
+  result &= doc.preamble.mapIt(it.toString()).join("\n")
+  result &= "\\end{document}\n"
+
+func makeLtxPlaintext(text: string): LatexNode =
+  LatexNode(
+    kind: lnkPlaintext,
+    text: text
+  )
+
+func makeLtxMacro(name: string, gargs, optargs: seq[string] = @[]): LatexNode =
+  LatexNode(
+    kind: lnkMacroUse,
+    name: name,
+    gargs: gargs.map(makeLtxPlaintext),
+    optargs: optargs.map(makeLtxPlaintext)
+  )
+
+func makeLtxEnviron(
+  name: string,
+  body: seq[LatexNode],
+  gargs, optargs: seq[string] = @[]): LatexNode =
+
+  LatexNode(
+    kind: lnkEnviron,
+    name: name,
+    body: body,
+    gargs: gargs.map(makeLtxPlaintext),
+    optargs: optargs.map(makeLtxPlaintext)
+  )
+
+func toLatex(cell: NBCell): LatexNode =
+  case cell.kind:
+    of nbcMarkdown: makeLtxPlaintext(cell.text) # TODO export using pandoc
+    of nbcCode:
+      makeLtxEnviron(
+        name = "minted",
+        gargs = @["python"],
+        body = @[makeLtxPlaintext(cell.source)]
+      )
+
+func toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument =
+  result.preamble.add makeLtxMacro("documentclass", gargs = @["article"])
+
+  let packages: seq[(seq[string], string)] = @[
+    (@["T1", "T2A"], "fontenc"),
+    (@["utf8"], "inputenc"),
+    (@["english", "russian"], "babel"),
+    (@[], "amsmath"),
+    (@[], "amssymb"),
+    (@[], "minted"),
+    (@[], "graphicx"),
+    (@[], "grffile"),
+    (@[], "longtable"),
+    (@[], "fancyhdr"),
+    (@["margin=2cm"], "geometry")
+  ]
+
+  result.preamble.add packages.mapIt(
+    makeLtxMacro(
+      name = "usepackage",
+      gargs = @[it[1]],
+      optargs = it[0]
+    ))
+
+  let styleconf: seq[(string, string)] = @[
+    ("pagestyle", "fancy"),
+    ("fancyhf", ""),
+    ("lhead", &"{title} {author}"),
+    ("rhead", "\\today"),
+    ("rfoot", "\\thepage"),
+    ("author", &"{title} {author}"),
+    ("title", &"{author}")
+  ]
+
+  result.preamble.add styleconf.mapIt(
+    makeLtxMacro(it[0], gargs = @[it[1]])
+  )
+
+  result.content.add makeLtxMacro("maketitle")
+
+  result.content.add notebook.cells.map(toLatex)
 
 parseArgs:
   opt:
@@ -215,6 +378,7 @@ outFile.write """
 \maketitle
 """ % [author, group, task]
 
+
 let nbJson = json.parseFile(notebook)
 
 for cell in nbJson["cells"].getElems():
@@ -230,13 +394,12 @@ outFile.write """
 
 outFile.close()
 
+# let (res, err, code) = shellVerboseErr {dokCommand}:
+#   latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
 
-let (res, err, code) = shellVerboseErr {dokCommand}:
-  latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
-
-if code != 0:
-  ceUserError0("Error while compiling result document")
-  echo err
-else:
-  ceUserInfo0("Compilation ok")
-  copyFile(outName, &"{author}_{group}_{task}.pdf")
+# if code != 0:
+#   ceUserError0("Error while compiling result document")
+#   echo err
+# else:
+#   ceUserInfo0("Compilation ok")
+#   copyFile(outName, &"{author}_{group}_{task}.pdf")
