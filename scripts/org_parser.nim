@@ -144,6 +144,8 @@ type
 #   return
 
 let nodeIndex = iterator(): int =
+    ## Generage sequence of increasing numbers. Increment value on
+    ## each evaluation
     var res = 0
     while true:
       yield res
@@ -152,6 +154,7 @@ let nodeIndex = iterator(): int =
 const indentation = "   "
 
 proc print(node: SexpNode, ind: int = 0): void =
+  ## Pretty-pring node starting with indentation `ind`
   let prefix = "  " & indentation.repeat(ind)
   case node.kind:
     of snkIdent: echo prefix, node.name.toWhite({styleDim})
@@ -170,22 +173,24 @@ proc print(node: SexpNode, ind: int = 0): void =
 
 
 func pegToSexpKind(name: string): SexpNodeKind =
+  ## COnvert peg name to `SexpNodeKind`
   case name:
     of "ident": snkIdent
     of "list": snkList
     else: raise newException(AssertionError, &"Ivalid peg item name: {name}")
 
-let text = "(org-data (a b) 12 (:sdf 2))"
+let text = "(org-data (a b) 12 (:sdf 2))" # Test text
 
-var depth = 0
-let ignored = @["ws"] # Skipped tokes
-let parseHelpers = @["sexp"] # Nodes only present in parse tree
-                                  # but not in syntax tree
+var depth = 0 ## Current depth of the printing
+let ignored = @["ws"] ## Skipped tokes
+let parseHelpers = @["sexp"] ## Nodes only present in parse tree but
+                             ## not in syntax tree
 
 proc debug(
   enter: static char,
   status: static char,
   name: string, args: varargs[string, `$`]): void =
+  ## Pretty-pring parsing states
   if name notin ignored:
     let prefix = if enter == 'e': "-> " else: "-< "
     stdout.write(indentation.repeat(depth) & prefix)
@@ -201,9 +206,11 @@ proc debug(
     echo args.join(" ")
 
 proc debug(str: string): void =
+  ## Print string with correct indentation
   echo indentation.repeat(depth), "~ ", str
 
 proc toSexp(kind: string, value: string): SexpNode =
+  ## Create s-expr based on `kind`
   case kind:
     of "ident": SexpNode(
       name: value, kind: snkIdent, idx: nodeIndex())
@@ -215,12 +222,11 @@ proc toSexp(kind: string, value: string): SexpNode =
       kind: snkInteger, value: value, idx: nodeIndex())
     else: raise newException(AssertionError, &"Ivalid peg item name: {kind}")
 
-const final: seq[string] = @["ident", "integer", "string"]
-
-var tree = SexpNode(kind: snkRoot, idx: nodeIndex())
-var stack: seq[SexpNode] = @[tree]
-var lastNode: SexpNode = tree
+var tree = SexpNode(kind: snkRoot, idx: nodeIndex()) ## Resulting tree
+var stack: seq[SexpNode] = @[tree] ## Stack of lists
+var lastNode: SexpNode = tree ## Reference to last node in stack/tree
 proc startItem(kind: string): void =
+  ## Add new item to stack of necessary
   if (kind in ignored) or (kind in parseHelpers): return
 
   if kind == "list":
@@ -230,10 +236,14 @@ proc startItem(kind: string): void =
     stack.add new
     lastNode = new
 
-template last(s: untyped): untyped = s[^1]
+template last(s: untyped): untyped =
+  ## Syntactic sugar for s[^1]
+  s[^1]
 
 
 proc finishItem(kind: string, value: string): void =
+  ## Finish parsing of the item: add item to the tree and pop it from
+  ## stack if necessary
   if (kind in ignored) or (kind in parseHelpers): return
   if kind == "list":
     debug "finished list"
@@ -260,6 +270,7 @@ proc finishItem(kind: string, value: string): void =
 
 
 template findIt(s: untyped, predicate: untyped): int =
+  ## Find item for which `predicate` evaluates as true.
   var res = -1
   for idx, it {.inject.} in s:
     if predicate:
@@ -273,12 +284,13 @@ proc failItem(kind: string): void =
     debug "Failed to parse list item, discarding node"
     debug "Node content:"
     print bot, depth
-    let idx = stack.last.elements.findIt(
-      it.kind == snkList and it == bot
-    )
+    # TODO REVIEW
+    # let idx = stack.last.elements.findIt(
+    #   it.kind == snkList and it == bot
+    # )
 
-    if idx != -1:
-      stack.last.elements.delete idx
+    # if idx != -1:
+    #   stack.last.elements.delete idx
 
     debug "Full tree content:"
     print tree, depth
