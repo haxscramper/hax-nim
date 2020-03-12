@@ -21,14 +21,26 @@ type
     style*: set[Style]
 
 
-proc toRed*(str: string): ColoredString =
-  ColoredString(str: str, fg: fgRed)
+proc toRed*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgRed)
 
-proc toGreen*(str: string): ColoredString =
-  ColoredString(str: str, fg: fgGreen)
+proc toGreen*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgGreen)
 
-proc toDefault*(str: string): ColoredString =
-  ColoredString(str: str, fg: fgDefault)
+proc toYellow*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgYellow)
+
+proc toWhite*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgWhite)
+
+proc toCyan*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgCyan)
+
+proc toMagenta*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgMagenta)
+
+proc toDefault*(str: string, style: set[Style] = {}): ColoredString =
+  ColoredString(str: str, style: style, fg: fgDefault)
 
 proc debug*(str: ColoredString) =
   echo "str: ", str.str, " fg: ",
