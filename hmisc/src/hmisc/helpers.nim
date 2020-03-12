@@ -5,6 +5,8 @@ import strutils
 import macros
 import deques
 import posix
+import os
+
 
 export options
 
@@ -26,22 +28,12 @@ converter toOption*[T](t: T): Option[T] =
   else:
     return some(t)
 
-
-proc findFirstFile(pattern: string, filePurpose: string, debug = true): string =
-  ## Find first file that matches glob
-  let notebooks = toSeq(walkFiles(pattern))
-  if notebooks.len < 1:
-    ceUserError0(&"No {filePurpose}s found in directory")
-    die()
-  elif notebooks.len > 1:
-    ceUserWarn(&"Multiple {filePurpose}s found in directory, using first")
-    for n in notebooks:
-      ceUserLog0(n, 2)
-    notebooks[0]
-  else:
-    ceUserInfo0(&"Found single {filePurpose}")
-    notebooks[0]
-
+template tern*(
+  predicate: bool,
+  tBranch: untyped,
+  fBranch: untyped): untyped =
+    if predicate: tBranch
+    else: fBranch
 
 macro quoteDoInterpolStmt*(body: untyped): untyped =
   ## Allows to interpolate function call into `quote do` body.
@@ -119,14 +111,6 @@ proc matchWith*[K, V](
       return some(tupl.v)
 
     result = none(V)
-
-template tern*(
-  predicate: bool,
-  tBranch: untyped,
-  fBranch: untyped): untyped =
-    if predicate: tBranch
-    else: fBranch
-
 
 proc echoi*(indent: int, message: varargs[string, `$`]): void =
   echo "  ".repeat(indent), message.join(" ")

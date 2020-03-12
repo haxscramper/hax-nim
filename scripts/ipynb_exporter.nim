@@ -1,4 +1,5 @@
 import hargparse
+import hashes
 import re
 import strutils
 import shell
@@ -153,7 +154,7 @@ func htmlStringToLatex(str: string): LatexNode = makeLtxPlaintext(str)
 
 type Base64ImageSpec = tuple[path, content: string]
 
-proc toLatex(outp: NBCellOutput): tuple[
+func toLatex(outp: NBCellOutput): tuple[
   node: LatexNode,
   encoded: Option[Base64ImageSpec]] =
   ## Convert single cell output to latex node. If output contains
@@ -170,7 +171,7 @@ proc toLatex(outp: NBCellOutput): tuple[
       encoded: none(Base64ImageSpec)
     )
     of nboImagePng:
-      let path = $toMD5(outp.content) & ".png"
+      let path = $hash(outp.content) & ".png"
       let inclgr = makeLtxMacro(
         name = "includegraphics",
         optargs = @["width=0.5\\textwidth"],
@@ -182,7 +183,7 @@ proc toLatex(outp: NBCellOutput): tuple[
         encoded: some((path, outp.content))
       )
 
-proc toLatex(cell: NBCell): (LatexNode, seq[Base64ImageSpec]) =
+func toLatex(cell: NBCell): (LatexNode, seq[Base64ImageSpec]) =
   ## Convert notebook cell to latex node. All images will be expored
   ## as base64 with required paths.
   case cell.kind:
@@ -200,7 +201,7 @@ proc toLatex(cell: NBCell): (LatexNode, seq[Base64ImageSpec]) =
 
       (res1, outputs.filterIt(it.isSome).mapIt(it[1].get()))
 
-proc toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument =
+func toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument =
   ## Conter notebook document to latex document. Required images will
   ## be exported seprateely as base64-encoded strings.
   result.preamble.add makeLtxMacro("documentclass", gargs = @["article"])
