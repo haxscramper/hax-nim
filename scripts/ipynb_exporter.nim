@@ -13,6 +13,7 @@ import json
 import base64
 import md5
 import options
+import pandoc_parser
 
 
 const
@@ -303,9 +304,39 @@ proc anything(input: string, argument: var string, start: int): int =
   argument = input[start..^1]
   return diff
 
+
+template jsonConversion(target, conversionProc: untyped): untyped =
+  let targetKind {.inject.} = target
+  if node.kind == targetKind:
+    return node.conversionProc()
+  else:
+    raise newException(
+      ValueError,
+      &"Json node of kind {node.kind} cannot be converted to {targetKind}"
+    )
+
+func asStr(node: JsonNode): string = jsonConversion(JString, getStr)
+func asInt(node: JsonNode): int = jsonConversion(JInt, getInt)
+func asFloat(node: JsonNode): float = jsonConversion(JFloat, getFloat)
+func asSeq(node: JsonNode): seq[JsonNode] = jsonConversion(JArray, getElems)
+func asTable(node: JsonNode): OrderedTable[string, JsonNode] =
+  jsonConversion(JObject, getFields)
+
+func joinArr(node: JsonNode): string =
+  assert node.kind == JArray and node.getElems().allIt(it.kind == JString),
+     "Only array of strings can be joined using `joinArr`"
+
+  node.asSeq().mapIt(it.asStr()).join("")
+
+  # if node.kind == JString:
+  #   return node.getStr()
+  # else:
+  #   raise newException(ValueError, &"Json node of kind {node.kind} cannot be converter to string")
+
+
 proc exportCellOutput(outp, cell: JsonNode): string =
-  let outtype = outp["output_type"].getStr()
-  let execcount = cell["execution_count"].getInt()
+  let outtype = outp["output_type"].asStr()
+  let execcount = cell["execution_count"].asInt()
   # ceUserLog0(&"Processing output #{execcount}", 2)
   if outtype == "stream":
     result = """
@@ -317,7 +348,7 @@ $1
   elif outtype == "execute_result" or outtype == "display_data":
     let data = outp["data"]
     if data.hasKey("image/png"):
-      let base64 = data["image/png"].getStr()
+      let base64 = data["image/png"].asStr()
       let hash = toMD5(base64)
       let outf = "sfdf" & $hash & ".png"
       let file = outf.open(fmWrite)
@@ -345,29 +376,30 @@ $1
 \includegraphics[width=$1in]{$2}
 \end{center}
 """ % [$(width / 100), getCurrentDir().joinPath(outf)]
-#     elif data.hasKey("text/html"):
-#       let body = data["text/html"].getStr()
-#       "tmp.html".writeFile(body)
-#       let (latex, err, code) = shellVerboseErr {dokCommand}:
-#         pandoc -f html -t latex "tmp.html" -o "table.tex"
+    elif data.hasKey("text/html"):
+      let body = data["text/html"].joinArr()
+      # "tmp.html".writeFile(body)
+      # let (latex, err, code) = shellVerboseErr {dokCommand}:
+      #   pandoc -f html -t latex "tmp.html" -o "table.tex"
+      let latextable = htmlTableToLatex(body)
 
-#       result = """
-# % ---
-# \begin{center}
-# $1
-# \end{center}
-# % ---
-# """ % ["table.tex".readFile()]
+      result = """
+% ---
+\begin{center}
+$1
+\end{center}
+% ---
+""" % [latextable]
     else:
       result = """
 % ---
 \begin{verbatim}
 $1
 \end{verbatim}
-% ---""" % [outp["data"]["text/plain"].getStr()] #TODO export html tables?
+% ---""" % [outp["data"]["text/plain"].joinArr()] #TODO export html tables?
 
 proc exportCodeCell(cell: JsonNode): string =
-  let body = cell["source"].getElems().mapIt(it.getStr()).join("")
+  let body = cell["source"].asSeq().mapIt(it.asStr()).join("")
   result.add """
 % ---
 \begin{minted}{python}
@@ -375,7 +407,7 @@ $1
 \end{minted}
 % ---""" % [body]
 
-  for res in cell["outputs"].getElems():
+  for res in cell["outputs"].asSeq():
     result.add "\n"
     result.add res.exportCellOutput(cell)
 
@@ -383,7 +415,7 @@ proc shellConfig(): set[DebugOutputKind] = {}
 
 
 proc exportMarkdownCell(cell: JsonNode): string =
-  let body = cell["source"].getElems().mapIt(it.getStr()).join("")
+  let body = cell["source"].asSeq().mapIt(it.asStr()).join("")
   "file.md".writeFile(body)
   let (res, err, code) = shellVerboseErr shellConfig():
     pandoc -f markdown -t latex -o "file.tex" "file.md"
@@ -441,10 +473,10 @@ outFile.write """
 
 let nbJson = json.parseFile(notebook)
 
-for cell in nbJson["cells"].getElems():
-  if cell["cell_type"].getStr() == "code":
+for cell in nbJson["cells"].asSeq():
+  if cell["cell_type"].asStr() == "code":
     outFile.write exportCodeCell(cell)
-  elif cell["cell_type"].getStr() == "markdown":
+  elif cell["cell_type"].asStr() == "markdown":
     outfile.write exportMarkdownCell(cell)
 
 outFile.write """
@@ -454,12 +486,14 @@ outFile.write """
 
 outFile.close()
 
-# let (res, err, code) = shellVerboseErr {dokCommand}:
-#   latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
+let (res, err, code) = shellVerboseErr {dokCommand}:
+  echo "running compilation"
+  latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
+  echo "finished compilation"
 
-# if code != 0:
-#   ceUserError0("Error while compiling result document")
-#   echo err
-# else:
-#   ceUserInfo0("Compilation ok")
-#   copyFile(outName, &"{author}_{group}_{task}.pdf")
+if code != 0:
+  ceUserError0("Error while compiling result document")
+  echo err
+
+copyFile(outName, &"{author}_{group}_{task}.pdf")
+echo "done all"

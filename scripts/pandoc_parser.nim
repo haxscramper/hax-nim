@@ -1,4 +1,8 @@
 import shell
+import sequtils
+import json
+import strutils, strformat
+import options
 
 type
   ListStyleKind = enum
@@ -173,9 +177,158 @@ type
         divAttr: DocAttr
         divBlocks: seq[DocBlock]
 
-let (res, err, code) = shellVerboseErr {dokCommand}:
-  pipe:
-    pandoc -t json test.md
-    jq
+type
+  RawPandoc = object
+    kind: string
+    case final: bool
+    of true:
+      value: string
+    of false:
+      content: seq[RawPandoc]
 
-echo res
+func toCleanString(node: JsonNode): string =
+  case node.kind:
+    of JString: $node.getStr()
+    of JInt: $node.getInt()
+    of JFloat: $node.getFloat()
+    else: $node
+
+
+func toRawPandoc(node: JsonNode): RawPandoc =
+  if node.kind == JObject:
+    if node.hasKey("c") and node["c"].kind == JArray:
+      RawPandoc(
+        final: false,
+        kind: node["t"].getStr(),
+        content: node["c"].getElems().map(toRawPandoc)
+      )
+    else:
+      RawPandoc(
+        final: true,
+        kind: node["t"].getStr(),
+        value:
+          block:
+            if node.hasKey("c"): node["c"].toCleanString()
+            else: ""
+      )
+  elif node.kind == JArray:
+    RawPandoc(
+      final: false,
+      kind: "ValueArray",
+      content: node.getElems().map(toRawPandoc)
+    )
+  else:
+    RawPandoc(
+      final: true,
+      kind: "Final",
+      value: node.toCleanString()
+    )
+
+func debugPrint(node: RawPandoc, ind = 0, index = 0): void =
+  let pref = "  ".repeat(ind)
+  if node.final:
+    debugecho &"{pref}#{index} [{node.kind}] {node.value}"
+  else:
+    debugecho &"{pref}[{node.kind}]"
+    for index, child in node.content:
+      debugprint(child, ind + 1, index)
+
+# func makePlaintextBlock(text: string): DocBlock =
+
+func findFirst(node: RawPandoc, kind: string): Option[RawPandoc] =
+  if node.kind == kind:
+    return some(node)
+
+  if node.final:
+    return none(RawPandoc)
+  else:
+    for child in node.content:
+      let res = findFirst(child, kind)
+      if res.isSome():
+        return res
+
+
+func isEmpty(node: RawPandoc): bool =
+  (not node.final) and node.content.len == 0
+
+type
+  SimpleTable = object
+    header: seq[string]
+    cells: seq[seq[string]]
+
+func toTableSimple(node: RawPandoc): SimpleTable =
+  assert node.kind == "Table"
+  let alignSettings = node.content[1]
+
+  func cellStrVal(cell: RawPandoc): string =
+    if cell.isEmpty:
+      ""
+    else:
+      # #1 [ValueArray]
+      #   #0 [Plain]
+      #     #0 [Str] "$x$"
+      cell.content[0].content[0].value
+
+
+  let tableHeaders: seq[string] =
+    node.content[3].content.map(cellStrVal)
+  let tableCells: seq[seq[string]] =
+    node.content[4].content.mapIt(it.content.map(cellStrVal))
+
+  SimpleTable(
+    header: tableHeaders,
+    cells: tableCells
+  )
+
+
+
+
+
+
+proc getTable(parsed: seq[RawPandoc]): SimpleTable =
+  for node in parsed:
+    let res = findFirst(node, "Table")
+    if res.isSome():
+      # debugprint res.get()
+      return res.get().toTableSimple()
+
+
+func toLatexTable(tbl: SimpleTable): string =
+  let newline = " \\\\"
+  let formatting = tbl.header.mapIt("l").join("|")
+  let headers = tbl.header.join(" & ") & newline
+  let cells = tbl.cells.mapIt(it.join(" & ")).join(newline & "\n")
+
+
+  return fmt"""
+\begin{{tabular}}{{{formatting}}}
+{headers}
+\hline
+\hline
+{cells}
+\end{{tabular}}
+"""
+
+proc htmlTableToLatex*(htmlTable: string): string =
+  let tmpfile = "/tmp/htmltable.html"
+  tmpfile.writeFile(htmlTable)
+  let (res, err, code) = shellVerboseErr {dokCommand}:
+    pandoc -t json ($tmpfile)
+
+  if code == 0:
+    let jnode = res.parseJson()
+    let blocks = jnode["blocks"].getElems()
+    let tbl = getTable(blocks.map(toRawPandoc))
+    return tbl.toLatexTable()
+  else:
+    echo err
+    return ""
+
+
+
+# echo htmlTableToLatex("test.tmp.html".readFile().string())
+
+
+
+# for blc in parsed:
+#   print blc
