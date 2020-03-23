@@ -11,11 +11,13 @@ import typetraits
 import tables
 
 type
-  OptDesc* = object
+  OptDescBase* = ref object of RootObj
     name*: string
     help*: string
     docstr*: string
     pfix*: seq[string]
+
+  OptDesc* = ref object of OptDescBase
     maxValues*: int
     # parseto*: Option[NimNode] # Disabling this field will allow to use
     #                           # this type at both compile-time and
@@ -104,18 +106,25 @@ macro convtest(): untyped =
   var t = [(1, Test(name: "hello"))].toTable()
   result = initCodegen(t)
   # result = initCodegen(Test(name: "fff"))
-  result = quote do:
-    let qqq {.inject.} = `result`
+  # result = quote do:
+  #   let qqq {.inject.} = `result`
 
-  result = nnkStmtList.newTree(result)
-
-  echo result.toStrLit()
+  # result = nnkStmtList.newTree(result)
 
 
-var ctime {.compiletime.} = [(1, Test(name: "hello"))].toTable()
-const runtime = ctime
+when false:
+  # Const cannot be used to store `ref` objects (and this is expected:
+  # `ref` assumes usage of heap and possibility of modification for
+  # objects is always present for the heap-allocated type: you can
+  # just craete new alias and modify it (well, at least this is my
+  # understanding))
+  var ctime {.compiletime.} = [(1, Test(name: "hello"))].toTable()
+  const runtime = ctime
 
-convtest()
+# Writting object literally in code allows to bypass this limitation:
+# result is not a zero-ovearhead, but if you absolutely need to have
+# `ref` object this is good enough.
+let items = convtest()
 
 # echo [(12, 12)].toTable()
 
@@ -211,3 +220,8 @@ when false:
 
 # Refenrence types still cannot be passed to `const`, but this
 # limitation can be worked around using `initCodegen` macro.
+
+# Usage of reference types allows to bypass limitation imposed by the
+# `NimNode`: you can inherit from base object that is available at
+# both runtime and compile time and add compile-time-only fields to
+# derived object.
