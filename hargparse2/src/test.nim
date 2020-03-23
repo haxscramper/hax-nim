@@ -67,10 +67,6 @@ proc initCodegenObject[T: object | tuple](obj: T): NimNode {.discardable.} =
   else:
     nnkPar.newTree(fieldInit)
 
-
-
-  # nnkStmtList.newTree()
-
 proc initCodegen(obj: object | tuple): NimNode {.discardable.} =
   initCodegenObject(obj)
 

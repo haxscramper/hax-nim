@@ -22,14 +22,17 @@ proc `==`*[A, B](tpl: (Opt[A],Opt[B]), tpl1: (A,B)): bool =
   ## Compare tuple of optional values for equality
   tpl[0] == tpl1[0] and tpl[1] == tpl1[1]
 
-converter toOption*[T](t: T): Option[T] =
-  ## Implicit convertion of values to option types
-  when T is ref:
-    if t.isNil:
-      return none(T)
-    return some(t)
-  else:
-    return some(t)
+# XXXX removed - it turned out ot be very dangerous: if you had no
+# correct overload for func(Opt[T]) this caused infinite recursion.
+
+# converter toOption*[T](t: T): Option[T] =
+#   ## Implicit convertion of values to option types
+#   when T is ref:
+#     if t.isNil:
+#       return none(T)
+#     return some(t)
+#   else:
+#     return some(t)
 
 template tern*(
   predicate: bool,

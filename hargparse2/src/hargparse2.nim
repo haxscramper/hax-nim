@@ -22,10 +22,11 @@ template setErr[V, E](res: var Result[V, E], val: E): untyped =
 
 
 type
-  OptDesc* = object
+  OptDescBase* = ref object of RootObj
     ## Data structure that will be used to generate command/options
-    ## tree. Configuration is first parsed into this structure and only
-    ## then used to generate tree.
+    ## tree. Configuration is first parsed into this structure and
+    ## only then used to generate tree. This part of the type is
+    ## avalable both at runtime and compile time.
     name*: string ## name of the command, used when acessing it in code
     help*: string ## Help string
     docstr*: string ## Longer string, used to generate manpages or html
@@ -36,6 +37,7 @@ type
                    ## this equals zero option type will be `bool`. One
                    ## for `T`. Two or more will create `seq[T]`.
 
+  OptDesc* = ref object of OptDescBase
     exclRules*: Option[NimNode] ## Boolean expression to check whether
                                ## or not it is possible to use command
                                ## (is it mutally exclisive with some
@@ -48,7 +50,7 @@ type
                               ## can be parsed to. This is `T` in
                               ## `maxValues`
 
-  ArgDesc* = object
+  ArgDescBase* = ref object of RootObj
     ## Description of the command argument.
     name*: string ## name of the command, used when acessing it in code
     variadic*: bool ## Whether or not argument might accept unlimited
@@ -57,6 +59,8 @@ type
     help*: string ## Help string, displayed when `--help` is invoked.
     docstr*: string ## Longer string, used to generate manpages or html
                    ## documentation.
+
+  ArgDesc* = ref object of ArgDescBase
     parsecheck*: Option[NimNode] ## Code that will be evaluated to
                                 ## check validty of the argument.
     parseto*: Option[NimNode] ## Type that *single* use of the
@@ -64,12 +68,32 @@ type
                           ## argument is `variadic` than each
                           ## entry will be checked.
 
-  CommandDescr* = object
-    # ## Description of the utility command
+  CommandDescrBase* = ref object of RootObj
+    ## Description of the utility command. This is a base type,
+    ## available at both runtime and compile-time. Due to limitations
+    ## imposed by use of `NimNode` in `AragDesc` some fields (list of
+    ## subcommands, arguments and options) have to be copied only as
+    ## `*Base` types: `CommandDescr` uses `args: seq[ArgDesc]` at
+    ## compile-time, but only `argsbase: seq[ArgDescBase]` at runtime
+
     name*: string ## Name of the command
     help*: string ## Help message to be displayed in help page
     dosctr*: string ## Longer string, used to generate manpages or html
-                   ## documentation.
+                     ## documentation.
+
+    argsbase*: seq[ArgDescBase] ## Descriptions of the command argument
+                               ## that is available at both runtime
+                               ## and compile-time
+
+    subsbase*: seq[CommandDescrBase] ## Description of the subcommand
+                                    ## that are available at both
+                                    ## runtime and compile-time.
+
+    optsbase*: seq[OptDescBase] ## Options for the command that are
+                                ## available at both runtime and
+                                ## compile-time.
+
+  CommandDescr* = ref object of CommandDescrBase
     args*: seq[ArgDesc] ## Arguments for the command. Arguments are
                        ## tried after subcommands - in case of
                        ## non-disjoint sets of values subcommand
@@ -77,7 +101,23 @@ type
     subs*: seq[CommandDescr] ## Subcommands.
     opts*: seq[OptDesc] ## Option related to the command.
 
+type
+  RuntimeDesc = CommandDescrBase
+
+
+func toBase(sub: ArgDesc): ArgDescBase = sub.ArgDescBase
+func toBase(sub: OptDesc): OptDescBase = sub.OptDescBase
+
+func toBase(sub: CommandDescr): CommandDescrBase =
+  result = sub.CommandDescrBase
+  result.argsbase = sub.args.map(toBase)
+  result.optsbase = sub.opts.map(toBase)
+  result.subsbase = sub.subs.map(toBase)
+
 var descriptionsComptime {.compileTime.}: Table[string, CommandDescr]
+
+func toBase(tbl: Table[string, CommandDescr]): Table[string, CommandDescrBase] =
+  toSeq(pairs(tbl)).mapIt((it[0], it[1].toBase())).toTable()
 
 type
   ParseErrorKind* = enum
@@ -154,7 +194,7 @@ when isMainModule:
   assert parseToken("-Hello", ctkLongFlag).isErr()
 
 func separateTokens(
-  tok: string, comm: CommandDescr
+  tok: string, comm: RuntimeDesc
      ): Result[seq[ParsedToken], ParseError] =
   ## Separate token into set of parsed tokens according to
   ## specification.
@@ -302,65 +342,100 @@ macro test() =
   # echo res.toStrLit()
   result = res
 
-func initCodegen*(val:
-    char   | int     | int8   | int16 |
-    int32  | int64   | uint   | uint8 |
-    uint16 | uint32  | uint64 | bool  |
-    string | float32 | float64
-  ): NimNode =
-    debugEcho "primitive ", typeof(val)
-    newLit(val)
+# [T:
+# # char   | int     | int8   | int16 |
+# # int32  | int64   | uint   | uint8 |
+# # uint16 | uint32  | uint64 | bool  |
+# # string | float32 | float64
+#              ]
 
-func initCodegen*[T](arr: seq[T]): NimNode =
-  debugEcho: "sequence"
-  nnkStmtList.newTree(
-    nnkPrefix.newTree(
-      newIdentNode("@"),
-      nnkBracket.newTree(arr.mapIt(
-        block:
-          debugEcho: "List item"
-          it.initCodegen()
-        ))))
+proc initCodegen[T](opt: Option[T]): NimNode {.discardable.}
+proc initCodegen[T](arr: seq[T]): NimNode {.discardable.}
+proc initCodegen(val: char | int | bool | string): NimNode {.discardable.}
 
-func initCodegen*[T: tuple | object](obj: T): NimNode =
-  debugEcho "tuple"
+proc initCodegenObject[T: object | tuple | ref object](obj: T): NimNode {.discardable.} =
+  echo "Generating object of type ", typeof(obj)
+  let isObj = (obj is object) or (obj is ref object)
   var fieldInit: seq[NimNode]
-  for name, value in obj.fieldPairs:
-    debugEcho: "sdffdsf"
-    when not isNamedTuple(typeof T):
+  if isObj:
+    fieldInit.add newIdentNode($typeof(T))
+
+  # NOTE using operator [] allows to treat reference object as regular one
+  for name, value in (when obj is ref object: obj[] else: obj).fieldPairs:
+    when isNamedTuple(typeof obj):
       fieldInit.add initCodegen(value)
     else:
-      fieldInit.add nnkExprColonExpr.newTree(ident(name), initCodegen(value))
+      fieldInit.add nnkExprColonExpr.newTree(
+        ident(name), initCodegen(value)
+      )
 
-  nnkStmtList.newTree(nnkPar.newTree(fieldInit))
+  if isObj:
+    nnkObjConstr.newTree(fieldInit)
+  else:
+    nnkPar.newTree(fieldInit)
 
-func initCodegen*[K, V](tbl: Table[K, V]): NimNode =
-  debugEcho "table"
+proc initCodegen(obj: object | tuple | ref object): NimNode {.discardable.} =
+  initCodegenObject(obj)
+
+proc initCodegen(val: char | int | bool | string): NimNode {.discardable.} =
+  when val is object:
+    echo "is object"
+    initCodegenObject(val)
+  else:
+    echo "is primitive type"
+    when val is string: newStrLitNode(val)
+    elif val is int: newIntLitNode(val)
+    elif val is bool: ident(val.tern("true", "false"))
+    else: initCodegenObject(val)
+
+
+
+proc initCodegen(nd: NimNode): NimNode {.discardable.} =
+  discard
+
+proc initCodegen[T](arr: seq[T]): NimNode {.discardable.} =
+  nnkPrefix.newTree(
+    newIdentNode("@"),
+    nnkBracket.newTree(arr.mapIt(it.initCodegen())))
+
+var optcall {.compiletime.} = 0
+proc initCodegen[T](opt: Option[T]): NimNode {.discardable.} =
+  echo "Generating code for option ", optcall, " ", typeof(opt)
+  inc optcall
+  if optcall > 10:
+    quit 1
+
+  if opt.isSome():
+    let item = opt.get()
+    echo "value is present, ", typeof(item)
+    result = initCodegen(item)
+    echo "done codegen for item"
+  else:
+    result = quote do: none(`T`)
+
+  dec optcall
+
+proc initCodegen[K, V](tbl: Table[K, V]): NimNode {.discardable.} =
   var fieldInit: seq[NimNode]
   for key, val in tbl:
     fieldInit.add nnkPar.newTree(
-      initCodegen[typeof key](key), initCodegen[typeof val](val)
+      initCodegen[K](key),
+      initCodegen[V](val)
     )
 
-  # makeDotExpr(fieldInit.makeBracket, ident("toTable")).makeCall
-  nnkStmtList.newTree(
-    nnkCall.newTree(
-      nnkBracketExpr.newTree(
-        nnkDotExpr.newTree(
-          nnkBracket.newTree(fieldInit),
-          newIdentNode("toTable")
-        ),
-        newIdentNode($typeof(K)),
-        newIdentNode($typeof(V)))))
+  nnkCall.newTree(
+    newIdentNode("toTable"),
+    nnkBracket.newTree(fieldInit)
+  )
 
-macro generate(): untyped =
-  result = initCodegen(descriptionsComptime)
-  echo result.toStrLit()
+macro generateInit(): untyped =
+  defer: echo result.toStrLit()
+  result = initCodegen(descriptionsComptime.toBase())
 
-var descriptions {.compiletime.} = descriptionsComptime
+var descriptions: Table[string, CommandDescrBase]
 
 test()
 
-discard generate()
+descriptions = generateInit()
 
 # let parsed = parse77(@["--test:12"])
