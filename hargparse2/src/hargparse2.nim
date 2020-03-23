@@ -329,18 +329,6 @@ proc makeCommandDeclaration(comm: CommandDescr, parentComm: seq[string]): NimNod
     `setter`
     `parser`
 
-macro test() =
-  let commTest = CommandDescr(
-    opts: @[OptDesc(
-      name: "test",
-      parseto: some(quote do: int)
-    )],
-    name: "77",
-  )
-
-  let res = makeCommandDeclaration(commTest, @[])
-  # echo res.toStrLit()
-  result = res
 
 # [T:
 # # char   | int     | int8   | int16 |
@@ -354,7 +342,6 @@ proc initCodegen[T](arr: seq[T]): NimNode {.discardable.}
 proc initCodegen(val: char | int | bool | string): NimNode {.discardable.}
 
 proc initCodegenObject[T: object | tuple | ref object](obj: T): NimNode {.discardable.} =
-  echo "Generating object of type ", typeof(obj)
   let isObj = (obj is object) or (obj is ref object)
   var fieldInit: seq[NimNode]
   if isObj:
@@ -379,10 +366,8 @@ proc initCodegen(obj: object | tuple | ref object): NimNode {.discardable.} =
 
 proc initCodegen(val: char | int | bool | string): NimNode {.discardable.} =
   when val is object:
-    echo "is object"
     initCodegenObject(val)
   else:
-    echo "is primitive type"
     when val is string: newStrLitNode(val)
     elif val is int: newIntLitNode(val)
     elif val is bool: ident(val.tern("true", "false"))
@@ -398,22 +383,10 @@ proc initCodegen[T](arr: seq[T]): NimNode {.discardable.} =
     newIdentNode("@"),
     nnkBracket.newTree(arr.mapIt(it.initCodegen())))
 
-var optcall {.compiletime.} = 0
 proc initCodegen[T](opt: Option[T]): NimNode {.discardable.} =
-  echo "Generating code for option ", optcall, " ", typeof(opt)
-  inc optcall
-  if optcall > 10:
-    quit 1
+  if opt.isSome(): initCodegen(opt.get())
+  else: quote do: none(`T`)
 
-  if opt.isSome():
-    let item = opt.get()
-    echo "value is present, ", typeof(item)
-    result = initCodegen(item)
-    echo "done codegen for item"
-  else:
-    result = quote do: none(`T`)
-
-  dec optcall
 
 proc initCodegen[K, V](tbl: Table[K, V]): NimNode {.discardable.} =
   var fieldInit: seq[NimNode]
@@ -428,14 +401,24 @@ proc initCodegen[K, V](tbl: Table[K, V]): NimNode {.discardable.} =
     nnkBracket.newTree(fieldInit)
   )
 
-macro generateInit(): untyped =
-  defer: echo result.toStrLit()
-  result = initCodegen(descriptionsComptime.toBase())
+macro test() =
+  let commTest = CommandDescr(
+    opts: @[OptDesc(
+      name: "test",
+      parseto: some(quote do: int)
+    )],
+    name: "77",
+  )
 
-var descriptions: Table[string, CommandDescrBase]
+  let commDecls = makeCommandDeclaration(commTest, @[])
+  let descrInit = initCodegen(descriptionsComptime.toBase())
+  result = quote do:
+    var descriptions {.inject.}: Table[string, CommandDescrBase]
+    `commDecls`
+    descriptions = `descrInit`
+
+  echo result.toStrLit()
 
 test()
 
-descriptions = generateInit()
-
-# let parsed = parse77(@["--test:12"])
+let parsed = parse77(@["--test:12"])
