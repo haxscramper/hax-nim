@@ -237,7 +237,9 @@ func separateTokens(
   tok: string, comm: CommandDescrBase
      ): Result[seq[ParsedToken], ParseError] =
   ## Separate token into set of parsed tokens according to
-  ## specification.
+  ## specification. Token without leading dashes is classified as
+  ## subcommand if `comm` has subcommand with the same name. Otherwise
+  ## it is classified as argument.
   let classification = tok.classifyToken()
   if classification.isUnambiguous():
     let res = tok.parseToken(classification[0])
@@ -275,12 +277,12 @@ func joinTypeNames*(names: seq[string], comm: CommandDescr): string =
 func makeOptTypeName(names: seq[string], comm: CommandDescr): string =
   ## Get name of the option type for given list of parent command
   ## `names`
-  "opts" & joinTypeNames(names, comm)
+  "Opts" & joinTypeNames(names, comm)
 
 func makeCommandTypeName(names: seq[string], comm: CommandDescr): string =
   ## Get name of the command type for given list of parent command
   ## `names` (should include final command)
-  "command" & joinTypeNames(names, comm)
+  "Command" & joinTypeNames(names, comm)
 
 func makeCommandParserName(names: seq[string], comm: CommandDescr): string =
   ## Get name of the command type for given list of parent command
@@ -290,6 +292,19 @@ func makeCommandParserName(names: seq[string], comm: CommandDescr): string =
 func makeCommandSetterName(names: seq[string], comm: CommandDescr): string =
   ## Get command value setter proc name
   "setvalFor" & joinTypeNames(names, comm)
+
+func makeSubcommandEnumName(names: seq[string], comm: CommandDescr): string =
+  ## Get subcommand selector enum name
+  "Sub" & joinTypeNames(names, comm)
+
+func makeSubcommandFieldEnumName(names: seq[string], comm: CommandDescr): string =
+  ## Get subcommand selector enum filed name
+  "sub" & names.mapIt(($it[0]).toLower()).join("") & comm.name.capitalizeAscii()
+
+
+func makeSubcommandFieldName(names: seq[string], comm: CommandDescr): string =
+  ## Get name of the subcommand field
+  comm.name
 
 func makeCommandOptionsType(
   comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
@@ -307,19 +322,62 @@ func makeCommandOptionsType(
   )
   result = makeNimType(name, flds)
 
+func makeSubcommandEnum(
+  comm: CommandDescr, parentComms: seq[string]): NimNode =
+  ## Generate enum used for selecting subcommands
+  let enumname = makeSubcommandEnumName(parentComms, comm)
+  TypeSection(
+    TypeDef(
+      Ident(enumname),
+      Empty(),
+      EnumTy(
+        @[Empty()] &
+          comm.subs.mapIt(makeSubcommandFieldEnumName(parentComms, it).ident())
+      )))
+
+func hasSubcommands(comm: CommandDescr): bool = comm.subs.len > 0
+
 func makeCommandType(
   comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
      ): NimNode =
-  ## Generate type describing cli command
+  ## Generate type describing cli command. Subcommands are selected
+  ## using 'kind' field. Enumeration with possible options is
+  ## generated too.
   let name = makeCommandTypeName(parentComms, comm)
   let optName = makeOptTypeName(parentComms, comm)
-  result = makeNimType(name, @[
-    nnkIdentDefs.newTree(
-      ident("options"),
-      ident(optName),
-      newEmptyNode()
+  let optsfield = nnkIdentDefs.newTree(
+    ident("options"),
+    ident(optName),
+    newEmptyNode()
+  )
+
+
+  if comm.hasSubcommands():
+    let subcEnumType = makeSubcommandEnumName(parentComms, comm)
+    let commandTypeDecl = makeNimType(
+      name, @[
+        optsField,
+        IdentDefs(
+          "activeSubc",
+          Ident(subcEnumType),
+          newEmptyNode()
+        )
+      ] & comm.subs.mapIt(
+        block:
+          let subcType = makeCommandTypeName(parentComms & @[comm.name], it)
+          let subcName = makeSubcommandFieldName(parentComms, it)
+          IdentDefs(subcName, Ident(subcType), newEmptyNode())
+      )
     )
-  ])
+
+    let enumTypeDecl = makeSubcommandEnum(comm, parentComms)
+    result = quote do:
+      `enumTypeDecl`
+      `commandTypeDecl`
+  else:
+    let commandTypeDecl = makeNimType(name, @[optsField])
+    result = quote do:
+      `commandTypeDecl`
 
 template makeVerboseLog(body: untyped): untyped =
   ## Return body if logging is enable and verblose logging is enabled.
@@ -513,6 +571,10 @@ func makeCommandParser(
         `tokenSepLog`
         if separate.isOk():
           for stok {.inject.} in separate.get():
+            # If token is command type select it as active subcommand
+            if stok.kind == ctkCommand:
+              discard
+
             let setres {.inject.} = `setterName`(res, stok)
             if setres.isErr():
               `setresErr`
@@ -523,6 +585,39 @@ func makeCommandParser(
           result.setErr separate.error
 
 
+func makeCommandAccess(
+  comm: CommandDescr, parentComm: seq[string], conf: CodegenConfig): NimNode =
+  ## Create functions to simplify access to active fields in command.
+  var procs: seq[NimNode]
+  let commTypeName: NimNode = makeCommandTypeName(parentComm, comm).ident()
+  let commArgName: NimNode = "comm".ident()
+
+
+  for sub in comm.subs:
+    let subcFieldName: string = makeSubcommandFieldName(parentComm, sub)
+    let funcName: NimNode = ("get" & subcFieldName.capitalizeAscii()).ident()
+    let subTypeName: string = makeCommandTypeName(parentComm & @[comm.name], sub)
+    let activeField: string = makeSubcommandFieldEnumName(parentComm, sub)
+    procs.add superquote do:
+      func `funcName`(`commArgName`: `commTypeName`): `subTypeName.ident()` =
+        if comm.activeSubc != `activeField.ident()`:
+          raise newException(
+            AssertionError,
+            "Cannot access subcommand '" &
+              `newStrLitNode(activeField)` &
+              "' for command with '" &
+              $comm.activeSubc & "' as active one."
+          )
+        else:
+          comm.`subcFieldName.ident()`
+
+  if comm.hasSubcommands():
+    let enumTypeName: NimNode = makeSubcommandEnumName(parentComm, comm).ident()
+    procs.add superquote do:
+      func isActiveSubc(`commArgName`: `commTypeName`, kind: `enumTypeName`): bool =
+        comm.activeSubc == kind
+
+  result = StmtList(procs)
 
 
 proc makeCommandDeclaration(
@@ -540,6 +635,7 @@ proc makeCommandDeclaration(
   let commType = makeCommandType(comm, parentComm, conf)
   let parser = makeCommandParser(comm, parentComm, conf)
   let setter = makeCommandSetter(comm, parentComm, conf)
+  let access = makeCommandAccess(comm, parentComm, conf)
   descriptionsComptime[makeCommandTypeName(parentComm, comm)] = comm
   result = quote do:
     # First leaf commands need to be created
@@ -552,6 +648,8 @@ proc makeCommandDeclaration(
     `setter`
     # Parser for options into command
     `parser`
+    # Functions to access fields in generated commands
+    `access`
 
 
 # [T:
@@ -727,19 +825,44 @@ macro testgen() =
 
 testgen()
 
-echo "runtime"
+block:
+  echo "============="
+  let parsed = parse77(@["--test:12"])
 
-let parsed = parse77(@["--test:12"])
+  if parsed.isOk():
+    echo "parse ok"
+    let val = parsed.get()
+    match (val.options):
+      (test: 12):
+        echo "test is 12"
+      _:
+        echo "different value"
+        echo val.options.test
+  else:
+    echo "parsed failed"
+    printError(parsed.error)
 
-if parsed.isOk():
-  echo "parse ok"
-  let val = parsed.get()
-  match (val.options):
-    (test: 12):
-      echo "test is 12"
-    _:
-      echo "different value"
-      echo val.options.test
-else:
-  echo "parsed failed"
-  printError(parsed.error)
+  echo "============"
+
+
+block:
+  echo "============="
+  let parsed = parse77(@["--test:33", "kill"])
+
+  if parsed.isOk():
+    echo "parse ok"
+    let val = parsed.get()
+    match (val.options):
+      (test: 33):
+        echo "test is 12"
+      _:
+        echo "different value"
+        echo val.options.test
+
+    if val.isActiveSubc(subKill):
+      let opts = val.getKill().options
+  else:
+    echo "parsed failed"
+    printError(parsed.error)
+
+  echo "============"
