@@ -106,10 +106,6 @@ type
     subs*: seq[CommandDescr] ## Subcommands.
     opts*: seq[OptDesc] ## Option related to the command.
 
-type
-  RuntimeDesc = CommandDescrBase
-
-
 func toBase(sub: ArgDesc): ArgDescBase = sub.ArgDescBase
 func toBase(sub: OptDesc): OptDescBase = sub.OptDescBase
 
@@ -142,6 +138,8 @@ type
     pekTooMuchValues
     pekMissingArgument
     pekTokenParseError
+    pekInvalidType
+    pekValueNotAllowed
 
   ParseError* = object
     ## Command parse error
@@ -173,21 +171,32 @@ type
     key: string
     value: string
 
+func longOptRegex(): Regex = re"--((?:\w|-|_){2,})[:=](.*)"
+func longFlagRegex(): Regex = re"--((?:\w|-|_){2,})$"
+func shortOptRegex(): Regex = re"-(\w[_?+=])[:=](.*)"
+func shortFlagRegex(): Regex = re"-(\w[_?+=])"
+
 func classifyToken(tok: string): PossibleParse =
   debugEcho tok
-  if tok =~ re"--(\w|-|_){2,}":
+  if tok =~ longFlagRegex():
     @[ctkLongFlag]
-  elif tok =~ re"--(\w|-|_){2,}[:=](.*)":
+  elif tok =~ longOptRegex():
     @[ctkLongOption]
+  elif tok =~ shortOptRegex():
+    @[ctkShortOption]
+  elif tok =~ shortFlagRegex():
+    @[ctkShortFlag]
   else:
     @[ctkInvalid]
 
 func isUnambiguous(optParse: PossibleParse): bool =
   optParse.len == 1
 
-func parseToken(tok: string, kind: CommandTokenKind, comm: RuntimeDesc
-               ): Result[ParsedToken, ParseError] =
+func parseToken(tok: string, kind: CommandTokenKind): Result[ParsedToken, ParseError] =
   ## Parse single unambigous token
+  ## :tok: is a token to parse
+  ## :kind: is expected kind for a token
+  debugEcho "Parsing token: ", tok, " as ", kind
   var res = ParsedToken(kind: kind)
   case kind:
     of ctkArgument: res.value = tok
@@ -208,6 +217,15 @@ func parseToken(tok: string, kind: CommandTokenKind, comm: RuntimeDesc
         result.setErr ParseError(
           kind: pekTokenParseError,
           message: &"Cannot parse '{tok}' as short flag")
+    of ctkLongOption:
+      if tok =~ longOptRegex():
+        let key = matches[0]
+        let val = matches[1]
+        result.setOk ParsedToken(
+          kind: ctkLongOption,
+          key: key,
+          value: val
+        )
     else:
       result.setErr ParseError(
         kind: pekTokenParseError,
@@ -215,13 +233,13 @@ func parseToken(tok: string, kind: CommandTokenKind, comm: RuntimeDesc
       )
 
 func separateTokens(
-  tok: string, comm: RuntimeDesc
+  tok: string, comm: CommandDescrBase
      ): Result[seq[ParsedToken], ParseError] =
   ## Separate token into set of parsed tokens according to
   ## specification.
   let classification = tok.classifyToken()
   if classification.isUnambiguous():
-    let res = tok.parseToken(classification[0], comm)
+    let res = tok.parseToken(classification[0])
     if res.isOk():
       result.ok @[res.get]
     else:
@@ -302,36 +320,6 @@ func makeCommandType(
     )
   ])
 
-func makeCommandSetter(
-  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
-     ): NimNode =
-  ## Create procedure for settings arguments to the command. The
-  ## procedure modifies value of the command (`comm` argument)
-  ## in-place. Second argument is single, unambigously parsed token
-  ## entry. Generated procedure performs necessary checks and might
-  ## generate error in parsing. Error returned as `err` value for
-  ## `Result`.
-  let name = makeCommandSetterName(parentComms, comm)
-  let comm = makeCommandTypeName(parentComms, comm)
-
-  let setLog =
-    if conf.enableLogging:
-      superquote do:
-        echo "setting value of '", tok, "' for command ", `newStrLitNode(comm)`
-    else:
-      quote do:
-        discard
-
-
-  result = superquote do:
-    proc `name.ident()`(
-      comm: var `comm.ident()`,
-      tok: ParsedToken
-                     ): Result[bool, ParseError] =
-      let comm {.inject.} = comm
-      let tok {.inject.} = tok
-      `setLog`
-
 template makeVerboseLog(body: untyped): untyped =
   ## Return body if logging is enable and verblose logging is enabled.
   ## Otherwise return `discard` WARNING: expects to find variable
@@ -376,6 +364,111 @@ proc printError(err: ParseError): void =
   echoMulti("message", msgWidth, err.message.justifyFitTerminal((msgWidth, 10)))
 
 
+func parseTokenImpl(val: string, res: int): int = result = val.parseInt()
+proc parseTokenVal[T](val: string): Result[T, ParseError] =
+  try:
+    var deflt: T
+    result.setOk parseTokenImpl(val, deflt)
+  except:
+    result.setErr ParseError(
+      kind: pekInvalidType,
+      message: getCurrentExceptionMsg()
+    )
+
+type
+  OkOrMsg = Result[bool, string]
+
+
+func makeResult[V, E](val: V): Result[V, E] = result.ok val
+func makeResult[V, E](val: E): Result[V, E] = result.err val
+
+# func makeResult[V, E](val: V | E): Result[V, E] =
+#   when val is V:
+#     result.ok val
+#   else:
+#     result.err val
+
+func makeOptionCheck(opt: OptDesc, conf: CodegenConfig): NimNode =
+  ## Create code for parsing option and checking it's validity
+  let targettype =
+    if opt.parseto.isSome(): opt.parseto.get()
+    else: quote do: string
+
+  let checkCode =
+    if opt.parsecheck.isSome(): opt.parsecheck.get()
+    else: quote do: true
+
+  let optIdent = newIdentNode(opt.name)
+
+  let valparseOk = makeVerboseLog:
+    echo "value parsing is ok"
+
+  result = superquote do:
+    if tok.key == `newStrLitNode(opt.name)`:
+      # Attempt to parse input token value to necesary type
+      let parseResult: Result[`targettype`, ParseError] =
+        parseTokenVal[`targettype`](tok.value)
+
+      # If parse is ok check for it's validity using additional code
+      if parseResult.isOk():
+        let parsedval {.inject.}: `targettype` = parseResult.get()
+        let checkResult: OkOrMsg = `checkCode`
+        if checkResult.isOk():
+          # Check successfull, set value in the output TODO
+          comm.options.`optIdent` = parsedval
+          `valparseOk`
+          result.setOk true
+        else:
+          result.setErr ParseError(
+            kind: pekValueNotAllowed,
+            message: checkResult.error
+          )
+
+func makeCommandSetter(
+  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+     ): NimNode =
+  ## Create procedure for settings arguments to the command. The
+  ## procedure modifies value of the command (`comm` argument)
+  ## in-place. Second argument is single, unambigously parsed token
+  ## entry. Generated procedure performs necessary checks and might
+  ## generate error in parsing. Error returned as `err` value for
+  ## `Result`.
+  let name = makeCommandSetterName(parentComms, comm)
+  let commPref = makeCommandTypeName(parentComms, comm)
+
+  let settingTokLog = makeVerboseLog:
+    echo "setting value of '", tok, "' for command ", commname
+
+  let setterLogic = nnkStmtList.newTree(
+    comm.opts.mapIt(makeOptionCheck(it, conf))
+  )
+
+  let postSet = makeRegularLog:
+    defer:
+      if result.isOk:
+        echo "Succesfully set value from token ", tok
+      else:
+        echo "Failed to set value from toke"
+        printError(result.error)
+
+  result = superquote do:
+    proc `name.ident()`(comm: var `commPref.ident()`, tok: ParsedToken): Result[bool, ParseError] =
+      var comm {.inject.} = comm
+      let tok {.inject.} = tok
+      let commname {.inject.} = `newStrLitNode(commPref)`
+
+      `postSet`
+
+      `settingTokLog`
+      if descriptions.commHasOpt(commname, tok.key):
+        `setterLogic`
+      else:
+        result.setErr ParseError(
+          kind: pekUnknownOption,
+          message: &"No such option for {commname}: {tok.key}"
+        )
+
+
 func makeCommandParser(
   comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
      ): NimNode =
@@ -398,9 +491,12 @@ func makeCommandParser(
     if not separate.isOk():
       printError(separate.error)
 
+  let setresErr = makeRegularLog:
+    echo "failed to set option for token ", stok
+    printError(setres.error)
+
   result = superquote do:
     proc `parserName`(tokens: seq[string]): Result[`commResType`, ParseError] =
-      # TODO get description without raising side-effects
       `parseLogStart`
       let descr = descriptions[`commLit`]
       var res: `commResType`
@@ -409,10 +505,13 @@ func makeCommandParser(
         let separate {.inject.} = tok.separateTokens(descr)
         `tokenSepLog`
         if separate.isOk():
-          for stok in separate.get():
-            let setres = `setterName`(res, stok)
+          for stok {.inject.} in separate.get():
+            let setres {.inject.} = `setterName`(res, stok)
             if setres.isErr():
+              `setresErr`
               result.setErr setres.error
+
+          result.setOk res
         else:
           result.setErr separate.error
 
@@ -556,12 +655,25 @@ proc colorPrint(node: NimNode, ind: int = 0): void =
     # for err in matchErrors:
     #   echo err
 
+func commHasOpt(
+  desc: Table[string, CommandDescrBase],
+  commName: string, key: string): bool =
+  ## Return true if command `commName` has option `key`
+  for opt in desc[commName].optsbase:
+    if opt.name == key:
+      return true
+
+  return false
+
 macro test() =
   let conf = CodegenConfig(enableLogging: true, verboseLogging: true)
   let commTest = CommandDescr(
     opts: @[OptDesc(
       name: "test",
-      parseto: some(quote do: int)
+      parseto: some(quote do: int),
+      parsecheck: some(quote do:
+        makeResult[bool, string](parsedval < 12)
+      )
     )],
     name: "77",
   )
@@ -575,10 +687,19 @@ macro test() =
   descriptionsComptime.clear()
   # echo result.toStrLit()
   "ast.tmp.nim".writeFile($result.toStrLit())
+  # discard staticExec("nimpretty ast.tmp.nim")
   echo staticExec("pygmentize -f terminal ast.tmp.nim ")
   # result.colorPrint()
 
 
 test()
 
+echo "runtime"
+
 let parsed = parse77(@["--test:12"])
+
+if parsed.isOk():
+  echo "parse ok"
+else:
+  echo "parsed failed"
+  printError(parsed.error)
