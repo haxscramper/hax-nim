@@ -1,4 +1,5 @@
 import terminal, sequtils, strutils
+export terminal
 
 type
   MessageType* = enum

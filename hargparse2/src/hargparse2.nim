@@ -1,4 +1,5 @@
 import macros
+import re
 import strformat
 import result
 import hmisc/helpers
@@ -9,6 +10,10 @@ import deques
 import typeinfo
 import typetraits
 import tables
+import macroutils
+import hmisc/termformat
+import ast_pattern_matching
+import colechopkg/types
 
 template setOk[V, E](res: var Result[V, E], val: V): untyped =
   ## Set ok value for result type and immediately return
@@ -109,6 +114,8 @@ func toBase(sub: ArgDesc): ArgDescBase = sub.ArgDescBase
 func toBase(sub: OptDesc): OptDescBase = sub.OptDescBase
 
 func toBase(sub: CommandDescr): CommandDescrBase =
+  ## Convert command description to base recursively. Map all `*Desc`
+  ## fields to `*DescBase` (OptDesc -> OptDescBase)
   result = sub.CommandDescrBase
   result.argsbase = sub.args.map(toBase)
   result.optsbase = sub.opts.map(toBase)
@@ -116,8 +123,16 @@ func toBase(sub: CommandDescr): CommandDescrBase =
 
 var descriptionsComptime {.compileTime.}: Table[string, CommandDescr]
 
-func toBase(tbl: Table[string, CommandDescr]): Table[string, CommandDescrBase] =
+func toBase(tbl: Table[string, CommandDescr]
+           ): Table[string, CommandDescrBase] =
+  ## Convert table of compile-time descriptions to runtime command
+  ## descriptions.
   toSeq(pairs(tbl)).mapIt((it[0], it[1].toBase())).toTable()
+
+type
+  CodegenConfig = object
+    enableLogging: bool
+    verboseLogging: bool
 
 type
   ParseErrorKind* = enum
@@ -144,6 +159,7 @@ type
 
     ctkArgument
     ctkCommand
+    ctkInvalid
 
   PossibleParse* = seq[CommandTokenKind]
     ## Possible parses for ambigout command line options (i.e.
@@ -158,12 +174,18 @@ type
     value: string
 
 func classifyToken(tok: string): PossibleParse =
-  discard
+  debugEcho tok
+  if tok =~ re"--(\w|-|_){2,}":
+    @[ctkLongFlag]
+  elif tok =~ re"--(\w|-|_){2,}[:=](.*)":
+    @[ctkLongOption]
+  else:
+    @[ctkInvalid]
 
 func isUnambiguous(optParse: PossibleParse): bool =
   optParse.len == 1
 
-func parseToken(tok: string, kind: CommandTokenKind
+func parseToken(tok: string, kind: CommandTokenKind, comm: RuntimeDesc
                ): Result[ParsedToken, ParseError] =
   ## Parse single unambigous token
   var res = ParsedToken(kind: kind)
@@ -172,26 +194,25 @@ func parseToken(tok: string, kind: CommandTokenKind
     of ctkLongFlag:
       if tok.startsWith("--"):
         res.key = tok[2..^1]
-        result.ok res
+        result.setOk res
       else:
-        result.err ParseError(
+        result.setErr ParseError(
           kind: pekTokenParseError,
           message: &"Cannot parse '{tok}' as long flag, missing '--'"
         )
     of ctkShortFlag:
       if tok.startsWith("-") and tok.len == 2:
         res.key = tok[1..^1]
-        result.ok res
+        result.setOk res
       else:
-        result.err ParseError(
+        result.setErr ParseError(
           kind: pekTokenParseError,
           message: &"Cannot parse '{tok}' as short flag")
     else:
-      discard
-
-when isMainModule:
-  assert parseToken("--hello", ctkLongFlag).isOk()
-  assert parseToken("-Hello", ctkLongFlag).isErr()
+      result.setErr ParseError(
+        kind: pekTokenParseError,
+        message: &"Unhandled token kind: {kind}"
+      )
 
 func separateTokens(
   tok: string, comm: RuntimeDesc
@@ -200,12 +221,13 @@ func separateTokens(
   ## specification.
   let classification = tok.classifyToken()
   if classification.isUnambiguous():
-    let res = tok.parseToken(classification[0])
+    let res = tok.parseToken(classification[0], comm)
     if res.isOk():
       result.ok @[res.get]
     else:
       result.err res.error
   else:
+    debugEcho: "Ambigous token"
     if tok.startsWith("-"):
       discard
 
@@ -250,7 +272,9 @@ func makeCommandSetterName(names: seq[string], comm: CommandDescr): string =
   ## Get command value setter proc name
   "setvalFor" & joinTypeNames(names, comm)
 
-func makeCommandOptionsType(comm: CommandDescr, parentComms: seq[string]): NimNode =
+func makeCommandOptionsType(
+  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+     ): NimNode =
   ## Generate type describind possible options for the command
   ## description. This is what CLI options will be parsed **into**.
   let name = makeOptTypeName(parentComms, comm)
@@ -264,7 +288,9 @@ func makeCommandOptionsType(comm: CommandDescr, parentComms: seq[string]): NimNo
   )
   result = makeNimType(name, flds)
 
-func makeCommandType(comm: CommandDescr, parentComms: seq[string]): NimNode =
+func makeCommandType(
+  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+     ): NimNode =
   ## Generate type describing cli command
   let name = makeCommandTypeName(parentComms, comm)
   let optName = makeOptTypeName(parentComms, comm)
@@ -276,35 +302,112 @@ func makeCommandType(comm: CommandDescr, parentComms: seq[string]): NimNode =
     )
   ])
 
-func makeCommandSetter(comm: CommandDescr, parentComms: seq[string]): NimNode =
+func makeCommandSetter(
+  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+     ): NimNode =
   ## Create procedure for settings arguments to the command. The
   ## procedure modifies value of the command (`comm` argument)
   ## in-place. Second argument is single, unambigously parsed token
   ## entry. Generated procedure performs necessary checks and might
   ## generate error in parsing. Error returned as `err` value for
   ## `Result`.
-  let name = makeCommandSetterName(parentComms, comm).ident()
-  let comm = makeCommandTypeName(parentComms, comm).ident()
-  result = quote do:
-    proc `name`(comm: var `comm`, tok: ParsedToken): Result[bool, ParseError] =
+  let name = makeCommandSetterName(parentComms, comm)
+  let comm = makeCommandTypeName(parentComms, comm)
+
+  let setLog =
+    if conf.enableLogging:
+      superquote do:
+        echo "setting value of '", tok, "' for command ", `newStrLitNode(comm)`
+    else:
+      quote do:
+        discard
+
+
+  result = superquote do:
+    proc `name.ident()`(
+      comm: var `comm.ident()`,
+      tok: ParsedToken
+                     ): Result[bool, ParseError] =
+      let comm {.inject.} = comm
+      let tok {.inject.} = tok
+      `setLog`
+
+template makeVerboseLog(body: untyped): untyped =
+  ## Return body if logging is enable and verblose logging is enabled.
+  ## Otherwise return `discard` WARNING: expects to find variable
+  ## `conf` of type `CodegenConfig` in surrounding scope.
+  static:
+    assert declared conf
+    assert conf is CodegenConfig
+
+  if conf.enableLogging and conf.verboseLogging:
+    superQuote do:
+      body
+  else:
+    quote do:
+      discard
+
+template makeRegularLog(body: untyped): untyped =
+  ## Return body if logging is enabled. Otherwise return `discard`.
+  ## WARNING: expects to find variable `conf` of type `CodegenConfig`
+  ## in surrounding scope.
+  static:
+    assert declared conf
+    assert conf is CodegenConfig
+
+  if conf.enableLogging:
+    superQuote do:
+      body
+  else:
+    quote do:
       discard
 
 
-func makeCommandParser(comm: CommandDescr, parentComms: seq[string]): NimNode =
+proc echoMulti(id: string, padTo: int, m: varargs[string, `$`]): void =
+  ## Print list of strings on multiple lines
+  echo id.alignLeft(padTo, '_'), ": ", m[0]
+  if m.len > 1:
+    echo m[1..^1].mapIt(" ".repeat(padTo + 2) & it).join("\n")
+
+proc printError(err: ParseError): void =
+  ## Print parse error
+  let msgWidth = 10
+  echoMulti("error", msgWidth, err.kind)
+  echoMulti("message", msgWidth, err.message.justifyFitTerminal((msgWidth, 10)))
+
+
+func makeCommandParser(
+  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+     ): NimNode =
   ## Generate function for parsing input string to command
+  let parserStrName = makeCommandParserName(parentComms, comm)
   let commResType = newIdentNode(makeCommandTypeName(parentComms, comm))
-  let parserName = newIdentNode(makeCommandParserName(parentComms, comm))
+  let parserName = newIdentNode(parserStrName)
   let setterName = newIdentNode(makeCommandSetterName(parentComms, comm))
   let commName = makeCommandTypeName(parentComms, comm)
   let commLit = newStrLitNode(commName)
 
-  result = quote do:
+  let parseLogStart = makeRegularLog:
+    echo "Parsing command '", `newStrLitNode(parserStrName)`, "'"
+
+  let tokenFound = makeVerboseLog:
+    echo "Found token '", tok, "'"
+
+  let tokenSepLog = makeVerboseLog:
+    echo "token separation result is ok: ", separate.isOk()
+    if not separate.isOk():
+      printError(separate.error)
+
+  result = superquote do:
     proc `parserName`(tokens: seq[string]): Result[`commResType`, ParseError] =
       # TODO get description without raising side-effects
+      `parseLogStart`
       let descr = descriptions[`commLit`]
       var res: `commResType`
-      for tok in tokens:
-        let separate = tok.separateTokens(descr)
+      for tok {.inject.} in tokens:
+        `tokenFound`
+        let separate {.inject.} = tok.separateTokens(descr)
+        `tokenSepLog`
         if separate.isOk():
           for stok in separate.get():
             let setres = `setterName`(res, stok)
@@ -316,12 +419,14 @@ func makeCommandParser(comm: CommandDescr, parentComms: seq[string]): NimNode =
 
 
 
-proc makeCommandDeclaration(comm: CommandDescr, parentComm: seq[string]): NimNode =
+proc makeCommandDeclaration(
+  comm: CommandDescr, parentComm: seq[string], conf: CodegenConfig
+     ): NimNode =
   ## Generate types for command `comm`
-  let optType = makeCommandOptionsType(comm, parentComm)
-  let commType = makeCommandType(comm, parentComm)
-  let parser = makeCommandParser(comm, parentComm)
-  let setter = makeCommandSetter(comm, parentComm)
+  let optType = makeCommandOptionsType(comm, parentComm, conf)
+  let commType = makeCommandType(comm, parentComm, conf)
+  let parser = makeCommandParser(comm, parentComm, conf)
+  let setter = makeCommandSetter(comm, parentComm, conf)
   descriptionsComptime[makeCommandTypeName(parentComm, comm)] = comm
   result = quote do:
     `optType`
@@ -387,7 +492,6 @@ proc initCodegen[T](opt: Option[T]): NimNode {.discardable.} =
   if opt.isSome(): initCodegen(opt.get())
   else: quote do: none(`T`)
 
-
 proc initCodegen[K, V](tbl: Table[K, V]): NimNode {.discardable.} =
   var fieldInit: seq[NimNode]
   for key, val in tbl:
@@ -401,7 +505,59 @@ proc initCodegen[K, V](tbl: Table[K, V]): NimNode {.discardable.} =
     nnkBracket.newTree(fieldInit)
   )
 
+
+type
+  TokenKind = enum
+    tkKeyword
+    tkVarname
+    tkType
+
+proc colorize(node: string, kind: TokenKind): ColoredString =
+  var fg = fgDefault
+  var bg = bgDefault
+  var style: set[Style]
+
+  case kind:
+    of tkKeyword: fg = fgBlue
+    of tkVarname: style.incl styleDim
+    of tkType: fg = fgRed; style.incl styleDim
+
+  ColoredString(fg: fg, bg: bg, str: node, style: style)
+
+proc getColored(node: NimNode): ColoredString =
+  ColoredString(str: $node.toStrLit())
+
+proc colorPrint(node: NimNode, ind: int = 0): void =
+  proc pr(msg: varargs[string, `$`]) = echo "  ".repeat(ind), msg.join(" ")
+
+  matchAst(node, matchErrors):
+  of nnkProcDef(
+    `name`,
+    _,
+    `typeParam`,
+    `paramList`,
+    `pragmas`,
+    _,
+    `body`
+  ):
+    pr "matches body"
+  of nnkStmtList:
+    for sub in node:
+      sub.colorPrint(ind + 1)
+
+  of nnkLetSection(nnkIdentDefs(`varname`, `vartype`, `varrhs`)):
+    pr colorize("let", tkKeyword),
+     colorize($varname.toStrLit(), tkVarname),
+     ":", colorize($vartype.toStrLit(), tkType),
+     "=", getColored(varrhs)
+
+  else:
+    echo "ast had mo match ", node.kind
+    # for err in matchErrors:
+    #   echo err
+
 macro test() =
+  let conf = CodegenConfig(enableLogging: true, verboseLogging: true)
   let commTest = CommandDescr(
     opts: @[OptDesc(
       name: "test",
@@ -410,14 +566,18 @@ macro test() =
     name: "77",
   )
 
-  let commDecls = makeCommandDeclaration(commTest, @[])
+  let commDecls = makeCommandDeclaration(commTest, @[], conf)
   let descrInit = initCodegen(descriptionsComptime.toBase())
   result = quote do:
-    var descriptions {.inject.}: Table[string, CommandDescrBase]
+    let descriptions {.inject.}: Table[string, CommandDescrBase] = `descrInit`
     `commDecls`
-    descriptions = `descrInit`
 
-  echo result.toStrLit()
+  descriptionsComptime.clear()
+  # echo result.toStrLit()
+  "ast.tmp.nim".writeFile($result.toStrLit())
+  echo staticExec("pygmentize -f terminal ast.tmp.nim ")
+  # result.colorPrint()
+
 
 test()
 
