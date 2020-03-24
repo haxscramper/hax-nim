@@ -14,6 +14,7 @@ import macroutils
 import hmisc/termformat
 import ast_pattern_matching
 import colechopkg/types
+import gara
 
 template setOk[V, E](res: var Result[V, E], val: V): untyped =
   ## Set ok value for result type and immediately return
@@ -364,7 +365,9 @@ proc printError(err: ParseError): void =
   echoMulti("message", msgWidth, err.message.justifyFitTerminal((msgWidth, 10)))
 
 
+func parseTokenImpl(val: string, res: string): string = val
 func parseTokenImpl(val: string, res: int): int = result = val.parseInt()
+
 proc parseTokenVal[T](val: string): Result[T, ParseError] =
   try:
     var deflt: T
@@ -409,6 +412,8 @@ func makeOptionCheck(opt: OptDesc, conf: CodegenConfig): NimNode =
       let parseResult: Result[`targettype`, ParseError] =
         parseTokenVal[`targettype`](tok.value)
 
+      echo "Parsed ", parseResult
+
       # If parse is ok check for it's validity using additional code
       if parseResult.isOk():
         let parsedval {.inject.}: `targettype` = parseResult.get()
@@ -451,9 +456,11 @@ func makeCommandSetter(
         echo "Failed to set value from toke"
         printError(result.error)
 
+  let commArgIdent = ident("comm")
   result = superquote do:
-    proc `name.ident()`(comm: var `commPref.ident()`, tok: ParsedToken): Result[bool, ParseError] =
-      var comm {.inject.} = comm
+    proc `name.ident()`(
+      `commArgIdent`: var `commPref.ident()`, tok: ParsedToken
+                     ): Result[bool, ParseError] =
       let tok {.inject.} = tok
       let commname {.inject.} = `newStrLitNode(commPref)`
 
@@ -522,15 +529,28 @@ proc makeCommandDeclaration(
   comm: CommandDescr, parentComm: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Generate types for command `comm`
+  let subcommandDeclarations: seq[NimNode] =
+    comm.subs.mapIt(makeCommandDeclaration(
+      it, parentComm & @[comm.name], conf)
+    )
+
+  let subdeclarations = StmtList(subcommandDeclarations)
+
   let optType = makeCommandOptionsType(comm, parentComm, conf)
   let commType = makeCommandType(comm, parentComm, conf)
   let parser = makeCommandParser(comm, parentComm, conf)
   let setter = makeCommandSetter(comm, parentComm, conf)
   descriptionsComptime[makeCommandTypeName(parentComm, comm)] = comm
   result = quote do:
+    # First leaf commands need to be created
+    `subdeclarations`
+    # Declare type used for setting options
     `optType`
+    # Declare type for command itself
     `commType`
+    # Declare proc for setting values into options
     `setter`
+    # Parser for options into command
     `parser`
 
 
@@ -665,17 +685,30 @@ func commHasOpt(
 
   return false
 
-macro test() =
+macro testgen() =
   let conf = CodegenConfig(enableLogging: true, verboseLogging: true)
   let commTest = CommandDescr(
+    name: "77",
     opts: @[OptDesc(
       name: "test",
       parseto: some(quote do: int),
-      parsecheck: some(quote do:
-        makeResult[bool, string](parsedval < 12)
-      )
+      parsecheck: some(quote do: makeResult[bool, string](parsedval < 12))
     )],
-    name: "77",
+    subs: @[
+      CommandDescr(
+        name: "kill",
+        opts: @[OptDesc(
+          name: "target",
+          parsecheck: some(
+            quote do:
+              if parsedval.len < 5:
+                makeResult[bool, string]("too short target for a kill")
+              else:
+                makeResult[bool, string](true)
+          )
+        )]
+      )
+    ],
   )
 
   let commDecls = makeCommandDeclaration(commTest, @[], conf)
@@ -688,11 +721,11 @@ macro test() =
   # echo result.toStrLit()
   "ast.tmp.nim".writeFile($result.toStrLit())
   # discard staticExec("nimpretty ast.tmp.nim")
-  echo staticExec("pygmentize -f terminal ast.tmp.nim ")
+  # echo staticExec("pygmentize -f terminal ast.tmp.nim ")
   # result.colorPrint()
 
 
-test()
+testgen()
 
 echo "runtime"
 
@@ -700,6 +733,13 @@ let parsed = parse77(@["--test:12"])
 
 if parsed.isOk():
   echo "parse ok"
+  let val = parsed.get()
+  match (val.options):
+    (test: 12):
+      echo "test is 12"
+    _:
+      echo "different value"
+      echo val.options.test
 else:
   echo "parsed failed"
   printError(parsed.error)
