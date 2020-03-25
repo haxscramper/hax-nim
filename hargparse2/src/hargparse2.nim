@@ -132,6 +132,7 @@ type
   CodegenConfig = object
     enableLogging: bool
     verboseLogging: bool
+    rootFirst: bool
 
 type
   ParseErrorKind* = enum
@@ -292,9 +293,13 @@ func makeNimType(name: string, flds: seq[NimNode]): NimNode =
           newEmptyNode(),
           nnkRecList.newTree(flds)))))
 
-func joinTypeNames*(comm: CommandDescr, names: seq[string]): string =
+func joinTypeNames*(
+  comm: CommandDescr, names: seq[string], noLast: bool = false
+     ): string =
   ## Join type names to use in generated types
-  (names & @[comm.name]).map(toNimIdentName).map(capitalizeAscii).join("")
+  (names & noLast.tern(
+    @[], @[comm.name]
+  )).map(toNimIdentName).map(capitalizeAscii).join("")
 
 func makeOptTypeName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the option type for given list of parent command
@@ -305,6 +310,10 @@ func makeCommandTypeName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the command type for given list of parent command
   ## `names` (should include final command)
   "Command" & comm.joinTypeNames(names)
+
+func makeCommandParentTypeName(comm: CommandDescr, names: seq[string]): string =
+  ## Get name of the parent command
+  "Command" & comm.joinTypeNames(names, noLast = true)
 
 func makeCommandParserName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the command type for given list of parent command
@@ -367,23 +376,30 @@ func makeCommandType(
   ## generated too.
   let name = comm.makeCommandTypeName(parent)
   let optName = comm.makeOptTypeName(parent)
-  let optsfield = nnkIdentDefs.newTree(
-    ident("options"),
-    ident(optName),
-    newEmptyNode()
-  )
+  let optsfield = @[
+    nnkIdentDefs.newTree(
+      ident("options"),
+      ident(optName),
+      newEmptyNode()
+    ),
+    IdentDefs(
+      "subcSelected",
+      Ident("bool"),
+      newEmptyNode()
+    )
+  ]
+
 
 
   if comm.hasSubcommands():
     let subcEnumType = comm.makeSubcommandEnumName(parent)
     let commandTypeDecl = makeNimType(
-      name, @[
-        optsField,
+      name, optsField & @[
         IdentDefs(
           "activeSubc",
           Ident(subcEnumType),
           newEmptyNode()
-        )
+        ),
       ] & comm.subs.mapIt(
         block:
           let subcType = it.makeCommandTypeName(parent & @[comm.name])
@@ -397,7 +413,7 @@ func makeCommandType(
       `enumTypeDecl`
       `commandTypeDecl`
   else:
-    let commandTypeDecl = makeNimType(name, @[optsField])
+    let commandTypeDecl = makeNimType(name, optsField)
     result = quote do:
       `commandTypeDecl`
 
@@ -547,6 +563,7 @@ func makeSubcommandSelector(
         `commandActivatedLog`
         if parsed.isOk():
           res.activeSubc = `makeSubcSelector`
+          res.subcSelected = true
           res.`subcField` = parsed.get()
         else:
           result.setErr parsed.error
@@ -615,9 +632,72 @@ func makeSubcommandTriggers(
   ## Generate code that will trigger on subcommand activation. Right
   ## now defaulting to root-first iteration.
   let optsTypeName = comm.makeOptTypeName(parent)
-  let optsVariable = "opts" & optsTypeName
+  let optsVariable = ("opts" & optsTypeName).ident()
+  let commandTypeName = comm.makeCommandTypeName(parent)
+  let commandVariable = ("parsed" & commandTypeName).ident()
+
+  let caseTriggers =
+    if comm.hasSubcommands():
+      let ofBranches = comm.subs.mapIt(
+        OfBranch(
+          [ it.makeSubcommandFieldEnumName(parent).ident() ],
+          it.makeSubcommandTriggers(parent & @[comm.name], conf)
+        )
+      )
+
+      CaseStmt(
+        (quote do: `commandVariable`.activeSubc) ,
+        ofBranches
+      )
+    else:
+      quote do:
+        discard
+
+  let parsedGetter =
+    if parent.len == 0:
+      quote do:
+        result.get()
+    else:
+      # Name of the parent command variable
+      let parentVariable = ("parsed" & comm.makeCommandParentTypeName(parent)).ident()
+      # Name of the field in parent command variable
+      let currentVariable = (comm.makeSubcommandFieldName(parent)).ident()
+      quote do:
+        `parentVariable`.`currentVariable`
+
+  let triggerAction =
+    block:
+      iflet (onsel = comm.onSelect):
+        onsel
+      else:
+        quote do:
+          discard
+
+  let actions =
+    block:
+      let tmp =
+        if conf.rootFirst:
+          quote do:
+            `triggerAction`
+            `caseTriggers`
+        else:
+          quote do:
+            `caseTriggers`
+            `triggerAction`
+
+      if comm.hasSubcommands():
+        quote do:
+          if `commandVariable`.subcSelected:
+            `tmp`
+      else:
+        tmp
+
   superquote do:
-    var `optsVariable.ident()`: `optsTypeName.ident()`
+    # Selected command instance
+    let `commandVariable`: `commandTypeName.ident()` = `parsedGetter`
+    # Options for selected command
+    let `optsVariable`: `optsTypeName.ident()` = `commandVariable`.options
+    `actions`
 
 
 func makeOnSelectTriggers(
@@ -1043,7 +1123,7 @@ macro testgen() =
           )
         )],
         onSelect: some quote do:
-          echo "77 kill is selected"
+          echo "\e[32m@@@@@@@77 kill is selected\e[0m"
       )
     ],
   )
