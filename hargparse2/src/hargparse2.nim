@@ -15,6 +15,7 @@ import hmisc/termformat
 import ast_pattern_matching
 import colechopkg/types
 import gara
+import packages/docutils/[rstgen, rst, rstast]
 
 template setOk[V, E](res: var Result[V, E], val: V): untyped =
   ## Set ok value for result type and immediately return
@@ -783,10 +784,87 @@ func commHasOpt(
 
   return false
 
+proc print(node: PRstNode, ind: int = 0): void =
+  let indent = "  ".repeat(ind)
+  echo indent, node.kind, " ", node.text
+  for sub in node.sons:
+    print(sub, ind + 1)
+
+proc renderHtml(node: PRstNode): string =
+  var gen: RstGenerator
+  gen.initRstGenerator(outHtml, defaultConfig(), "hello.html", {})
+
+  var outhtml: string
+  gen.renderRstToOut(node, outhtml)
+  result = outhtml
+
+func toRstNode(s: string): PRstNode = newRstNode(rnLeaf, s)
+func toRstNode(n: PRstNode): PRstNode = n
+func toRstNode(n: (string, string)): (PRstNode, PRstNode) =
+  (toRstNode(n[0]), toRstNode(n[1]))
+
+
+func newRstTree(kind: RstNodeKind, children: varargs[PRstNode, toRstNode]): PRstNode =
+  result = newRstNode(kind)
+  for c in children:
+    result.add(c)
+
+func newRstParagraph(args: varargs[PRstNode, toRstNode]): PRstNode =
+  newRstTree(rnParagraph, args)
+
+func makeRstFieldList(flds: seq[(PRstNode, PRstNode)]): PRstNode =
+  newRstTree(
+    rnFieldList,
+    flds.mapIt(newRstTree(
+      rnField,
+      newRstTree(rnFieldName, it[0]),
+      newRstTree(rnFieldBody, it[1])
+  )))
+
+proc toRstDocs(comm: CommandDescr, parentComms: seq[string]): PRstNode =
+  var top = newRstNode(rnHeadline)
+  top.add("Command '" & parentComms.joinw() & " " & comm.name & "'")
+  top.add(newRstTree(rnParagraph, &"""This command is represented as a type
+'{makeCommandTypeName(parentComms, comm)}'.
+"""))
+
+  if comm.hasSubcommands():
+    top.add newRstParagraph("It has following subcommands:")
+    top.add(makeRstFieldList(comm.subs.mapIt((it.name, it.help).toRstNode())))
+  else:
+    top.add newRstParagraph("There are no subcommands")
+
+  top.add(newRstTree(rnParagraph, &"""Options are represented as a field 'options' of type
+'{makeOptTypeName(parentComms, comm)}'. This field has following fields:
+"""))
+
+  top.add(makeRstFieldList(comm.opts.mapIt((
+    it.name & " (" & it.parseto.isSome().tern(
+      $it.parseto.get().toStrLit(),
+      "string"
+    ) & ")", (it.help.len > 0).tern(
+      it.help,
+      "! THERE IS NO DOCUMENTATION FOR THIS OPTION !"
+    )
+  ).toRstNode())))
+
+  for subc in comm.subs:
+    top.add subc.toRstDocs(parentComms & @[comm.name])
+
+  return top
+
+proc generateDocumentation(comm: CommandDescr, basename: string): void =
+  ## Generate documentation for types describing command `comm`
+
+  let top = comm.toRstDocs(@[])
+
+  (basename & ".html").writeFile(top.renderHtml())
+
 macro testgen() =
   let conf = CodegenConfig(enableLogging: true, verboseLogging: true)
   let commTest = CommandDescr(
     name: "77",
+    help: "There is not help",
     opts: @[OptDesc(
       name: "test",
       parseto: some(quote do: int),
@@ -795,6 +873,7 @@ macro testgen() =
     subs: @[
       CommandDescr(
         name: "kill",
+        help: "Subcommand help",
         opts: @[OptDesc(
           name: "target",
           parsecheck: some(
@@ -809,6 +888,7 @@ macro testgen() =
     ],
   )
 
+  generateDocumentation(commTest, "docs.tmp")
   let commDecls = makeCommandDeclaration(commTest, @[], conf)
   let descrInit = initCodegen(descriptionsComptime.toBase())
   result = quote do:
