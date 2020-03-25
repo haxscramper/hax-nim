@@ -249,41 +249,6 @@ func toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument
 
   result.content.add cells.mapIt(it[0])
 
-parseArgs:
-  opt:
-    name: "temp-dir"
-    opt: ["--temp-dir", "+takes_values"]
-    help: """Specify temporary directory.
-             If not specified {defaultTemp} will be used"""
-  opt:
-    name: "input-dir"
-    opt: ["--in-dir", "--input", "+takes_values"]
-    help: """Specify input directory. By default {defaultInput}
-             is used"""
-
-let tempDir = "temp-dir".kp().tern(
-  "temp-dir".k.toStr(), defaultTemp
-)
-
-let inputDir = "input-dir".kp().tern(
-  "input-dir".k.toStr(), defaultInput
-).absolutePath()
-
-ceUserLog0(&"Input directory '{inputDir}'")
-ceUserLog0(&"Temp directory '{tempDir}'")
-
-if not dirExists(inputDir):
-  ceUserError0("Input directory does not exist")
-  die()
-else:
-  ceUserInfo0("Input directory exists")
-  setCurrentDir(inputDir)
-
-let notebook = findFirstFile("*.ipynb", "notebook")
-let configuration =  findFirstFile("*.toml", "configuration file")
-
-ceUserInfo0(&"Input notebook: {notebook}")
-ceUserInfo0(&"Input configuration: {configuration}")
 
 
 proc getConfOrDie(conf: TomlValueRef, name: string): string =
@@ -293,10 +258,6 @@ proc getConfOrDie(conf: TomlValueRef, name: string): string =
   else:
     conf[name].getStr()
 
-let config = parsetoml.parseFile(configuration)
-let author = config.getConfOrDie("name")
-let group = config.getConfOrDie("group")
-let task = config.getConfOrDie("task")
 
 
 proc anything(input: string, argument: var string, start: int): int =
@@ -376,6 +337,9 @@ $1
 \includegraphics[width=$1in]{$2}
 \end{center}
 """ % [$(width / 100), getCurrentDir().joinPath(outf)]
+    elif data.hasKey("text/latex"):
+      let body = data["text/latex"].joinArr()
+      result = body
     elif data.hasKey("text/html"):
       let body = data["text/html"].joinArr()
       # "tmp.html".writeFile(body)
@@ -402,7 +366,7 @@ proc exportCodeCell(cell: JsonNode): string =
   let body = cell["source"].asSeq().mapIt(it.asStr()).join("")
   result.add """
 % ---
-\begin{minted}{python}
+\begin{minted}{python}[breaklines]
 $1
 \end{minted}
 % ---""" % [body]
@@ -427,73 +391,160 @@ proc exportMarkdownCell(cell: JsonNode): string =
 
   result = "file.tex".readFile().string()
 
+func getLatexHeader(author, group, task: string): string =
+  return """
+  % Created 2020-01-29 Wed 18:16
+  % Intended LaTeX compiler: pdflatex
+  \documentclass{article}
 
-let outName = "result_tex.tex"
-ceUserLog0(&"Writing result to file {outName}")
-let outFile = outName.open(fmWrite)
+  \usepackage{hyperref}
 
-outFile.write """
-% Created 2020-01-29 Wed 18:16
-% Intended LaTeX compiler: pdflatex
-\documentclass{article}
+  \hypersetup{colorlinks=true,linkcolor=blue}
+  \usepackage[T1, T2A]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage[english,russian]{babel}
 
-\usepackage{hyperref}
+  % \usepackage{cmap}
 
-\hypersetup{colorlinks=true,linkcolor=blue}
-\usepackage[T1, T2A]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage[english,russian]{babel}
+  \usepackage{amsmath}
+  \usepackage{amssymb}
+  \usepackage{minted}
+  \usepackage{graphicx}
+  \usepackage{grffile}
+  \usepackage{longtable}
 
-% \usepackage{cmap}
+  \usepackage{fancyhdr}
 
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{minted}
-\usepackage{graphicx}
-\usepackage{grffile}
-\usepackage{longtable}
+  \usepackage[margin=2cm]{geometry}
+  \pagestyle{fancy}
+  \fancyhf{}
+  \lhead{$1 $2}
+  \rhead{\today}
+  \rfoot{\thepage}
 
-\usepackage{fancyhdr}
+  \author{$1 $2}
+  \title{$3}
 
-\usepackage[margin=2cm]{geometry}
-\pagestyle{fancy}
-\fancyhf{}
-\lhead{$1 $2}
-\rhead{\today}
-\rfoot{\thepage}
+  \begin{document}
 
-\author{$1 $2}
-\title{$2}
+  \maketitle
+  """ % [author, group, task]
 
-\begin{document}
+proc cdUp(): void =
+  setCurrentDir(parentDir(getCurrentDir()))
 
-\maketitle
-""" % [author, group, task]
+proc logDir(): void =
+  ceUserLog0(&"Current location is {getCurrentDir()}")
+
+proc logCopyFile(src, dest: string): void =
+  ceUserLog0(&"Copying {src} to {dest}")
+  copyFile(src, dest)
+
+proc convertFile(notebook: string, author, group, task: string): void =
+  let outName = "result_tex.tex"
+  ceUserLog0(&"Writing result to file {outName}")
+  let outFile = outName.open(fmWrite)
+
+  outFile.write getLatexHeader(author, group, task)
+
+  let nbJson = json.parseFile(notebook)
+
+  for cell in nbJson["cells"].asSeq():
+    if cell["cell_type"].asStr() == "code":
+      outFile.write exportCodeCell(cell)
+    elif cell["cell_type"].asStr() == "markdown":
+      outfile.write exportMarkdownCell(cell)
+
+  outFile.write """
+  % ---
+  \end{document}
+  """
+
+  outFile.close()
+
+  let (res, err, code) = shellVerboseErr {dokCommand}:
+    echo "running compilation"
+    latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
+    echo "finished compilation"
+
+  if code != 0:
+    ceUserError0("Error while compiling result document")
+    echo err
+
+  logCopyFile("result_tex.pdf", &"{author}_{group}_{task}.pdf")
 
 
-let nbJson = json.parseFile(notebook)
+proc processZip(file: string, tmpdir: string): void =
+  logDir()
+  removeDir(tmpdir)
+  createDir(tmpdir)
+  copyFile(file, &"{tmpdir}/{file}")
+  setCurrentDir(tmpdir)
+  logDir()
 
-for cell in nbJson["cells"].asSeq():
-  if cell["cell_type"].asStr() == "code":
-    outFile.write exportCodeCell(cell)
-  elif cell["cell_type"].asStr() == "markdown":
-    outfile.write exportMarkdownCell(cell)
+  if existsFile(file):
+    ceUserInfo0(&"File copy ok")
+  else:
+    ceUserError0(&"Could not find {file}")
 
-outFile.write """
-% ---
-\end{document}
-"""
+  shell:
+    echo "ddd"
+    unzip ($file)
+    echo "333"
 
-outFile.close()
+  ceUserLog0("Opened file")
 
-let (res, err, code) = shellVerboseErr {dokCommand}:
-  echo "running compilation"
-  latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
-  echo "finished compilation"
+  let notebook = findFirstFile("*.ipynb", "notebook")
+  let configuration =  findFirstFile("*.toml", "configuration file")
 
-if code != 0:
-  ceUserError0("Error while compiling result document")
-  echo err
+  ceUserInfo0(&"Input notebook: {notebook}")
+  ceUserInfo0(&"Input configuration: {configuration}")
 
-copyFile(outName, &"{author}_{group}_{task}.pdf")
-echo "done all"
+  let config = parsetoml.parseFile(configuration)
+  let author = config.getConfOrDie("name")
+  let group = config.getConfOrDie("group")
+  let task = config.getConfOrDie("task")
+
+  convertFile(notebook, author, group, task)
+
+  cdUp()
+
+  let resultfile = tmpdir & ".zip"
+  shell:
+    zip ($resultfile) -r ($tmpdir)
+
+
+  # logCopyFile(&"{tmpdir}/{resultfile}", &"{resultfile}")
+
+
+proc processWholeDir(inputDirectory: string): void =
+  ## Find all zipped notebooks in directory and process them
+  ## one-by-one. Pack results back into zip archives
+
+  ceUserLog0(&"Input directory '{inputDirectory}'")
+
+  if not dirExists(inputDirectory):
+    ceUserError0("Input directory does not exist")
+    die()
+  else:
+    ceUserInfo0("Input directory exists")
+    setCurrentDir(inputDirectory)
+
+  logDir()
+  for idx, zip in toSeq(walkPattern("*.zip")):
+    ceUserInfo0(&"Found zip file {zip}")
+    if not zip.startsWith("result"):
+      processZip(zip, &"result_zip_{idx}")
+
+parseArgs:
+  opt:
+    name: "input-dir"
+    opt: ["--in-dir", "--input", "+takes_values"]
+    help: """Specify input directory. By default {defaultInput}
+             is used"""
+
+let inputDir = "input-dir".kp().tern(
+  "input-dir".k.toStr(), defaultInput
+).absolutePath()
+
+processWholeDir(inputDir)

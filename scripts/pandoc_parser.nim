@@ -1,4 +1,5 @@
 import shell
+import hmisc/helpers
 import sequtils
 import json
 import strutils, strformat
@@ -224,14 +225,40 @@ func toRawPandoc(node: JsonNode): RawPandoc =
       value: node.toCleanString()
     )
 
+func maxLen(node: RawPandoc): int =
+  case node.final:
+    of true: 1
+    of false:
+      max(
+        node.content.len,
+        node.content.map(maxLen).max(0)
+      )
+
+func dfsJoin(node: RawPandoc, first = true): seq[string] =
+  if node.final:
+    @[node.value]
+  else:
+    let sub = node.content[0].dfsJoin(false)
+    if first: sub
+    else: node.kind & sub
+
+
 func debugPrint(node: RawPandoc, ind = 0, index = 0): void =
   let pref = "  ".repeat(ind)
   if node.final:
     debugecho &"{pref}#{index} [{node.kind}] {node.value}"
   else:
-    debugecho &"{pref}[{node.kind}]"
-    for index, child in node.content:
-      debugprint(child, ind + 1, index)
+    if node.maxLen() == 1:
+      let subnodes = toSeq(pairs(node.dfsJoin())).mapIt(
+        &"#{it[0]} [{it[1]}]"
+      ).join(" ")
+
+      debugecho &"{pref}{subnodes}"
+
+    else:
+      debugecho &"{pref}#{index} [{node.kind}]"
+      for index, child in node.content:
+        debugprint(child, ind + 1, index)
 
 # func makePlaintextBlock(text: string): DocBlock =
 
@@ -289,13 +316,13 @@ proc getTable(parsed: seq[RawPandoc]): SimpleTable =
   for node in parsed:
     let res = findFirst(node, "Table")
     if res.isSome():
-      # debugprint res.get()
+      debugprint res.get()
       return res.get().toTableSimple()
 
 
 func toLatexTable(tbl: SimpleTable): string =
   let newline = " \\\\"
-  let formatting = tbl.header.mapIt("l").join("|")
+  let formatting = "||" & tbl.header.mapIt("l").join("|") & "||"
   let headers = tbl.header.join(" & ") & newline
   let cells = tbl.cells.mapIt(it.join(" & ")).join(newline & "\n")
 
@@ -325,8 +352,8 @@ proc htmlTableToLatex*(htmlTable: string): string =
     return ""
 
 
-
-# echo htmlTableToLatex("test.tmp.html".readFile().string())
+when isMainModule:
+  discard htmlTableToLatex("test.tmp.html".readFile().string())
 
 
 
