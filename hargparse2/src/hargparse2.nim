@@ -292,48 +292,48 @@ func makeNimType(name: string, flds: seq[NimNode]): NimNode =
           newEmptyNode(),
           nnkRecList.newTree(flds)))))
 
-func joinTypeNames*(names: seq[string], comm: CommandDescr): string =
+func joinTypeNames*(comm: CommandDescr, names: seq[string]): string =
   ## Join type names to use in generated types
   (names & @[comm.name]).map(toNimIdentName).map(capitalizeAscii).join("")
 
-func makeOptTypeName(names: seq[string], comm: CommandDescr): string =
+func makeOptTypeName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the option type for given list of parent command
   ## `names`
-  "Opts" & joinTypeNames(names, comm)
+  "Opts" & comm.joinTypeNames(names)
 
-func makeCommandTypeName(names: seq[string], comm: CommandDescr): string =
+func makeCommandTypeName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the command type for given list of parent command
   ## `names` (should include final command)
-  "Command" & joinTypeNames(names, comm)
+  "Command" & comm.joinTypeNames(names)
 
-func makeCommandParserName(names: seq[string], comm: CommandDescr): string =
+func makeCommandParserName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the command type for given list of parent command
   ## `names` (should include final command)
-  "parse" & joinTypeNames(names, comm)
+  "parse" & comm.joinTypeNames(names)
 
-func makeCommandSetterName(names: seq[string], comm: CommandDescr): string =
+func makeCommandSetterName(comm: CommandDescr, names: seq[string]): string =
   ## Get command value setter proc name
-  "setvalFor" & joinTypeNames(names, comm)
+  "setvalFor" & comm.joinTypeNames(names)
 
-func makeSubcommandEnumName(names: seq[string], comm: CommandDescr): string =
+func makeSubcommandEnumName(comm: CommandDescr, names: seq[string]): string =
   ## Get subcommand selector enum name
-  "Sub" & joinTypeNames(names, comm)
+  "Sub" & comm.joinTypeNames(names)
 
-func makeSubcommandFieldEnumName(names: seq[string], comm: CommandDescr): string =
+func makeSubcommandFieldEnumName(comm: CommandDescr, names: seq[string]): string =
   ## Get subcommand selector enum filed name
   "sub" & names.mapIt(($it[0]).toLower()).join("") & comm.name.capitalizeAscii()
 
 
-func makeSubcommandFieldName(names: seq[string], comm: CommandDescr): string =
+func makeSubcommandFieldName(comm: CommandDescr, names: seq[string]): string =
   ## Get name of the subcommand field
   comm.name
 
 func makeCommandOptionsType(
-  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Generate type describind possible options for the command
   ## description. This is what CLI options will be parsed **into**.
-  let name = makeOptTypeName(parentComms, comm)
+  let name = comm.makeOptTypeName(parent)
   let flds = comm.opts.mapIt(
     block:
       nnkIdentDefs.newTree(
@@ -345,28 +345,28 @@ func makeCommandOptionsType(
   result = makeNimType(name, flds)
 
 func makeSubcommandEnum(
-  comm: CommandDescr, parentComms: seq[string]): NimNode =
+  comm: CommandDescr, parent: seq[string]): NimNode =
   ## Generate enum used for selecting subcommands
-  let enumname = makeSubcommandEnumName(parentComms, comm)
+  let enumname = comm.makeSubcommandEnumName(parent)
   TypeSection(
     TypeDef(
       Ident(enumname),
       Empty(),
       EnumTy(
         @[Empty()] &
-          comm.subs.mapIt(makeSubcommandFieldEnumName(parentComms, it).ident())
+          comm.subs.mapIt(it.makeSubcommandFieldEnumName(parent).ident())
       )))
 
 func hasSubcommands(comm: CommandDescr): bool = comm.subs.len > 0
 
 func makeCommandType(
-  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Generate type describing cli command. Subcommands are selected
   ## using 'kind' field. Enumeration with possible options is
   ## generated too.
-  let name = makeCommandTypeName(parentComms, comm)
-  let optName = makeOptTypeName(parentComms, comm)
+  let name = comm.makeCommandTypeName(parent)
+  let optName = comm.makeOptTypeName(parent)
   let optsfield = nnkIdentDefs.newTree(
     ident("options"),
     ident(optName),
@@ -375,7 +375,7 @@ func makeCommandType(
 
 
   if comm.hasSubcommands():
-    let subcEnumType = makeSubcommandEnumName(parentComms, comm)
+    let subcEnumType = comm.makeSubcommandEnumName(parent)
     let commandTypeDecl = makeNimType(
       name, @[
         optsField,
@@ -386,13 +386,13 @@ func makeCommandType(
         )
       ] & comm.subs.mapIt(
         block:
-          let subcType = makeCommandTypeName(parentComms & @[comm.name], it)
-          let subcName = makeSubcommandFieldName(parentComms, it)
+          let subcType = it.makeCommandTypeName(parent & @[comm.name])
+          let subcName = it.makeSubcommandFieldName(parent)
           IdentDefs(subcName, Ident(subcType), newEmptyNode())
       )
     )
 
-    let enumTypeDecl = makeSubcommandEnum(comm, parentComms)
+    let enumTypeDecl = makeSubcommandEnum(comm, parent)
     result = quote do:
       `enumTypeDecl`
       `commandTypeDecl`
@@ -510,23 +510,23 @@ func makeOptionCheck(opt: OptDesc, conf: CodegenConfig): NimNode =
           )
 
 func makeSubcommandSelector(
-  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Generate code for handling selection of the subcommands for
   ## command described in `comm`
   var subcHandlers: seq[NimNode]
   for subc in comm.subs:
-    let commType = makeCommandTypeName(
-      parentComms & @[subc.name], subc).ident()
+    let commType = subc.makeCommandTypeName(
+      parent & @[subc.name]).ident()
 
-    let parser = makeCommandParserName(
-      parentComms & @[comm.name], subc).ident()
+    let parser = subc.makeCommandParserName(
+      parent & @[comm.name]).ident()
 
-    let makeSubcSelector = makeSubcommandFieldEnumName(
-      parentComms, subc
+    let makeSubcSelector = subc.makeSubcommandFieldEnumName(
+      parent
     ).ident()
 
-    let subcField = makeSubcommandFieldName(parentComms, subc).ident()
+    let subcField = subc.makeSubcommandFieldName(parent).ident()
 
     let commandActivatedLog = makeRegularLog:
       if parsed.isOk():
@@ -564,7 +564,7 @@ func makeSubcommandSelector(
 
 
 func makeCommandSetter(
-  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Create procedure for settings arguments to the command. The
   ## procedure modifies value of the command (`comm` argument)
@@ -572,8 +572,8 @@ func makeCommandSetter(
   ## entry. Generated procedure performs necessary checks and might
   ## generate error in parsing. Error returned as `err` value for
   ## `Result`.
-  let name = makeCommandSetterName(parentComms, comm)
-  let commPref = makeCommandTypeName(parentComms, comm)
+  let name = comm.makeCommandSetterName(parent)
+  let commPref = comm.makeCommandTypeName(parent)
 
   let settingTokLog = makeVerboseLog:
     echo "setting value of '", tok, "' for command ", commname
@@ -609,16 +609,39 @@ func makeCommandSetter(
           message: &"No such option for {commname}: {tok.key}"
         )
 
+func makeSubcommandTriggers(
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
+     ): NimNode =
+  ## Generate code that will trigger on subcommand activation. Right
+  ## now defaulting to root-first iteration.
+  let optsTypeName = comm.makeOptTypeName(parent)
+  let optsVariable = "opts" & optsTypeName
+  superquote do:
+    var `optsVariable.ident()`: `optsTypeName.ident()`
+
+
+func makeOnSelectTriggers(
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
+     ): NimNode =
+  ## Generate 'on selection' code - it will run if all parsing has
+  ## been completed succesfully for toplevel command.
+  if parent.len() == 0:
+    # IDEA TODO add support for leaf-first and root-first trigger
+    # evaluation. Right now code will trigger in root-major mode.
+    result = comm.makeSubcommandTriggers(@[], conf)
+  else:
+    result = quote do:
+      discard
 
 func makeCommandParser(
-  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Generate function for parsing input string to command
-  let parserStrName = makeCommandParserName(parentComms, comm)
-  let commResType = newIdentNode(makeCommandTypeName(parentComms, comm))
+  let parserStrName = comm.makeCommandParserName(parent)
+  let commResType = newIdentNode(comm.makeCommandTypeName(parent))
   let parserName = newIdentNode(parserStrName)
-  let setterName = newIdentNode(makeCommandSetterName(parentComms, comm))
-  let commName = makeCommandTypeName(parentComms, comm)
+  let setterName = newIdentNode(comm.makeCommandSetterName(parent))
+  let commName = comm.makeCommandTypeName(parent)
   let commLit = newStrLitNode(commName)
 
   let parseLogStart = makeRegularLog:
@@ -636,11 +659,20 @@ func makeCommandParser(
     echo "failed to set option for token ", stok
     printError(setres.error)
 
-  let subcHandlers = makeSubcommandSelector(comm, parentComms, conf)
+  let subcHandlers = comm.makeSubcommandSelector(parent, conf)
   let tokensIdent = "tokens".ident()
+
+  let onSelect = comm.makeOnSelectTriggers(parent, conf)
 
   result = superquote do:
     proc `parserName`(`tokensIdent`: seq[string]): Result[`commResType`, ParseError] =
+      defer:
+        if result.isOk():
+          # Code to run if all parsing has been completed succesfully. It
+          # will be called when parser is completed.
+          `onSelect`
+
+
       `parseLogStart`
       let descr {.inject.} = descriptions[`commLit`]
       var res {.inject.}: `commResType`
@@ -682,18 +714,18 @@ func makeCommandParser(
       result.setOk res
 
 func makeCommandAccess(
-  comm: CommandDescr, parentComm: seq[string], conf: CodegenConfig): NimNode =
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig): NimNode =
   ## Create functions to simplify access to active fields in command.
   var procs: seq[NimNode]
-  let commTypeName: NimNode = makeCommandTypeName(parentComm, comm).ident()
+  let commTypeName: NimNode = comm.makeCommandTypeName(parent).ident()
   let commArgName: NimNode = "comm".ident()
 
 
   for sub in comm.subs:
-    let subcFieldName: string = makeSubcommandFieldName(parentComm, sub)
+    let subcFieldName: string = sub.makeSubcommandFieldName(parent)
     let funcName: NimNode = ("get" & subcFieldName.capitalizeAscii()).ident()
-    let subTypeName: string = makeCommandTypeName(parentComm & @[comm.name], sub)
-    let activeField: string = makeSubcommandFieldEnumName(parentComm, sub)
+    let subTypeName: string = sub.makeCommandTypeName(parent & @[comm.name])
+    let activeField: string = sub.makeSubcommandFieldEnumName(parent)
     procs.add superquote do:
       func `funcName`(`commArgName`: `commTypeName`): `subTypeName.ident()` =
         if comm.activeSubc != `activeField.ident()`:
@@ -708,7 +740,7 @@ func makeCommandAccess(
           comm.`subcFieldName.ident()`
 
   if comm.hasSubcommands():
-    let enumTypeName: NimNode = makeSubcommandEnumName(parentComm, comm).ident()
+    let enumTypeName: NimNode = comm.makeSubcommandEnumName(parent).ident()
     procs.add superquote do:
       func isActiveSubc(`commArgName`: `commTypeName`, kind: `enumTypeName`): bool =
         comm.activeSubc == kind
@@ -717,22 +749,22 @@ func makeCommandAccess(
 
 
 proc makeCommandDeclaration(
-  comm: CommandDescr, parentComm: seq[string], conf: CodegenConfig
+  comm: CommandDescr, parent: seq[string], conf: CodegenConfig
      ): NimNode =
   ## Generate types for command `comm`
   let subcommandDeclarations: seq[NimNode] =
     comm.subs.mapIt(makeCommandDeclaration(
-      it, parentComm & @[comm.name], conf)
+      it, parent & @[comm.name], conf)
     )
 
   let subdeclarations = StmtList(subcommandDeclarations)
 
-  let optType = makeCommandOptionsType(comm, parentComm, conf)
-  let commType = makeCommandType(comm, parentComm, conf)
-  let parser = makeCommandParser(comm, parentComm, conf)
-  let setter = makeCommandSetter(comm, parentComm, conf)
-  let access = makeCommandAccess(comm, parentComm, conf)
-  descriptionsComptime[makeCommandTypeName(parentComm, comm)] = comm
+  let optType = comm.makeCommandOptionsType(parent, conf)
+  let commType = comm.makeCommandType(parent, conf)
+  let parser = comm.makeCommandParser(parent, conf)
+  let setter = comm.makeCommandSetter(parent, conf)
+  let access = comm.makeCommandAccess(parent, conf)
+  descriptionsComptime[comm.makeCommandTypeName(parent)] = comm
   result = quote do:
     # First leaf commands need to be created
     `subdeclarations`
@@ -942,12 +974,12 @@ func makeRstCodeBlock(code: string): PRstNode =
   result = blc
 
 
-proc toRstDocs(comm: CommandDescr, parentComms: seq[string]): PRstNode =
+proc toRstDocs(comm: CommandDescr, parent: seq[string]): PRstNode =
   ## Generate rst nodes for creating documentation for the command description
   var top = newRstNode(rnHeadline)
-  top.add("Command '" & parentComms.joinw() & " " & comm.name & "'")
+  top.add("Command '" & parent.joinw() & " " & comm.name & "'")
   top.add(newRstTree(rnParagraph, &"""This command is represented as a type
-'{makeCommandTypeName(parentComms, comm)}'.
+'{comm.makeCommandTypeName(parent)}'.
 """))
 
   if comm.hasSubcommands():
@@ -957,7 +989,7 @@ proc toRstDocs(comm: CommandDescr, parentComms: seq[string]): PRstNode =
     top.add newRstParagraph("There are no subcommands")
 
   top.add(newRstTree(rnParagraph, &"""Options are represented as a field 'options' of type
-'{makeOptTypeName(parentComms, comm)}'. This field has following fields:
+'{comm.makeOptTypeName(parent)}'. This field has following fields:
 """))
 
   top.add(makeRstFieldList(comm.opts.mapIt((
@@ -975,7 +1007,7 @@ proc toRstDocs(comm: CommandDescr, parentComms: seq[string]): PRstNode =
     top.add makeRstCodeBlock($comm.onSelect.get().toStrLit())
 
   for subc in comm.subs:
-    top.add subc.toRstDocs(parentComms & @[comm.name])
+    top.add subc.toRstDocs(parent & @[comm.name])
 
   return top
 
