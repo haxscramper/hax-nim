@@ -107,6 +107,7 @@ type
                        ## always takes precedence.
     subs*: seq[CommandDescr] ## Subcommands.
     opts*: seq[OptDesc] ## Option related to the command.
+    onSelect*: Option[NimNode] ## Code will be executed if command is selected
 
 func toBase(sub: ArgDesc): ArgDescBase = sub.ArgDescBase
 func toBase(sub: OptDesc): OptDescBase = sub.OptDescBase
@@ -136,6 +137,7 @@ type
   ParseErrorKind* = enum
     ## Kind of command parse error
     pekUnknownOption
+    pekUnknownSubcommand
     pekInvalidValue
     pekTooMuchValues
     pekMissingArgument
@@ -147,6 +149,7 @@ type
     ## Command parse error
     message*: string
     kind*: ParseErrorKind
+    errComm*: CommandDescrBase
 
 type
   CommandTokenKind* = enum
@@ -173,12 +176,23 @@ type
     key: string
     value: string
 
+
+func isSubcommandFor(tok: string, comm: CommandDescrBase): bool =
+  ## Return true if token is can be recognized as subcommand for
+  ## command description
+  comm.subsbase.anyofIt(it.name == tok)
+
+func isSubcommandFor(tok: ParsedToken, comm: CommandDescrBase): bool =
+  ## Return true if token is can be recognized as subcommand for
+  ## command description
+  tok.key.isSubcommandFor(comm)
+
 func longOptRegex(): Regex = re"--((?:\w|-|_){2,})[:=](.*)"
 func longFlagRegex(): Regex = re"--((?:\w|-|_){2,})$"
 func shortOptRegex(): Regex = re"-(\w[_?+=])[:=](.*)"
 func shortFlagRegex(): Regex = re"-(\w[_?+=])"
 
-func classifyToken(tok: string): PossibleParse =
+func classifyToken(tok: string, comm: CommandDescrBase): PossibleParse =
   debugEcho tok
   if tok =~ longFlagRegex():
     @[ctkLongFlag]
@@ -188,8 +202,10 @@ func classifyToken(tok: string): PossibleParse =
     @[ctkShortOption]
   elif tok =~ shortFlagRegex():
     @[ctkShortFlag]
+  elif tok.isSubcommandFor(comm):
+    @[ctkCommand]
   else:
-    @[ctkInvalid]
+    @[ctkArgument]
 
 func isUnambiguous(optParse: PossibleParse): bool =
   optParse.len == 1
@@ -228,6 +244,12 @@ func parseToken(tok: string, kind: CommandTokenKind): Result[ParsedToken, ParseE
           key: key,
           value: val
         )
+    of ctkCommand:
+      result.setOk ParsedToken(
+        kind: ctkCommand,
+        key: tok,
+        value: ""
+      )
     else:
       result.setErr ParseError(
         kind: pekTokenParseError,
@@ -241,7 +263,7 @@ func separateTokens(
   ## specification. Token without leading dashes is classified as
   ## subcommand if `comm` has subcommand with the same name. Otherwise
   ## it is classified as argument.
-  let classification = tok.classifyToken()
+  let classification = tok.classifyToken(comm)
   if classification.isUnambiguous():
     let res = tok.parseToken(classification[0])
     if res.isOk():
@@ -249,7 +271,6 @@ func separateTokens(
     else:
       result.err res.error
   else:
-    debugEcho: "Ambigous token"
     if tok.startsWith("-"):
       discard
 
@@ -488,6 +509,60 @@ func makeOptionCheck(opt: OptDesc, conf: CodegenConfig): NimNode =
             message: checkResult.error
           )
 
+func makeSubcommandSelector(
+  comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
+     ): NimNode =
+  ## Generate code for handling selection of the subcommands for
+  ## command described in `comm`
+  var subcHandlers: seq[NimNode]
+  for subc in comm.subs:
+    let commType = makeCommandTypeName(
+      parentComms & @[subc.name], subc).ident()
+
+    let parser = makeCommandParserName(
+      parentComms & @[comm.name], subc).ident()
+
+    let makeSubcSelector = makeSubcommandFieldEnumName(
+      parentComms, subc
+    ).ident()
+
+    let subcField = makeSubcommandFieldName(parentComms, subc).ident()
+
+    let commandActivatedLog = makeRegularLog:
+      if parsed.isOk():
+        echo "Activated command ", targetSubname
+      else:
+        echo "Failed to activate command ", targetSubname
+        printError parsed.error
+
+    let wrongCommandLog = makeVerboseLog:
+      echo "tried command ", commname, " didn't match with ", targetSubname
+
+    subcHandlers.add superquote do:
+      let targetSubname {.inject.} = `subc.name.newStrLitNode()`
+      if commname == targetSubname:
+        # TODO add access to configuration options in all parent
+        # commands
+        let parsed {.inject.} = `parser`(tokens[(idx + 1)..^1])
+        `commandActivatedLog`
+        if parsed.isOk():
+          res.activeSubc = `makeSubcSelector`
+          res.`subcField` = parsed.get()
+        else:
+          result.setErr parsed.error
+      else:
+        `wrongCommandLog`
+
+  let selectorLogic = newStmtList(subcHandlers)
+
+  result = superquote do:
+    assert declared descr, "Missing command description from scope"
+    assert descr is CommandDescrBase, "Command description has invalid type"
+    if stok.isSubcommandFor(descr):
+      let commname {.inject.} = stok.key
+      `selectorLogic`
+
+
 func makeCommandSetter(
   comm: CommandDescr, parentComms: seq[string], conf: CodegenConfig
      ): NimNode =
@@ -561,30 +636,50 @@ func makeCommandParser(
     echo "failed to set option for token ", stok
     printError(setres.error)
 
+  let subcHandlers = makeSubcommandSelector(comm, parentComms, conf)
+  let tokensIdent = "tokens".ident()
+
   result = superquote do:
-    proc `parserName`(tokens: seq[string]): Result[`commResType`, ParseError] =
+    proc `parserName`(`tokensIdent`: seq[string]): Result[`commResType`, ParseError] =
       `parseLogStart`
-      let descr = descriptions[`commLit`]
-      var res: `commResType`
-      for tok {.inject.} in tokens:
+      let descr {.inject.} = descriptions[`commLit`]
+      var res {.inject.}: `commResType`
+      for idx {.inject.}, tok {.inject.} in tokens:
         `tokenFound`
         let separate {.inject.} = tok.separateTokens(descr)
         `tokenSepLog`
         if separate.isOk():
           for stok {.inject.} in separate.get():
             # If token is command type select it as active subcommand
-            if stok.kind == ctkCommand:
-              discard
+            case stok.kind:
+              of ctkCommand:
+                if not stok.isSubcommandFor(descr):
+                  result.setErr ParseError(
+                    kind: pekUnknownSubcommand,
+                    message: "Unknown subcommand " &
+                      stok.key & " for command " & descr.name,
+                    errComm: descr
+                  )
 
-            let setres {.inject.} = `setterName`(res, stok)
-            if setres.isErr():
-              `setresErr`
-              result.setErr setres.error
+                `subcHandlers`
+              of ctkShortFlag, ctkLongFlag, ctkShortOption, ctkLongOption:
+                let setres {.inject.} = `setterName`(res, stok)
+                if setres.isErr():
+                  `setresErr`
+                  result.setErr setres.error
+              of ctkInvalid:
+                result.setErr ParseError(
+                  message: "Attempt to set token of type ctkInvalid",
+                  kind: pekTokenParseError
+                )
+              of ctkArgument:
+                # TODO add argument command
+                discard
 
-          result.setOk res
         else:
           result.setErr separate.error
 
+      result.setOk res
 
 func makeCommandAccess(
   comm: CommandDescr, parentComm: seq[string], conf: CodegenConfig): NimNode =
@@ -785,12 +880,14 @@ func commHasOpt(
   return false
 
 proc print(node: PRstNode, ind: int = 0): void =
+  ## Print rst node in tree formatt
   let indent = "  ".repeat(ind)
   echo indent, node.kind, " ", node.text
   for sub in node.sons:
     print(sub, ind + 1)
 
 proc renderHtml(node: PRstNode): string =
+  ## Render rst node as html string
   var gen: RstGenerator
   gen.initRstGenerator(outHtml, defaultConfig(), "hello.html", {})
 
@@ -798,21 +895,29 @@ proc renderHtml(node: PRstNode): string =
   gen.renderRstToOut(node, outhtml)
   result = outhtml
 
-func toRstNode(s: string): PRstNode = newRstNode(rnLeaf, s)
+func toRstNode(s: string): PRstNode =
+  ## Convert string to `rnLeaf` node
+  newRstNode(rnLeaf, s)
+
 func toRstNode(n: PRstNode): PRstNode = n
 func toRstNode(n: (string, string)): (PRstNode, PRstNode) =
+  ## Convert pair of strings into pari of `rnLeaf` nodes
   (toRstNode(n[0]), toRstNode(n[1]))
 
 
 func newRstTree(kind: RstNodeKind, children: varargs[PRstNode, toRstNode]): PRstNode =
+  ## Create new rst tree with `kind` as kind and `children` as `sons` nodes.
   result = newRstNode(kind)
   for c in children:
     result.add(c)
 
 func newRstParagraph(args: varargs[PRstNode, toRstNode]): PRstNode =
+  ## Create new `rnParagraph` node with arguments as child nodes.
   newRstTree(rnParagraph, args)
 
 func makeRstFieldList(flds: seq[(PRstNode, PRstNode)]): PRstNode =
+  ## Create `rnFieldList` node with each pair in sequence being an
+  ## `rnField` son for the list.
   newRstTree(
     rnFieldList,
     flds.mapIt(newRstTree(
@@ -821,7 +926,24 @@ func makeRstFieldList(flds: seq[(PRstNode, PRstNode)]): PRstNode =
       newRstTree(rnFieldBody, it[1])
   )))
 
+func makeRstCodeBlock(code: string): PRstNode =
+  ## Create `rnCodeBlock` node with `code` as body of code block.
+  var blc = newRstNode(rnCodeBlock)
+  var args = newRstNode(rnDirArg)
+  blc.add args
+  blc.add PRstNode(nil)
+
+  var lb = newRstNode(rnLiteralBlock)
+  var n = newRstNode(rnLeaf)
+  n.text = code
+  lb.add n
+  blc.add lb
+
+  result = blc
+
+
 proc toRstDocs(comm: CommandDescr, parentComms: seq[string]): PRstNode =
+  ## Generate rst nodes for creating documentation for the command description
   var top = newRstNode(rnHeadline)
   top.add("Command '" & parentComms.joinw() & " " & comm.name & "'")
   top.add(newRstTree(rnParagraph, &"""This command is represented as a type
@@ -847,6 +969,10 @@ proc toRstDocs(comm: CommandDescr, parentComms: seq[string]): PRstNode =
       "! THERE IS NO DOCUMENTATION FOR THIS OPTION !"
     )
   ).toRstNode())))
+
+  if comm.onSelect.isSome():
+    top.add newRstParagraph("When command is selected followind code will be executed:")
+    top.add makeRstCodeBlock($comm.onSelect.get().toStrLit())
 
   for subc in comm.subs:
     top.add subc.toRstDocs(parentComms & @[comm.name])
@@ -883,7 +1009,9 @@ macro testgen() =
               else:
                 makeResult[bool, string](true)
           )
-        )]
+        )],
+        onSelect: some quote do:
+          echo "77 kill is selected"
       )
     ],
   )
@@ -941,6 +1069,7 @@ block:
 
     if val.isActiveSubc(subKill):
       let opts = val.getKill().options
+      echo "Activated kill subcommand"
   else:
     echo "parsed failed"
     printError(parsed.error)
