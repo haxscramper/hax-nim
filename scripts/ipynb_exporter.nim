@@ -24,6 +24,7 @@ const
     else: "input"
 
 
+var nocode = false
 
 
 type
@@ -200,7 +201,7 @@ func toLatex(cell: NBCell): (LatexNode, seq[Base64ImageSpec]) =
           outputs.mapIt(it[0])
       )
 
-      (res1, outputs.filterIt(it.isSome).mapIt(it[1].get()))
+      (res1, outputs.filterIt(it[1].isSome).mapIt(it[1].get()))
 
 func toLatexDocument(notebook: NBDocument, title, author: string): LatexDocument =
   ## Conter notebook document to latex document. Required images will
@@ -305,7 +306,8 @@ proc exportCellOutput(outp, cell: JsonNode): string =
 \begin{verbatim}
 $1
 \end{verbatim}
-% ---""" % [outp["text"].getStr()]
+% ---
+""" % [outp["text"].getStr()]
   elif outtype == "execute_result" or outtype == "display_data":
     let data = outp["data"]
     if data.hasKey("image/png"):
@@ -360,16 +362,21 @@ $1
 \begin{verbatim}
 $1
 \end{verbatim}
-% ---""" % [outp["data"]["text/plain"].joinArr()] #TODO export html tables?
+% --- ---
+
+""" % [outp["data"]["text/plain"].joinArr()] #TODO export html tables?
 
 proc exportCodeCell(cell: JsonNode): string =
-  let body = cell["source"].asSeq().mapIt(it.asStr()).join("")
-  result.add """
-% ---
-\begin{minted}{python}[breaklines]
-$1
-\end{minted}
-% ---""" % [body]
+  if not nocode:
+    let body = cell["source"].asSeq().mapIt(it.asStr()).join("")
+    result.add """
+  % ---
+  \begin{minted}{python}[breaklines]
+  $1
+  \end{minted}
+  % --- ---
+
+  """ % [body]
 
   for res in cell["outputs"].asSeq():
     result.add "\n"
@@ -440,14 +447,12 @@ proc logCopyFile(src, dest: string): void =
   ceUserLog0(&"Copying {src} to {dest}")
   copyFile(src, dest)
 
-proc convertFile(notebook: string, author, group, task: string): void =
+proc convertFile(nbJson: JsonNode, author, group, task: string): void =
   let outName = "result_tex.tex"
   ceUserLog0(&"Writing result to file {outName}")
   let outFile = outName.open(fmWrite)
 
   outFile.write getLatexHeader(author, group, task)
-
-  let nbJson = json.parseFile(notebook)
 
   for cell in nbJson["cells"].asSeq():
     if cell["cell_type"].asStr() == "code":
@@ -462,19 +467,42 @@ proc convertFile(notebook: string, author, group, task: string): void =
 
   outFile.close()
 
-  let (res, err, code) = shellVerboseErr {dokCommand}:
-    echo "running compilation"
-    latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
-    echo "finished compilation"
+  let namepref = &"{author}_{group}_{task}"
 
-  if code != 0:
-    ceUserError0("Error while compiling result document")
-    echo err
+  block:
+    let (res, err, code) = shellVerboseErr {dokCommand}:
+      echo "running compilation"
+      latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
+      echo "finished compilation"
 
-  logCopyFile("result_tex.pdf", &"{author}_{group}_{task}.pdf")
+    if code != 0:
+      ceUserError0("Error while compiling result document")
+      echo err
+
+    logCopyFile("result_tex.pdf", &"{namepref}.pdf")
+
+  block:
+    discard shellVerboseErr {dokCommand}:
+      pandoc "result_tex.tex" "-o" "result_tex.odt"
+
+    logCopyFile("result_tex.odt", &"{namepref}.odt")
+
+    discard shellVerboseErr {dokCommand}:
+      soffice "--headless" "--convert-to" docx "result_tex.odt"
+
+    logCopyFile("result_tex.docx", &"{namepref}.docx")
+
+proc extractConfig(nbJson: JsonNode): Option[string] =
+  for cell in nbJson["cells"].asSeq():
+    if cell["cell_type"].asStr() == "raw":
+      let src = cell["source"].asSeq().mapIt(it.asStr())
+      if src[0].startsWith("#+begin_config") and
+         src[^1].startsWith("#+end_config"):
+        return some(src[1..^2].joinl())
 
 
-proc processZip(file: string, tmpdir: string): void =
+
+proc processNotebook(file: string, tmpdir: string, fromZip: bool): void =
   logDir()
   removeDir(tmpdir)
   createDir(tmpdir)
@@ -487,25 +515,35 @@ proc processZip(file: string, tmpdir: string): void =
   else:
     ceUserError0(&"Could not find {file}")
 
-  shell:
-    echo "ddd"
-    unzip ($file)
-    echo "333"
+  if fromZip:
+    shell:
+      unzip ($file)
 
-  ceUserLog0("Opened file")
+    ceUserLog0("Opened file")
 
   let notebook = findFirstFile("*.ipynb", "notebook")
-  let configuration =  findFirstFile("*.toml", "configuration file")
-
   ceUserInfo0(&"Input notebook: {notebook}")
-  ceUserInfo0(&"Input configuration: {configuration}")
 
-  let config = parsetoml.parseFile(configuration)
+  let nbJson = json.parseFile(notebook)
+
+  let config =
+    if fromZip:
+      let configuration =  findFirstFile("*.toml", "configuration file")
+      ceUserInfo0(&"Input configuration: {configuration}")
+      parsetoml.parseFile(configuration)
+    else:
+      iflet (conf = extractConfig(nbJson)):
+        ceUserInfo0("Found configuration string")
+        parsetoml.parseString(conf)
+      else:
+        ceUserError0("Could not find configuration in the notebook")
+        die()
+
   let author = config.getConfOrDie("name")
   let group = config.getConfOrDie("group")
   let task = config.getConfOrDie("task")
 
-  convertFile(notebook, author, group, task)
+  convertFile(nbJson, author, group, task)
 
   cdUp()
 
@@ -516,8 +554,7 @@ proc processZip(file: string, tmpdir: string): void =
 
   # logCopyFile(&"{tmpdir}/{resultfile}", &"{resultfile}")
 
-
-proc processWholeDir(inputDirectory: string): void =
+proc processWholeDir(inputDirectory: string, pref: string): void =
   ## Find all zipped notebooks in directory and process them
   ## one-by-one. Pack results back into zip archives
 
@@ -533,8 +570,12 @@ proc processWholeDir(inputDirectory: string): void =
   logDir()
   for idx, zip in toSeq(walkPattern("*.zip")):
     ceUserInfo0(&"Found zip file {zip}")
-    if not zip.startsWith("result"):
-      processZip(zip, &"result_zip_{idx}")
+    if not zip.contains("result"):
+      processNotebook(zip, &"{pref}result_zip_{idx}", fromZip = true)
+
+  for idx, notebook in toSeq(walkPattern("*.ipynb")):
+    ceUserInfo0(&"Found notebook file {notebook}")
+    processNotebook(notebook, &"{pref}result_notebook_{idx}", fromZip = false)
 
 parseArgs:
   opt:
@@ -542,9 +583,21 @@ parseArgs:
     opt: ["--in-dir", "--input", "+takes_values"]
     help: """Specify input directory. By default {defaultInput}
              is used"""
+  opt:
+    name: "nocode"
+    opt: ["--nocode"]
+    help: "Do not add code blocks to generated document"
+
+  opt:
+    name: "pref"
+    opt: ["--pref", "+takes_values"]
+    help: "result direcoty prefix"
 
 let inputDir = "input-dir".kp().tern(
   "input-dir".k.toStr(), defaultInput
 ).absolutePath()
 
-processWholeDir(inputDir)
+if "nocode".kp():
+  nocode = true
+
+processWholeDir(inputDir, "pref".kp().tern("pref".k().toStr(), ""))

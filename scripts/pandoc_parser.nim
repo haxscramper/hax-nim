@@ -316,7 +316,7 @@ proc getTable(parsed: seq[RawPandoc]): SimpleTable =
   for node in parsed:
     let res = findFirst(node, "Table")
     if res.isSome():
-      debugprint res.get()
+      # debugprint res.get()
       return res.get().toTableSimple()
 
 
