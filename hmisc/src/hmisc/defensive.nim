@@ -12,6 +12,8 @@ export shell
 ## Collection of helper functions to provide verbose messages for
 ## common errors
 
+const noShellMsg*: set[DebugOutputKind] = {}
+
 proc die*() {.discardable, noreturn.} =
   ceUserInfo2("Terminating program")
   quit 1
@@ -32,7 +34,7 @@ proc findFirstFile*(
     ceUserInfo0(&"Found single {filePurpose}")
     notebooks[0]
 
-template initDefence*(logfile: string = "", prefix: string = ""): untyped =
+template initDefense*(logfile: string = "", prefix: string = ""): untyped =
   ##[ Create necessary variables and procs for debugging.
 
   All settings and procedures are scope-local. `logile` is a name of
@@ -56,6 +58,15 @@ template initDefence*(logfile: string = "", prefix: string = ""): untyped =
 
   var defensiveLogLevel {.inject.} = lvlAll
   var defensiveLogPrefix {.inject.} = prefix
+  var defensiveLogIndentation {.inject.} = 0
+
+  proc increaseLogIndent() = defensiveLogIndentation += 2
+  proc decreaseLogIndent() = defensiveLogIndentation -= 2
+
+  template runIndentedLog(body: untyped): untyped =
+    increaseLogIndent()
+    body
+    decreaseLogIndent()
 
   proc saveLog(text: string, logLevel = lvlAll): void =
     if defensiveFileLogEnabled:
@@ -63,25 +74,25 @@ template initDefence*(logfile: string = "", prefix: string = ""): untyped =
 
   proc showError(msgs: varargs[string, `$`]) =
     let text = msgs.join(" ")
-    ceUserError0(defensiveLogPrefix & text)
+    ceUserError0(defensiveLogPrefix & text, defensiveLogIndentation)
     saveLog(text, lvlError)
     # fileLogger.log(lvlError, text)
 
   proc showLog(msgs: varargs[string, `$`]) =
     let text = msgs.join(" ")
-    ceUserLog0(defensiveLogPrefix & text)
+    ceUserLog0(defensiveLogPrefix & text, defensiveLogIndentation)
     saveLog(text, lvlDebug)
     # fileLogger.log(lvlDebug, text)
 
   proc showInfo(msgs: varargs[string, `$`]) =
     let text = msgs.join(" ")
-    ceUserInfo2(defensiveLogPrefix & text)
+    ceUserInfo2(defensiveLogPrefix & text, defensiveLogIndentation)
     saveLog(text, lvlInfo)
     # fileLogger.log(lvlInfo, text)
 
   proc showWarn(msgs: varargs[string, `$`]) =
     let text = msgs.join(" ")
-    ceUserWarn(defensiveLogPrefix & text)
+    ceUserWarn(defensiveLogPrefix & text, defensiveLogIndentation)
     saveLog(text, lvlWarn)
     # fileLogger.log(lvlWarn, text)
 
@@ -92,12 +103,18 @@ template initDefence*(logfile: string = "", prefix: string = ""): untyped =
 template safeRunCommand*(
   msg: string,
   runConf: set[DebugOutputKind],
+  hideerror: bool = false,
   body: untyped): bool =
   ## Execute shell command and return `true/false` based on execution
   ## results. This template internally uses syntax from `shell`
   ## module. Execution results are not returned.
+  ##
+  ## :hideerror: if `true` do not print stderr after error in shell
+  ## :runConf: passed to `shellVerboseErr`
+  ## :msg: Print 'msg' and execution succeded/failed. Leave empty (`""`)
+  ##       for not messages.
   runnableExamples:
-    initDefence()
+    initDefense()
     let res = safeRunCommand("test", {dokCommand}):
       ls
 
@@ -109,13 +126,19 @@ template safeRunCommand*(
       body
 
     if code != 0:
-      showError(msg, "execution failed")
-      showError("Error output")
-      showPlain(err)
-      saveLog(err)
-      saveLog(res)
+      if msg.len > 0:
+        showError(msg, "exited with non-zero output code")
+
+
+      if not hideerror:
+        showError("Error output")
+        showPlain(err)
+        saveLog(err)
+        saveLog(res)
     else:
-      showInfo(msg, "execution succeded")
+      if msg.len > 0:
+        showInfo(msg, "exited with output code 0")
+
       resOk = true
 
     resOk
@@ -123,11 +146,11 @@ template safeRunCommand*(
 
 when isMainModule:
   setCurrentDir("/tmp")
-  initDefence(prefix = "FFF: ")
+  initDefense(prefix = "FFF: ")
   showWarn("hello", "world")
   showError("test", "ddd")
 
-  let res = safeRunCommand("test", {dokCommand}):
+  let res = safeRunCommand("test", {dokCommand}, false):
     ls
 
   assert res == true
