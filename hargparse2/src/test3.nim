@@ -1,9 +1,8 @@
 import macros
 
 dumpTree:
-  case val:
-    of f1: echo "11"
-    of f2: echo "qq"
+  configuration "Number of items in generated list",
+       val: int = 12
 
-dumpTree:
-  a.b.c
+  configuration "Number of items in generated list",
+       name: string = "111"

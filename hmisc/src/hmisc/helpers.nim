@@ -66,9 +66,9 @@ macro quoteDoInterpolStmt*(body: untyped): untyped =
     assert macrotest() == 123
     assert macrotest2() == macrotest()
 
-  defer:
-    echo "quote do interpol"
-    echo result.toStrLit()
+  # defer:
+  #   echo "quote do interpol"
+  #   echo result.toStrLit()
 
   # TODO add documentaion
   # TODO refactor to two simpler functions

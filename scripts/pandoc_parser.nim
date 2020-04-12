@@ -4,6 +4,9 @@ import sequtils
 import json
 import strutils, strformat
 import options
+import hmisc/defensive
+
+initDefense()
 
 type
   ListStyleKind = enum
@@ -339,7 +342,7 @@ func toLatexTable(tbl: SimpleTable): string =
 proc htmlTableToLatex*(htmlTable: string): string =
   let tmpfile = "/tmp/htmltable.html"
   tmpfile.writeFile(htmlTable)
-  let (res, err, code) = shellVerboseErr {dokCommand}:
+  let (res, err, code) = shellVerboseErr noShellMsg:
     pandoc -t json ($tmpfile)
 
   if code == 0:
