@@ -354,29 +354,30 @@ proc ceInfo*(
     ceWrite(str = str,
             mtype = mInfo, level = lv, style = st, indent = ind)
 
+# TODO DOC
 
-proc ceUserWarn*(str: string): void =
+proc ceUserWarn*(str: string, ind = 0): void =
   ## Use when stopping program due to expected reasons (for example
   ## when user is prompted Y/n to create file and chooses no. In that
   ## case you need to issue a warning that no files were created, but
   ## otherwise this is expected situation)
-  ceWrite(str = str, mtype = mWarn, level = 1, style = sBright, 0)
+  ceWrite(str = str, mtype = mWarn, level = 1, style = sBright, indent = ind)
 
-proc ceUserInfo0*(str: string): void =
-  ceWrite(str = str, mtype = mInfo, level = 0, style = sBright, 0)
+proc ceUserInfo0*(str: string, ind = 0): void =
+  ceWrite(str = str, mtype = mInfo, level = 0, style = sBright, indent = ind)
 
-proc ceUserInfo2*(str: string): void =
-  ceWrite(str = str, mtype = mInfo, level = 2, style = sDefault, 0)
+proc ceUserInfo2*(str: string, ind = 0): void =
+  ceWrite(str = str, mtype = mInfo, level = 2, style = sDefault, indent = ind)
 
 proc ceUserLog0*(str: string, ind = 0): void =
   ## Fancier echo, nothing useful
   ceWrite(str = str, mtype = mLog, level = 0, style = sDefault, indent = ind)
 
-proc ceUserError0*(str: string): void =
+proc ceUserError0*(str: string, ind: int = 0): void =
   ## When multiple errors of that type are expected. For example when
   ## parsing configuration file and discarding several options due to
   ## broken configuraion.
-  ceWrite(str = str, mtype = mError, level = 0, style = sBright, 0)
+  ceWrite(str = str, mtype = mError, level = 0, style = sBright, indent = ind)
 
 proc printSeparator*(typ: string = "upper"): void =
   case typ:
