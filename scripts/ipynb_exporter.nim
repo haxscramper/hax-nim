@@ -3,7 +3,7 @@ import hashes
 import re
 import strutils
 import shell
-import hmisc/[helpers, defensive]
+import hmisc/[helpers, defensive, hjson]
 import colechopkg/lib
 import strformat
 import os
@@ -16,6 +16,8 @@ import options
 import pandoc_parser
 
 
+initDefense()
+
 const
   testing = true
   defaultTemp = "/tmp/ipynb_exporter"
@@ -25,7 +27,7 @@ const
 
 
 var nocode = false
-
+var hideerror = false
 
 type
   NBCellKind = enum
@@ -267,28 +269,6 @@ proc anything(input: string, argument: var string, start: int): int =
   return diff
 
 
-template jsonConversion(target, conversionProc: untyped): untyped =
-  let targetKind {.inject.} = target
-  if node.kind == targetKind:
-    return node.conversionProc()
-  else:
-    raise newException(
-      ValueError,
-      &"Json node of kind {node.kind} cannot be converted to {targetKind}"
-    )
-
-func asStr(node: JsonNode): string = jsonConversion(JString, getStr)
-func asInt(node: JsonNode): int = jsonConversion(JInt, getInt)
-func asFloat(node: JsonNode): float = jsonConversion(JFloat, getFloat)
-func asSeq(node: JsonNode): seq[JsonNode] = jsonConversion(JArray, getElems)
-func asTable(node: JsonNode): OrderedTable[string, JsonNode] =
-  jsonConversion(JObject, getFields)
-
-func joinArr(node: JsonNode): string =
-  assert node.kind == JArray and node.getElems().allIt(it.kind == JString),
-     "Only array of strings can be joined using `joinArr`"
-
-  node.asSeq().mapIt(it.asStr()).join("")
 
   # if node.kind == JString:
   #   return node.getStr()
@@ -299,15 +279,14 @@ func joinArr(node: JsonNode): string =
 proc exportCellOutput(outp, cell: JsonNode): string =
   let outtype = outp["output_type"].asStr()
   let execcount = cell["execution_count"].asInt()
-  # ceUserLog0(&"Processing output #{execcount}", 2)
+
+  defer:
+    if result.contains("\\cfrac"):
+      showWarn("Code cell contains \\cfrac. execcount:", execcount)
+
   if outtype == "stream":
-    result = """
-% ---
-\begin{verbatim}
-$1
-\end{verbatim}
-% ---
-""" % [outp["text"].getStr()]
+    showLog("Found text stream")
+    result = outp["text"].joinArr()
   elif outtype == "execute_result" or outtype == "display_data":
     let data = outp["data"]
     if data.hasKey("image/png"):
@@ -343,6 +322,7 @@ $1
       let body = data["text/latex"].joinArr()
       result = body
     elif data.hasKey("text/html"):
+      showLog("Found html table, converting to latex ...")
       let body = data["text/html"].joinArr()
       # "tmp.html".writeFile(body)
       # let (latex, err, code) = shellVerboseErr {dokCommand}:
@@ -454,11 +434,14 @@ proc convertFile(nbJson: JsonNode, author, group, task: string): void =
 
   outFile.write getLatexHeader(author, group, task)
 
-  for cell in nbJson["cells"].asSeq():
-    if cell["cell_type"].asStr() == "code":
-      outFile.write exportCodeCell(cell)
-    elif cell["cell_type"].asStr() == "markdown":
-      outfile.write exportMarkdownCell(cell)
+
+  runIndentedLog():
+    for cell in nbJson["cells"].asSeq():
+      if cell["cell_type"].asStr() == "code":
+        outFile.write exportCodeCell(cell)
+      elif cell["cell_type"].asStr() == "markdown":
+        outfile.write exportMarkdownCell(cell)
+
 
   outFile.write """
   % ---
@@ -470,25 +453,29 @@ proc convertFile(nbJson: JsonNode, author, group, task: string): void =
   let namepref = &"{author}_{group}_{task}"
 
   block:
-    let (res, err, code) = shellVerboseErr {dokCommand}:
+    showInfo("Compiling latex to pdf ...")
+    showLog("Latex file:", outName.absolutePath())
+    var isOk = safeRunCommand("pdf compilation", noShellMsg, true):
       echo "running compilation"
       latexmk "-pdf -latexoption=-shell-escape --interaction=nonstopmode" ($outName)
       echo "finished compilation"
 
-    if code != 0:
-      ceUserError0("Error while compiling result document")
-      echo err
-
     logCopyFile("result_tex.pdf", &"{namepref}.pdf")
 
   block:
-    discard shellVerboseErr {dokCommand}:
+    var isOk = safeRunCommand("latex to odt conversion", noShellMsg, hideerror):
       pandoc "result_tex.tex" "-o" "result_tex.odt"
+
+    if not isOk:
+      die()
 
     logCopyFile("result_tex.odt", &"{namepref}.odt")
 
-    discard shellVerboseErr {dokCommand}:
+    isOk = safeRunCommand("odt to docx conversion", noShellMsg, hideerror):
       soffice "--headless" "--convert-to" docx "result_tex.odt"
+
+    if not isOk:
+      die()
 
     logCopyFile("result_tex.docx", &"{namepref}.docx")
 
@@ -502,11 +489,14 @@ proc extractConfig(nbJson: JsonNode): Option[string] =
 
 
 
-proc processNotebook(file: string, tmpdir: string, fromZip: bool): void =
+proc processNotebook(filepath: string, tmpdir: string, fromZip: bool): void =
+  let (_, file) = filepath.splitPath()
+  ceUserInfo0(&"Processing path {filepath}")
+  ceUserLog0(&"File name is {file}")
   logDir()
   removeDir(tmpdir)
   createDir(tmpdir)
-  copyFile(file, &"{tmpdir}/{file}")
+  logCopyFile(filepath, &"{tmpdir}/{file}")
   setCurrentDir(tmpdir)
   logDir()
 
@@ -524,6 +514,7 @@ proc processNotebook(file: string, tmpdir: string, fromZip: bool): void =
   let notebook = findFirstFile("*.ipynb", "notebook")
   ceUserInfo0(&"Input notebook: {notebook}")
 
+  showInfo("Parsing notebook file at ", notebook.absolutePath())
   let nbJson = json.parseFile(notebook)
 
   let config =
@@ -542,8 +533,10 @@ proc processNotebook(file: string, tmpdir: string, fromZip: bool): void =
   let author = config.getConfOrDie("name")
   let group = config.getConfOrDie("group")
   let task = config.getConfOrDie("task")
+  let namepref = &"{author}_{group}_{task}"
 
   convertFile(nbJson, author, group, task)
+  logCopyFile(notebook, &"{namepref}.ipynb")
 
   cdUp()
 
@@ -593,11 +586,47 @@ parseArgs:
     opt: ["--pref", "+takes_values"]
     help: "result direcoty prefix"
 
-let inputDir = "input-dir".kp().tern(
-  "input-dir".k.toStr(), defaultInput
-).absolutePath()
+  opt:
+    name: "input-file"
+    opt: ["--in-file", "+takes_values"]
+    help: """Specify input file. Run only on it"""
+  opt:
+    name: "hideerror"
+    opt: ["--hideerror"]
+    help: "Do not show error messages from failed shell commands"
+
+
+if "hideerror".kp():
+  ceUserWarn("""Error supression is enabled - failed shell
+  commands will not show `stderr`""")
+  hideerror = true
 
 if "nocode".kp():
+  showInfo "'--nocode' is selected: python code will not be included"
   nocode = true
 
-processWholeDir(inputDir, "pref".kp().tern("pref".k().toStr(), ""))
+
+
+
+if "input-dir".kp() or (not "input-file".kp()):
+  # Process directory
+  let inputDir = "input-dir".kp().tern(
+    "input-dir".k.toStr(), defaultInput
+  ).absolutePath()
+
+  processWholeDir(inputDir, "pref".kp().tern("pref".k().toStr(), ""))
+else:
+  let inputFile =
+    block:
+      let tmp = "input-file".k.toStr().expandTilde()
+      if tmp.isAbsolute(): tmp
+      else: tmp.absolutePath()
+
+  if not inputFile.existsFile():
+    ceUserError0("No such file or directory: " & inputFile)
+    die()
+  else:
+    let (_, filename) = inputFile.splitPath()
+    ceUserInfo0(&"Found file {inputFile}, generating report ...")
+    ceUserLog0(&"Output files will be places into 'res_{filename}.d'")
+    processNotebook(inputFile, &"res_{filename}.d", fromZip = false)
