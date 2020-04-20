@@ -8,6 +8,7 @@ export os
 import strutils
 import logging
 import shell
+import colechopkg/types
 
 export shell
 
@@ -246,7 +247,12 @@ template pprintErr(body: untyped): untyped =
 
       if not filename.startsWith(choosenim):
         let (_, name, ext) = filename.splitFile()
-        ceUserLog0(name & ":" & $tr.line & " " & $tr.procname)
+        ceUserLog0(
+          $name.toDefault(style = { styleDim }) &
+            ":" &
+            $($tr.line).toDefault(style = { styleUnderscore }) &
+            " " &
+            $($tr.procname).toYellow())
 
     let idx = e.msg.find('(')
     echo ""
