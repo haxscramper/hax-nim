@@ -452,6 +452,8 @@ proc convertFile(nbJson: JsonNode, author, group, task: string): void =
 
   let namepref = &"{author}_{group}_{task}"
 
+  var genFiles = "list.txt".open(fmWrite)
+
   block:
     showInfo("Compiling latex to pdf ...")
     showLog("Latex file:", outName.absolutePath())
@@ -461,6 +463,8 @@ proc convertFile(nbJson: JsonNode, author, group, task: string): void =
       echo "finished compilation"
 
     logCopyFile("result_tex.pdf", &"{namepref}.pdf")
+    genFiles.write(&"{namepref}.pdf\n")
+
 
   block:
     var isOk = safeRunCommand("latex to odt conversion", noShellMsg, hideerror):
@@ -468,6 +472,7 @@ proc convertFile(nbJson: JsonNode, author, group, task: string): void =
 
     if not isOk:
       die()
+
 
     logCopyFile("result_tex.odt", &"{namepref}.odt")
 
@@ -478,6 +483,10 @@ proc convertFile(nbJson: JsonNode, author, group, task: string): void =
       die()
 
     logCopyFile("result_tex.docx", &"{namepref}.docx")
+    genFiles.write(&"{namepref}.docx\n")
+
+  genFiles.close()
+
 
 proc extractConfig(nbJson: JsonNode): Option[string] =
   for cell in nbJson["cells"].asSeq():
@@ -489,14 +498,23 @@ proc extractConfig(nbJson: JsonNode): Option[string] =
 
 
 
-proc processNotebook(filepath: string, tmpdir: string, fromZip: bool): void =
+proc processNotebook*(filepath: string, tmpdir: string, fromZip: bool): void =
   let (_, file) = filepath.splitPath()
+  let targetfile = &"{tmpdir}/{file}"
   ceUserInfo0(&"Processing path {filepath}")
   ceUserLog0(&"File name is {file}")
   logDir()
-  removeDir(tmpdir)
-  createDir(tmpdir)
-  logCopyFile(filepath, &"{tmpdir}/{file}")
+  if targetfile == filepath:
+    showLog("Target file is located in temporary directory")
+  else:
+    showLog("Temp directory is:", tmpDir)
+    showLog("Cleaning up temporary directory")
+    if existsDir(tmpDir):
+      removeDir(tmpdir)
+
+    createDir(tmpdir)
+    logCopyFile(filepath, targetfile)
+
   setCurrentDir(tmpdir)
   logDir()
 
@@ -588,12 +606,16 @@ parseArgs:
 
   opt:
     name: "input-file"
-    opt: ["--in-file", "+takes_values"]
+    opt: ["--in-file", "--file", "+takes_values"]
     help: """Specify input file. Run only on it"""
   opt:
     name: "hideerror"
     opt: ["--hideerror"]
     help: "Do not show error messages from failed shell commands"
+  opt:
+    name: "temp-dir"
+    opt: ["--temp-dir", "+takes_values"]
+    help: "Directory to use for temporary files in single-file compilation"
 
 
 if "hideerror".kp():
@@ -604,7 +626,6 @@ if "hideerror".kp():
 if "nocode".kp():
   showInfo "'--nocode' is selected: python code will not be included"
   nocode = true
-
 
 
 
@@ -629,4 +650,10 @@ else:
     let (_, filename) = inputFile.splitPath()
     ceUserInfo0(&"Found file {inputFile}, generating report ...")
     ceUserLog0(&"Output files will be places into 'res_{filename}.d'")
-    processNotebook(inputFile, &"res_{filename}.d", fromZip = false)
+    processNotebook(
+      inputFile,
+      "temp-dir".kp().tern(
+        "temp-dir".k().toStr(),
+        &"res_{filename}.d"
+      ),
+      fromZip = false)

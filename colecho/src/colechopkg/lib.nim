@@ -309,7 +309,7 @@ template printLine*(
                    prefix.str
                  else:
                    " ".repeat(max((prefix.str.len) - 4, 0)) &
-                     ".".repeat(3) & " "
+                     ".".repeat(3)
 
 
     echo "$#$#$#$#" % [
