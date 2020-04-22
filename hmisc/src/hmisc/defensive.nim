@@ -52,7 +52,7 @@ proc findFirstFile*(
 #===========================  logging support  ===========================#
 
 type
-  LoggingConf = enum
+  LoggingConf* = enum
     lcFileLogging
     lcPrintLogging
 
@@ -67,6 +67,10 @@ var defLogConfMap: Table[string, set[LoggingConf]]
 var defLogLoggerMap: Table[string, FileLogger]
 var defLogLevelMap: Table[string, Level]
 
+# Global set of configurations with hard override for any printing
+var globalExcluded: set[LoggingConf]
+var globalIncluded: set[LoggingConf]
+
 proc increaseLogIndent*() = defLogIndentation += 4
 proc decreaseLogIndent*() = defLogIndentation -= 4
 
@@ -75,14 +79,33 @@ template runIndentedLog*(body: untyped): untyped =
   body
   decreaseLogIndent()
 
+
 template getLogConf*(f: string): untyped =
-  if defLogConfMap.hasKey(f):
-    defLogConfMap[f]
-  else:
+  if not defLogConfMap.hasKey(f):
     raise newException(
       AssertionError,
       "Attempt to use logging without init configuration"
     )
+
+  defLogConfMap[f]
+
+
+template runTempConfigLock*(newConf: (LoggingConf, bool), body: untyped): untyped =
+  ## Add/remove configuration from global config, run body and then
+  ## restore configuration back (by using reverse operation)
+
+  let file = instantiationInfo().filename
+  if newConf[1]: # true => adding to conf
+    globalIncluded.incl newConf[0]
+  else:
+    globalExcluded.incl newConf[0]
+
+  body
+
+  if newConf[1]: # true => must remove
+    globalIncluded.excl newConf[0]
+  else:
+    globalExcluded.excl newConf[0]
 
 template getLogLevel*(f: string): untyped =
   if defLogLevelMap.hasKey(f):
@@ -99,23 +122,30 @@ template saveLog*(text: string, logLevel = lvlAll): void =
     defLogLoggerMap[f].log(lvlAll, text)
 
 template getDefPrefix(iinfo: IInfo): string =
-  let file = iinfo.filename
-  let confPrefix =
-    if defLogPrefixMap.hasKey(file):
-      defLogPrefixMap[file]
-    else:
-      ""
-
-  (if lcUsePrefix in getLogConf(file): confPrefix & ": " else: "") &
-  (
-    block:
-      if lcUseFileName in getLogConf(file):
-        let (_, name, ext) = iinfo.filename.splitFile()
-        "[" & name & "] "
+  block:
+    let file = iinfo.filename
+    let confPrefix =
+      if defLogPrefixMap.hasKey(file):
+        defLogPrefixMap[file]
       else:
         ""
-  ) &
-  (if lcUseLine in getLogConf(file): "(" & $iinfo.line & ") " else: "")
+
+    proc isEnabled(c: LoggingConf): bool =
+      if c in globalExcluded: false
+      elif c in globalIncluded: true
+      elif c in getLogConf(file): true
+      else: false
+
+    (if isEnabled(lcUsePrefix): confPrefix & ": " else: "") &
+    (
+      block:
+        if isEnabled(lcUseFileName):
+          let (_, name, ext) = iinfo.filename.splitFile()
+          "[" & name & "] "
+        else:
+          ""
+    ) &
+    (if isEnabled(lcUseLine): "(" & $iinfo.line & ") " else: "")
 
 template showError*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
