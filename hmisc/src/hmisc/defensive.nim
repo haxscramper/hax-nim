@@ -63,8 +63,8 @@ type
     lcUsePrefix
     lcUseFileName
     lcUseLine
-    lcNoLogging
-    lcNoReflow
+    lcUseLogging
+    lcUseReflow
 
   IInfo = tuple[filename: string, line: int, column: int]
 
@@ -74,8 +74,15 @@ var defLogLoggerMap: Table[string, FileLogger]
 var defLogLevelMap: Table[string, Level]
 
 # Global set of configurations with hard override for any printing
-var globalExcluded: set[LoggingConf]
-var globalIncluded: set[LoggingConf]
+var globalDisabled: set[LoggingConf]
+var globalEnabled: set[LoggingConf]
+
+proc isExplicitlyDisabled*(c: LoggingConf): bool =
+  c in globalDisabled
+
+proc isExplicitlyEnabled*(c: LoggingConf): bool =
+  (not c.isExplicitlyDisabled()) or
+  (c in globalEnabled)
 
 proc increaseLogIndent*() = defLogIndentation += 4
 proc decreaseLogIndent*() = defLogIndentation -= 4
@@ -102,19 +109,30 @@ template runTempConfigLock*(
   ## restore configuration back (by using reverse operation)
 
   let file = instantiationInfo().filename
+
+  let startGlobalDis = globalDisabled
+  let startGlobalEnb = globalEnabled
+
   for item in newConf:
     if item[1]: # true => adding to conf
-      globalIncluded.incl item[0]
+      globalEnabled.incl item[0]
     else:
-      globalExcluded.incl item[0]
+      globalDisabled.incl item[0]
 
   body
 
-  for item in newConf:
-    if item[1]: # true => must remove
-      globalIncluded.excl item[0]
-    else:
-      globalExcluded.excl item[0]
+  globalDisabled = startGlobalDis
+  globalEnabled = startGlobalEnb
+  # globalConfig = startConf
+  # for item in newConf:
+  #   # true & was actually added => must remove
+  #   if item[1] and (item[0] notin startConf):
+  #     # globalIncluded.excl item[0]
+
+  #   # was actually removed
+  #   elif (item[0] in startConf):
+  #     globalConf.incl item[0]
+  #     # globalConfig.excl item[0]
 
 template getLogLevel*(f: string): untyped =
   if defLogLevelMap.hasKey(f):
@@ -140,10 +158,7 @@ template getDefPrefix(iinfo: IInfo): string =
         ""
 
     proc isEnabled(c: LoggingConf): bool =
-      if c in globalExcluded: false
-      elif c in globalIncluded: true
-      elif c in getLogConf(file): true
-      else: false
+      (c.isExplicitlyEnabled()) and (c in getLogConf(file))
 
     (if isEnabled(lcUsePrefix): confPrefix & ": " else: "") &
     (
@@ -157,15 +172,12 @@ template getDefPrefix(iinfo: IInfo): string =
     (if isEnabled(lcUseLine): "(" & $iinfo.line & ") " else: "")
 
 proc printingAllowed(iinfo: IInfo): bool =
-  if lcNoLogging in globalIncluded: false
-  elif lcNoLogging in getLogConf(iinfo.filename): false
-  else: true
+  (lcUseLogging.isExplicitlyEnabled()) or
+  (lcUseLogging in getLogConf(iinfo.filename))
 
 proc reflowNeeded(iinfo: IInfo): bool =
-  not (
-    (lcNoReflow in globalIncluded) or
-    (lcNoLogging in getLogConf(iinfo.filename))
-  )
+  (lcUseReflow.isExplicitlyEnabled()) or
+  (lcUseReflow in getLogConf(iinfo.filename))
 
 template showError*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
