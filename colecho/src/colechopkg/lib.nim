@@ -297,12 +297,13 @@ proc printAllArgs*(): void =
       discard
 
 
-template printLine*(
+proc printLine*(
   lprefix: ColoredString,
   line: string | ColoredString,
   ellipis: bool = false,
   indentSize: int = 0,
-  prefixSpacing: string = " "
+  prefixSpacing: string = " ",
+  idx: int = 0
          ): void =
     var prefix = lprefix
     prefix.str = if idx == 0:
@@ -325,10 +326,14 @@ proc ceWrite(
   mtype: MessageType,
   level: int,
   style: MessageStyle,
-  indent: int): void =
+  indent: int,
+  doReflow: bool = true): void =
     let prefix = getPrefix(mtype, level, style)
-    for idx, line in str.justifyFitTerminal(padding = (prefix.len + indent, 2)):
-      printLine(prefix, line, idx != 0, indent)
+    if doReflow:
+      for idx, line in str.justifyFitTerminal(padding = (prefix.len + indent, 2)):
+        printLine(prefix, line, idx != 0, indent, idx = idx)
+    else:
+      printLine(prefix, str, 0 != 0, indent, idx = 0)
 
 proc ceError*(
   str: string, lv: int = 0, st: MessageStyle = sDefault,
@@ -356,28 +361,28 @@ proc ceInfo*(
 
 # TODO DOC
 
-proc ceUserWarn*(str: string, ind = 0): void =
+proc ceUserWarn*(str: string, ind = 0, doReflow: bool = true): void =
   ## Use when stopping program due to expected reasons (for example
   ## when user is prompted Y/n to create file and chooses no. In that
   ## case you need to issue a warning that no files were created, but
   ## otherwise this is expected situation)
-  ceWrite(str = str, mtype = mWarn, level = 1, style = sBright, indent = ind)
+  ceWrite(str = str, mtype = mWarn, level = 1, style = sBright, indent = ind, doReflow = doReflow)
 
-proc ceUserInfo0*(str: string, ind = 0): void =
-  ceWrite(str = str, mtype = mInfo, level = 0, style = sBright, indent = ind)
+proc ceUserInfo0*(str: string, ind = 0, doReflow: bool = true): void =
+  ceWrite(str = str, mtype = mInfo, level = 0, style = sBright, indent = ind, doReflow = doReflow)
 
-proc ceUserInfo2*(str: string, ind = 0): void =
-  ceWrite(str = str, mtype = mInfo, level = 2, style = sDefault, indent = ind)
+proc ceUserInfo2*(str: string, ind = 0, doReflow: bool = true): void =
+  ceWrite(str = str, mtype = mInfo, level = 2, style = sDefault, indent = ind, doReflow = doReflow)
 
-proc ceUserLog0*(str: string, ind = 0): void =
+proc ceUserLog0*(str: string, ind = 0, doReflow: bool = true): void =
   ## Fancier echo, nothing useful
-  ceWrite(str = str, mtype = mLog, level = 0, style = sDefault, indent = ind)
+  ceWrite(str = str, mtype = mLog, level = 0, style = sDefault, indent = ind, doReflow = doReflow)
 
-proc ceUserError0*(str: string, ind: int = 0): void =
+proc ceUserError0*(str: string, ind: int = 0, doReflow: bool = true): void =
   ## When multiple errors of that type are expected. For example when
   ## parsing configuration file and discarding several options due to
   ## broken configuraion.
-  ceWrite(str = str, mtype = mError, level = 0, style = sBright, indent = ind)
+  ceWrite(str = str, mtype = mError, level = 0, style = sBright, indent = ind, doReflow = doReflow)
 
 proc printSeparator(typ: string = "upper"): void =
   case typ:

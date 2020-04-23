@@ -64,6 +64,7 @@ type
     lcUseFileName
     lcUseLine
     lcNoLogging
+    lcNoReflow
 
   IInfo = tuple[filename: string, line: int, column: int]
 
@@ -160,12 +161,22 @@ proc printingAllowed(iinfo: IInfo): bool =
   elif lcNoLogging in getLogConf(iinfo.filename): false
   else: true
 
+proc reflowNeeded(iinfo: IInfo): bool =
+  not (
+    (lcNoReflow in globalIncluded) or
+    (lcNoLogging in getLogConf(iinfo.filename))
+  )
+
 template showError*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
 
   let iinfo = instantiationInfo()
   if printingAllowed(iinfo):
-    ceUserError0(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+    ceUserError0(
+      getDefPrefix(iinfo = iinfo) & text,
+      ind = defLogIndentation,
+      doReflow = reflowNeeded(iinfo)
+    )
 
   saveLog(text, lvlError)
 
@@ -174,7 +185,11 @@ template showLog*(msgs: varargs[string, `$`]) =
 
   let iinfo = instantiationInfo()
   if printingAllowed(iinfo):
-    ceUserLog0(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+    ceUserLog0(
+      getDefPrefix(iinfo = iinfo) & text,
+      ind = defLogIndentation,
+      doReflow = reflowNeeded(iinfo)
+    )
 
   saveLog(text, lvlDebug)
 
@@ -183,7 +198,11 @@ template showInfo*(msgs: varargs[string, `$`]) =
 
   let iinfo = instantiationInfo()
   if printingAllowed(iinfo):
-    ceUserInfo2(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+    ceUserInfo2(
+      getDefPrefix(iinfo = iinfo) & text,
+      ind = defLogIndentation,
+      doReflow = reflowNeeded(iinfo)
+    )
 
   saveLog(text, lvlInfo)
 
@@ -192,7 +211,11 @@ template showWarn*(msgs: varargs[string, `$`]) =
 
   let iinfo = instantiationInfo()
   if printingAllowed(iinfo):
-    ceUserWarn(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+    ceUserWarn(
+      getDefPrefix(iinfo = iinfo) & text,
+      ind = defLogIndentation,
+      doReflow = reflowNeeded(iinfo)
+    )
 
   saveLog(text, lvlWarn)
   # fileLogger.log(lvlWarn, text)
