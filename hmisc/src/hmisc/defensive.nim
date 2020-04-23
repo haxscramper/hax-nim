@@ -1,4 +1,6 @@
 import colechopkg/lib
+import terminal
+import re
 import helpers
 import tables
 import sequtils
@@ -8,7 +10,9 @@ export os
 import strutils
 import logging
 import shell
+
 import colechopkg/types
+export types
 
 export shell
 
@@ -59,6 +63,7 @@ type
     lcUsePrefix
     lcUseFileName
     lcUseLine
+    lcNoLogging
 
   IInfo = tuple[filename: string, line: int, column: int]
 
@@ -90,22 +95,25 @@ template getLogConf*(f: string): untyped =
   defLogConfMap[f]
 
 
-template runTempConfigLock*(newConf: (LoggingConf, bool), body: untyped): untyped =
+template runTempConfigLock*(
+  newConf: openarray[(LoggingConf, bool)], body: untyped): untyped =
   ## Add/remove configuration from global config, run body and then
   ## restore configuration back (by using reverse operation)
 
   let file = instantiationInfo().filename
-  if newConf[1]: # true => adding to conf
-    globalIncluded.incl newConf[0]
-  else:
-    globalExcluded.incl newConf[0]
+  for item in newConf:
+    if item[1]: # true => adding to conf
+      globalIncluded.incl item[0]
+    else:
+      globalExcluded.incl item[0]
 
   body
 
-  if newConf[1]: # true => must remove
-    globalIncluded.excl newConf[0]
-  else:
-    globalExcluded.excl newConf[0]
+  for item in newConf:
+    if item[1]: # true => must remove
+      globalIncluded.excl item[0]
+    else:
+      globalExcluded.excl item[0]
 
 template getLogLevel*(f: string): untyped =
   if defLogLevelMap.hasKey(f):
@@ -147,32 +155,45 @@ template getDefPrefix(iinfo: IInfo): string =
     ) &
     (if isEnabled(lcUseLine): "(" & $iinfo.line & ") " else: "")
 
+proc printingAllowed(iinfo: IInfo): bool =
+  if lcNoLogging in globalIncluded: false
+  elif lcNoLogging in getLogConf(iinfo.filename): false
+  else: true
+
 template showError*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
-  ceUserError0(getDefPrefix(
-    iinfo = instantiationInfo()
-  ) & text, defLogIndentation)
+
+  let iinfo = instantiationInfo()
+  if printingAllowed(iinfo):
+    ceUserError0(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+
   saveLog(text, lvlError)
 
 template showLog*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
-  ceUserLog0(getDefPrefix(
-    iinfo = instantiationInfo()
-  ) & text, defLogIndentation)
+
+  let iinfo = instantiationInfo()
+  if printingAllowed(iinfo):
+    ceUserLog0(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+
   saveLog(text, lvlDebug)
 
 template showInfo*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
-  ceUserInfo2(getDefPrefix(
-    iinfo = instantiationInfo()
-  ) & text, defLogIndentation)
+
+  let iinfo = instantiationInfo()
+  if printingAllowed(iinfo):
+    ceUserInfo2(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+
   saveLog(text, lvlInfo)
 
 template showWarn*(msgs: varargs[string, `$`]) =
   let text = msgs.join(" ")
-  ceUserWarn(getDefPrefix(
-    iinfo = instantiationInfo()
-  ) & text, defLogIndentation)
+
+  let iinfo = instantiationInfo()
+  if printingAllowed(iinfo):
+    ceUserWarn(getDefPrefix(iinfo = iinfo) & text, defLogIndentation)
+
   saveLog(text, lvlWarn)
   # fileLogger.log(lvlWarn, text)
 
@@ -221,6 +242,8 @@ template initDefense*(
     defLogLoggerMap[file] = newFileLogger(logfile)
 
 
+#================  shell interaction without exceptions  =================#
+
 template safeRunCommand*(
   msg: string,
   runConf: set[DebugOutputKind],
@@ -264,15 +287,123 @@ template safeRunCommand*(
 
     resOk
 
+
+#=====================  exception-related features  ======================#
+
+# DOC use formatting only on literal nodes, pas non-literal as-is
+template optFmt(arg: string{lit}): untyped = &arg
+proc optFmt(arg: string): string = arg
+
+func joinLiteral(msg: string): string =
+  msg.split("\n")
+    .filterIt(it.find(re"[^\s]") != -1)
+    .mapIt(it[it.find(re"""[^\s]""") .. ^1])
+    .join(" ")
+
+template longAssertionCheck*(expression: untyped, body: untyped): untyped =
+  ## Raise `AssertionError` if `expression` evaluates as false. Body
+  ## is a string literal which will be passed as a message. It will be
+  ## passed to `&` macro - i.e. variable interpolation is supported.
+  runnableExamples:
+    var test = false
+    try:
+      let variable = 2
+      longAssertionCheck(variable == 3):
+        """
+        Failed to break math while comparing {variable} to `3`
+        """
+    except AssertionError:
+      test = true
+
+    assert test
+
+  static: assert body is string
+  assert expression, joinLiteral(optFmt body)
+
+
+template longAssertionFail*(body: untyped): untyped =
+  ## Raise `AssertionError`. Body is a string literal which will be
+  ## passed as a message. It will be passed to `&` macro - i.e.
+  ## variable interpolation is supported.
+  runnableExamples:
+    var test = false
+    try:
+      longAssertionFail:
+        "Assertion failed"
+    except AssertionError:
+      test = true
+
+    assert test
+
+  static: assert body is string
+  raise newException(AssertionError, joinLiteral(&body))
+
+
+template longValueCheck*(expression: untyped, body: untyped): untyped =
+  ## Raise `ValueError` if `expression` evaluates as false. Body is a
+  ## string literal which will be passed as a message. It will be
+  ## passed to `&` macro - i.e. variable interpolation is supported.
+  runnableExamples:
+    var test = false
+    try:
+      let variable = 2
+      longValueCheck(variable == 3):
+        """
+        Failed to break math while comparing {variable} to `3`
+        """
+    except ValueError:
+      test = true
+
+    assert test
+
+  if not (expression):
+    raise newException(ValueError, joinLiteral(&body))
+
+
+template longValueFail*(body: untyped): untyped =
+  ## Raise `ValueError`. Body is a string literal which will be
+  ## passed as a message. It will be passed to `&` macro - i.e.
+  ## variable interpolation is supported.
+  runnableExamples:
+    var test = false
+    try:
+      longValueFail:
+        "Assertion failed"
+    except ValueError:
+      test = true
+
+    assert test
+
+  static: assert body is string
+  raise newException(ValueError, joinLiteral(&body))
+
+
 template getCEx(t: untyped): untyped =
   cast[t](getCurrentException())
 
-template pprintErr(body: untyped): untyped =
+proc printSeparator(msg: string): void =
+  let str = center(
+    " " & msg & " ",
+    width = terminalWidth(),
+    fillChar = '='
+  )
+
+  echo str.toDefault(style = { styleDim })
+
+proc getFileName*(f: string): string =
+  let (_, name, ext) = f.splitFile()
+  return name & ext
+
+template pprintErr*(body: untyped): untyped =
   template pprintStackTrace(): untyped =
     let e = getCurrentException()
     let choosenim = getHomeDir() & ".choosenim"
 
-    for tr in e.getStackTraceEntries():
+    let stackEntries = e.getStackTraceEntries()
+    echo ""
+    printSeparator("Exception")
+    echo ""
+    for tr in stackEntries:
       let filename: string = $tr.filename
 
       if not filename.startsWith(choosenim):
@@ -286,7 +417,9 @@ template pprintErr(body: untyped): untyped =
 
     let idx = e.msg.find('(')
     echo ""
-    ceUserError0(e.msg[(if idx > 0: idx else: 0)..^1])
+    ceUserError0(
+      (idx > 0).tern(e.msg[0 ..< idx].getFileName() & " ", "") &
+      e.msg[(if idx > 0: idx else: 0)..^1])
 
   try:
     body

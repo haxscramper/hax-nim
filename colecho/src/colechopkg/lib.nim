@@ -379,7 +379,7 @@ proc ceUserError0*(str: string, ind: int = 0): void =
   ## broken configuraion.
   ceWrite(str = str, mtype = mError, level = 0, style = sBright, indent = ind)
 
-proc printSeparator*(typ: string = "upper"): void =
+proc printSeparator(typ: string = "upper"): void =
   case typ:
     of "upper": echo "--> <--\n"
     of "lower": echo "\n--> <--"
