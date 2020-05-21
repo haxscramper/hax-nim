@@ -15,6 +15,7 @@ import colechopkg/types
 export types
 
 export shell
+export helpers
 
 ##[
 
@@ -26,6 +27,15 @@ export shell
 
 ## Collection of helper functions to provide verbose messages for
 ## common errors
+
+#=======================  more verbose exceptions  =======================#
+
+type
+  VerboseError = ref object of CatchableError
+    causes: seq[string]
+
+#============================  shell logging  ============================#
+
 
 const noShellMsg*: set[DebugOutputKind] = {}
 
@@ -416,7 +426,7 @@ template longValueFail*(body: untyped): untyped =
 template getCEx(t: untyped): untyped =
   cast[t](getCurrentException())
 
-proc printSeparator(msg: string): void =
+proc printSeparator*(msg: string): void =
   let str = center(
     " " & msg & " ",
     width = terminalWidth(),
@@ -441,14 +451,19 @@ template pprintErr*(body: untyped): untyped =
     for tr in stackEntries:
       let filename: string = $tr.filename
 
-      if not filename.startsWith(choosenim):
-        let (_, name, ext) = filename.splitFile()
-        ceUserLog0(
-          $name.toDefault(style = { styleDim }) &
-            ":" &
-            $($tr.line).toDefault(style = { styleUnderscore }) &
-            " " &
-            $($tr.procname).toYellow())
+      let prefix =
+        if not filename.startsWith(choosenim): "(usr) "
+        else: $("(sys) ".toGreen())
+
+
+      let (_, name, ext) = filename.splitFile()
+      ceUserLog0(
+        prefix &
+        $name.toDefault(style = { styleDim }) &
+          ":" &
+          $($tr.line).toDefault(style = { styleUnderscore }) &
+          " " &
+          $($tr.procname).toYellow())
 
     let idx = e.msg.find('(')
     echo ""

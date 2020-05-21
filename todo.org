@@ -1,0 +1,19 @@
+* Colecho
+** TODO Use debug levels from nim logging
+   :PROPERTIES:
+   :CREATED:  <2020-04-23 Thu 21:16>
+   :END:
+
+Current system with four different levels of configuration, four
+styles that is configured via integer values. Not really pretty.
+
+Replace logging levels with enumeration from debug (lvlDebug, lvlError
+etc.). Leave prefix styles. Remove three-level wrapping for ~showError
+-> ceUserError0 -> ceWrite~, use colecholib directly.
+
+Map old configuration scheme to new.
+
+** TODO Calculate width of the string using only visible characters
+   :PROPERTIES:
+   :CREATED:  <2020-04-29 Wed 17:50>
+   :END:
