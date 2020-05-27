@@ -78,7 +78,7 @@ proc getPrefixString*(
         case level:
         of 0:
           case style:
-          of sDefault : "  -"
+          of sDefault : "-  "
           of sVerbose : "Log 0"
           of sGtest   : "[          ]"
           of sLog  : "[L0]"
