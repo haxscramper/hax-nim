@@ -1,4 +1,5 @@
 import macros
+import strutils
 import parsecomb
 import regex
 
@@ -46,8 +47,15 @@ type
     args: seq[string]
     children: seq[FormatAst]
 
+var ind: int
+proc incv[T](v: var T): T = inc v; return v
+
+let trackerCb = Callbacks(
+  entry: proc(p: int) = echo "  ".repeat(incv ind), "--"
+)
+
 let skipUntilFormat = parseSkipUntil[char, string]('~')
-let matchFormatCtrl = parseRx(re r"~(C|%|&|\|)")
+let matchFormatCtrl = parseRx(re r"~(C|%|&|\|)", cb = trackerCb)
 
 let matchTokens = parseNTimes(parseOr(@[
   skipUntilFormat, matchFormatCtrl

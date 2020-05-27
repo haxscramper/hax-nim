@@ -12,9 +12,21 @@ type
       of false:
         error*: string
 
+  Callbacks* = object
+    entry*: proc(pos: int)
+    success*: proc(pos: int)
+    failure*: proc(pos: int)
+
+const noCallbacks* = Callbacks(
+  entry: proc(p: int) = discard,
+  success: proc(p: int) = discard,
+  failure: proc(p: int) = discard
+)
+
+type
   Parser*[Val, Buf] = proc(buffer: Buf, position: int = 0): ParseResult[Val]
 
-proc parseString*(str: string): Parser[string, string] =
+proc parseString*(str: string, cb: Callbacks = noCallbacks): Parser[string, string] =
   return proc(buffer: string, position: int = 0): ParseResult[string] =
     if position + str.len > buffer.len:
       ParseResult[string](
@@ -33,8 +45,10 @@ proc parseString*(str: string): Parser[string, string] =
         error: "Cannot find string"
       )
 
-proc parseRx*(rx: Regex): Parser[string, string] =
+proc parseRx*(rx: Regex, cb: Callbacks = noCallbacks): Parser[string, string] =
   return proc(buffer: string, startpos: int = 0): ParseResult[string] =
+    if not cb.entry.isNil(): cb.entry(startpos)
+
     var m: RegexMatch
     if find(buffer, rx, m, startpos) and m.boundaries.a == startpos:
       ParseResult[string](
@@ -48,7 +62,7 @@ proc parseRx*(rx: Regex): Parser[string, string] =
       )
 
 
-proc parseOr*[Val, Buf](args: seq[Parser[Val, Buf]]): Parser[Val, Buf] =
+proc parseOr*[Val, Buf](args: seq[Parser[Val, Buf]], cb: Callbacks = noCallbacks): Parser[Val, Buf] =
   return proc(buffer: string, position: int = 0): ParseResult[Val] =
     for parser in args:
       let res = parser(buffer, position)
@@ -60,7 +74,7 @@ proc parseOr*[Val, Buf](args: seq[Parser[Val, Buf]]): Parser[Val, Buf] =
       error: "None of the parsers match"
     )
 
-proc parseAnd*[Val, Buf](args: seq[Parser[Val, Buf]]): Parser[seq[Val], Buf] =
+proc parseAnd*[Val, Buf](args: seq[Parser[Val, Buf]], cb: Callbacks = noCallbacks): Parser[seq[Val], Buf] =
   return proc(buffer: string, position: int = 0): ParseResult[seq[Val]] =
     var posNow = position
     var resVals: seq[Val]
@@ -81,7 +95,7 @@ proc parseAnd*[Val, Buf](args: seq[Parser[Val, Buf]]): Parser[seq[Val], Buf] =
       endpos: posNow
     )
 
-proc parseOpt*[Val, Buf](parser: Parser[Val, Buf]): Parser[Option[Val], Buf] =
+proc parseOpt*[Val, Buf](parser: Parser[Val, Buf], cb: Callbacks = noCallbacks): Parser[Option[Val], Buf] =
   return proc(buffer: string, position: int = 0): ParseResult[Option[Val]] =
     let res = parser(buffer, position)
     if res.success:
@@ -100,7 +114,8 @@ proc parseOpt*[Val, Buf](parser: Parser[Val, Buf]): Parser[Option[Val], Buf] =
 proc parseNTimes*[Val, Buf](
   parser: Parser[Val, Buf],
   mintimes: int = 0,
-  maxtimes: int = high(int)): Parser[seq[Val], Buf] =
+  maxtimes: int = high(int),
+  cb: Callbacks = noCallbacks): Parser[seq[Val], Buf] =
   return proc(buffer: Buf, position: int = 0): ParseResult[seq[Val]] =
     var resSeq: seq[Val]
     var posNow = position
@@ -116,13 +131,13 @@ proc parseNTimes*[Val, Buf](
         elif mintimes <= i:
           return ParseResult[seq[Val]](success: true, value: resSeq, endpos: posNow)
 
-proc parseOneOrMore*[Val, Buf](parser: Parser[Val, Buf]): Parser[seq[Val], Buf] =
-  return parseNTimes(parser, mintimes = 1)
+proc parseOneOrMore*[Val, Buf](parser: Parser[Val, Buf], cb: Callbacks = noCallbacks): Parser[seq[Val], Buf] =
+  return parseNTimes(parser, mintimes = 1, cb = cb)
 
-proc parseZeroOrMore*[Val, Buf](parser: Parser[Val, Buf]): Parser[seq[Val], Buf] =
-  return parseNTimes(parser)
+proc parseZeroOrMore*[Val, Buf](parser: Parser[Val, Buf], cb: Callbacks = noCallbacks): Parser[seq[Val], Buf] =
+  return parseNTimes(parser, cb = cb)
 
-proc parseSkipUntil*[Val, Buf](value: Val): Parser[Buf, Buf] =
+proc parseSkipUntil*[Val, Buf](value: Val, cb: Callbacks = noCallbacks): Parser[Buf, Buf] =
   return proc(buffer: Buf, position: int = 0): ParseResult[Buf] =
     var i = position
     while true:
