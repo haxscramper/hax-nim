@@ -4,10 +4,10 @@ import options
 import regex
 
 type
-  ParseResult*[T] = object
+  ParseResult*[Val] = object
     case success*: bool
       of true:
-        value*: T
+        value*: Val
         endpos*: int
       of false:
         error*: string
@@ -48,40 +48,40 @@ proc parseRx*(rx: Regex): Parser[string, string] =
       )
 
 
-proc parseOr*[V, T](args: seq[Parser[V, T]]): Parser[V, T] =
-  return proc(buffer: string, position: int = 0): ParseResult[T] =
+proc parseOr*[Val, Buf](args: seq[Parser[Val, Buf]]): Parser[Val, Buf] =
+  return proc(buffer: string, position: int = 0): ParseResult[Val] =
     for parser in args:
       let res = parser(buffer, position)
       if res.success:
         return res
 
-    return ParseResult[T](
+    return ParseResult[Val](
       success: false,
       error: "None of the parsers match"
     )
 
-proc parseAnd*[V, T](args: seq[Parser[V, T]]): Parser[seq[V], T] =
-  return proc(buffer: string, position: int = 0): ParseResult[seq[V]] =
+proc parseAnd*[Val, Buf](args: seq[Parser[Val, Buf]]): Parser[seq[Val], Buf] =
+  return proc(buffer: string, position: int = 0): ParseResult[seq[Val]] =
     var posNow = position
-    var resVals: seq[V]
+    var resVals: seq[Val]
     for parser in args:
       let res = parser(buffer, posNow)
       if res.success:
         resVals.add res.value
         posNow = res.endpos
       else:
-        return ParseResult[seq[V]](
+        return ParseResult[seq[Val]](
           success: false,
           error: res.error
         )
 
-    return ParseResult[seq[V]](
+    return ParseResult[seq[Val]](
       success: true,
       value: resVals,
       endpos: posNow
     )
 
-proc parseOpt*[Val, Tok](parser: Parser[Val, Tok]): Parser[Option[Val], Tok] =
+proc parseOpt*[Val, Buf](parser: Parser[Val, Buf]): Parser[Option[Val], Buf] =
   return proc(buffer: string, position: int = 0): ParseResult[Option[Val]] =
     let res = parser(buffer, position)
     if res.success:
@@ -96,3 +96,6 @@ proc parseOpt*[Val, Tok](parser: Parser[Val, Tok]): Parser[Option[Val], Tok] =
         value: none(Val),
         endpos: position
       )
+
+# proc parseZeroOrMore*[Val, Buf](parser: Parser[Val, Buf]): Parser[seq[Val], Buf] =
+#   return proc(buffer: Buf, position: int = 0): ParseResult[]
