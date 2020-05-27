@@ -97,5 +97,43 @@ proc parseOpt*[Val, Buf](parser: Parser[Val, Buf]): Parser[Option[Val], Buf] =
         endpos: position
       )
 
-# proc parseZeroOrMore*[Val, Buf](parser: Parser[Val, Buf]): Parser[seq[Val], Buf] =
-#   return proc(buffer: Buf, position: int = 0): ParseResult[]
+proc parseNTimes*[Val, Buf](
+  parser: Parser[Val, Buf],
+  mintimes: int = 0,
+  maxtimes: int = high(int)): Parser[seq[Val], Buf] =
+  return proc(buffer: Buf, position: int = 0): ParseResult[seq[Val]] =
+    var resSeq: seq[Val]
+    var posNow = position
+    for i in 0 .. maxtimes:
+      let res = parser(buffer, posNow)
+      if res.success:
+        echo res
+        resSeq.add res.value
+        posNow = res.endpos
+      else:
+        if i < mintimes:
+          return ParseResult[seq[Val]](success: false, error: res.error)
+        elif mintimes <= i:
+          return ParseResult[seq[Val]](success: true, value: resSeq, endpos: posNow)
+
+proc parseOneOrMore*[Val, Buf](parser: Parser[Val, Buf]): Parser[seq[Val], Buf] =
+  return parseNTimes(parser, mintimes = 1)
+
+proc parseZeroOrMore*[Val, Buf](parser: Parser[Val, Buf]): Parser[seq[Val], Buf] =
+  return parseNTimes(parser)
+
+proc parseSkipUntil*[Val, Buf](value: Val): Parser[Buf, Buf] =
+  return proc(buffer: Buf, position: int = 0): ParseResult[Buf] =
+    var i = position
+    while true:
+      if (i == buffer.len) or (buffer[i] == value):
+        if i == position:
+          return ParseResult[Buf](success: false, error: "No tokens matched")
+        else:
+          return ParseResult[Buf](
+            success: true,
+            endpos: i,
+            value: buffer[position ..< i]
+          )
+
+      inc i
