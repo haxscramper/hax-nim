@@ -23,6 +23,12 @@ static:
     echo m
 
 type
+  # FormatTok = object
+
   FormatAst = object
     args: seq[string]
     children: seq[FormatAst]
+
+# echo string is openarray[char]
+# proc t(s: openarray[char]) = discard
+# t("Hello")

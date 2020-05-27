@@ -12,9 +12,9 @@ type
       of false:
         error*: string
 
-  Parser*[T] = proc(buffer: string, position: int = 0): ParseResult[T]
+  Parser*[Val, Buf] = proc(buffer: Buf, position: int = 0): ParseResult[Val]
 
-proc parseString*(str: string): Parser[string] =
+proc parseString*(str: string): Parser[string, string] =
   return proc(buffer: string, position: int = 0): ParseResult[string] =
     if position + str.len > buffer.len:
       ParseResult[string](
@@ -33,7 +33,7 @@ proc parseString*(str: string): Parser[string] =
         error: "Cannot find string"
       )
 
-proc parseRx*(rx: Regex): Parser[string] =
+proc parseRx*(rx: Regex): Parser[string, string] =
   return proc(buffer: string, startpos: int = 0): ParseResult[string] =
     var m: RegexMatch
     if find(buffer, rx, m, startpos) and m.boundaries.a == startpos:
@@ -48,7 +48,7 @@ proc parseRx*(rx: Regex): Parser[string] =
       )
 
 
-proc parseOr*[T](args: seq[Parser[T]]): Parser[T] =
+proc parseOr*[V, T](args: seq[Parser[V, T]]): Parser[V, T] =
   return proc(buffer: string, position: int = 0): ParseResult[T] =
     for parser in args:
       let res = parser(buffer, position)
@@ -60,29 +60,29 @@ proc parseOr*[T](args: seq[Parser[T]]): Parser[T] =
       error: "None of the parsers match"
     )
 
-proc parseAnd*[T](args: seq[Parser[T]]): Parser[seq[T]] =
-  return proc(buffer: string, position: int = 0): ParseResult[seq[T]] =
+proc parseAnd*[V, T](args: seq[Parser[V, T]]): Parser[seq[V], T] =
+  return proc(buffer: string, position: int = 0): ParseResult[seq[V]] =
     var posNow = position
-    var resVals: seq[T]
+    var resVals: seq[V]
     for parser in args:
       let res = parser(buffer, posNow)
       if res.success:
         resVals.add res.value
         posNow = res.endpos
       else:
-        return ParseResult[seq[T]](
+        return ParseResult[seq[V]](
           success: false,
           error: res.error
         )
 
-    return ParseResult[seq[T]](
+    return ParseResult[seq[V]](
       success: true,
       value: resVals,
       endpos: posNow
     )
 
-proc parseOpt*[T](parser: Parser[T]): Parser[Option[T]] =
-  return proc(buffer: string, position: int = 0): ParseResult[Option[T]] =
+proc parseOpt*[Val, Tok](parser: Parser[Val, Tok]): Parser[Option[Val], Tok] =
+  return proc(buffer: string, position: int = 0): ParseResult[Option[Val]] =
     let res = parser(buffer, position)
     if res.success:
       return ParseResult(
@@ -93,6 +93,6 @@ proc parseOpt*[T](parser: Parser[T]): Parser[Option[T]] =
     else:
       return ParseResult(
         success: true,
-        value: none(T),
+        value: none(Val),
         endpos: position
       )
