@@ -15,5 +15,10 @@ let iterFor_q = iterator (): iterValType(@[1, 2, 4]) =
   for val in @[1, 2, 4]:
     yield val
 
-dumpTree:
-  (not finished(iterFor_i)) and (not finished(iterFor_q))
+# dumpTree:
+#   (not finished(iterFor_i)) and (not finished(iterFor_q))
+
+# template t(d: string = "default"): untyped =
+#   echo "h"
+
+# t

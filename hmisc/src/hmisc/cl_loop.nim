@@ -14,16 +14,25 @@ export types
 
 ## Implementation of common lisp's loop macro
 
+type
+  CodeError* = ref object of CatchableError
+    filename*: string
+    line*, column*: int
+    expr*: string
+    annotation*: string
+
 proc nthLine(file: string, line: int): string =
   readLines(file, line)[line - 1]
 
-proc highlightNode*(info: LineInfo, length: int, message: string): void =
-  let (dir, name, ext) = info.filename.splitFile()
-  let position = &"{name}{ext} {info.line}:{info.column} "
-  echo position, nthLine(info.filename, info.line)
-  let padding = " ".repeat(position.len + info.column)
-  echo padding, "^".repeat(length).toRed()
-  echo padding, message
+proc highlightErr*(err: CodeError): void =
+  let (dir, name, ext) = err.filename.splitFile()
+  let position = &"{name}{ext} {err.line}:{err.column} "
+  let padding = " ".repeat(position.len + err.column)
+
+  echo "\n", err.msg, "\n"
+  echo position, nthLine(err.filename, err.line)
+  echo padding, "^".repeat(err.expr.len()).toRed()
+  echo padding, err.annotation
 
 template iterValType*(arg: untyped): untyped =
   when compiles(arg[0]):
@@ -31,10 +40,23 @@ template iterValType*(arg: untyped): untyped =
   else:
     typeof(arg)
 
-template quitAssert*(cond: untyped, body: untyped): untyped =
+proc codeAssert*(
+  cond: bool,
+  info: LineInfo,
+  expr: string,
+  annotation: string,
+  msg: string
+         ): void =
   if not cond:
-    body
-    quit(1)
+    raise CodeError(
+      line: info.line,
+      column: info.column,
+      filename: info.filename,
+      expr: expr,
+      annotation: annotation,
+      msg: msg
+    )
+
 
 proc makeClosureIteratorDef(iter: NimNode): NimNode =
   nnkIteratorDef.newTree(
@@ -85,7 +107,7 @@ proc substituteEnv(expr: NimNode, env: seq[(NimNode, NimNode)]): NimNode =
 
 
 macro loop*(body: untyped): untyped =
-  defer: echo result.toStrLit()
+  # defer: echo result.toStrLit()
 
   result = quote do: 1
   let stmts = toSeq(body.children()).filterIt(it.kind != nnkEmpty)
@@ -148,21 +170,28 @@ macro loop*(body: untyped): untyped =
   let typeAsserts = collect(newSeq):
     for idx, coll in collectStmts:
       let info = collectStmts[idx].lineInfoObj()
-      let nodeLen = ($collectStmts[idx][1].toStrLit()).len().newIntLitNode()
+      let nodeStr = $collectStmts[idx][1].toStrLit()
+      let nodeLen = (nodeStr).len().newIntLitNode()
       superQuote do:
-        quitAssert (typeof(`typeExprs[idx]`)) is `resType`:
-          echo "\nType mismatch on `lcollect` expression\n"
-          highlightNode(
-            info = LineInfo(
+        codeAssert(
+          cond = (typeof(`typeExprs[idx]`) is `resType`),
+          msg = "Type mismatch on `lcollect` expression",
+          annotation = (
+            "Has type `" &
+              $typeof(`typeExprs[idx]`) &
+              "` but expected `" &
+              $typeof(`resType`) &
+              "`"
+          ),
+          info = LineInfo(
               filename: `info.filename.newStrLitNode()`,
               line: `info.line.newIntLitNode()`,
               column: `info.column.newIntLitNode()`
-            ),
-            length = `nodeLen`,
-            message =
-              "Has type `" & $typeof(`typeExprs[idx]`) &
-                "` but expected `" & $typeof(`resType`) & "`"
+          ),
+          expr = `newStrLitNode(nodeStr)`
           )
+
+  # echo typeAsserts.newStmtList().tostrLit()
 
   result = superQuote do:
     block:
@@ -170,7 +199,11 @@ macro loop*(body: untyped): untyped =
       `resSeq`
 
       static:
-        `typeAsserts.newStmtList()`
+        try:
+          `typeAsserts.newStmtList()`
+        except CodeError:
+          highlightErr(CodeError(getCurrentException()))
+          quit(1)
 
       while true:
         `varAssgns.newStmtList()`
