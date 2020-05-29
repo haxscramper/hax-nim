@@ -6,6 +6,9 @@ import macros
 import strformat
 import sugar
 
+import colechopkg/types
+export types
+
 ## Implementation of common lisp's loop macro
 
 template iterValType*(arg: untyped): untyped =
@@ -14,6 +17,10 @@ template iterValType*(arg: untyped): untyped =
   else:
     typeof(arg)
 
+template quitAssert*(cond: untyped, message: untyped): untyped =
+  if not cond:
+    echo message
+    quit(1)
 
 proc makeClosureIteratorDef(iter: NimNode): NimNode =
   nnkIteratorDef.newTree(
@@ -52,13 +59,15 @@ proc substituteEnv(expr: NimNode, env: seq[(NimNode, NimNode)]): NimNode =
   if idx != -1:
     result = env[idx][1]
     result = quote do: (`result`)
-  elif expr.kind == nnkIdent:
-    return expr
   else:
-    result = newTree(
-      expr.kind,
-      toSeq(expr.children()).mapIt(it.substituteEnv(env))
-    )
+    case expr.kind:
+      of nnkIdent, nnkStrLit:
+        return expr
+      else:
+        result = newTree(
+          expr.kind,
+          toSeq(expr.children()).mapIt(it.substituteEnv(env))
+        )
 
 
 macro loop*(body: untyped): untyped =
@@ -66,6 +75,9 @@ macro loop*(body: untyped): untyped =
 
   result = quote do: 1
   let stmts = toSeq(body.children()).filterIt(it.kind != nnkEmpty)
+
+  proc iterNode(v: NimNode): NimNode =
+    ident("iterFor__" & $v)
 
   let forStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lfor"))
   let forIters = collect(newSeq):
@@ -78,7 +90,7 @@ macro loop*(body: untyped): untyped =
         vsym: varn,
         iter: iterDecl,
         itbody: iter,
-        itersym: ident("iterFor___" & $varn)
+        itersym: iterNode(varn)
       )
 
   let decls = collect(newSeq):
@@ -91,11 +103,13 @@ macro loop*(body: untyped): untyped =
 
   let typeExprs = collect(newSeq):
     for coll in collectStmts:
-      coll[1].substituteEnv(forIters.mapIt((it[0], it[2])))
+      coll[1].substituteEnv(forIters.mapIt((
+        it[0], Call(iterNode(it[0])))))
+
+  let resType = superQuote do: typeof(`typeExprs[0]`)
 
   let resSeq = superQuote do:
-    var ress {.inject.}: seq[iterValType(`typeExprs[0]`)]
-
+    var ress {.inject.}: seq[`resType`]
 
   let breakCondition = forIters.mapIt(
     Call("finished", it.itersym)
@@ -117,10 +131,20 @@ macro loop*(body: untyped): untyped =
       superQuote do:
         ress.add(`coll[1]`)
 
+  let typeAsserts = collect(newSeq):
+    for idx, coll in collectStmts:
+      superQuote do:
+        quitAssert (typeof(`typeExprs[idx]`)) is `resType`,
+          $("failed".toRed())
+
   result = superQuote do:
     block:
-      `resSeq`
       `newStmtList(decls)`
+      `resSeq`
+
+      static:
+        `typeAsserts.newStmtList()`
+
       while true:
         `varAssgns.newStmtList()`
         if `breakCondition`:
