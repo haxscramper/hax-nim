@@ -15,24 +15,30 @@ export types
 ## Implementation of common lisp's loop macro
 
 type
-  CodeError* = ref object of CatchableError
-    filename*: string
-    line*, column*: int
+  ErrorAnnotation = object
+    errpos*: LineInfo
     expr*: string
     annotation*: string
+
+  CodeError* = ref object of CatchableError
+    annots: seq[ErrorAnnotation]
 
 proc nthLine(file: string, line: int): string =
   readLines(file, line)[line - 1]
 
 proc highlightErr*(err: CodeError): void =
-  let (dir, name, ext) = err.filename.splitFile()
-  let position = &"{name}{ext} {err.line}:{err.column} "
-  let padding = " ".repeat(position.len + err.column)
 
   echo "\n", err.msg, "\n"
-  echo position, nthLine(err.filename, err.line)
-  echo padding, "^".repeat(err.expr.len()).toRed()
-  echo padding, err.annotation
+
+  for err in err.annots:
+    let (dir, name, ext) = err.errpos.filename.splitFile()
+    let position = &"{name}{ext} {err.errpos.line}:{err.errpos.column} "
+    let padding = " ".repeat(position.len + err.errpos.column)
+
+    echo position, nthLine(err.errpos.filename, err.errpos.line)
+    echo padding, "^".repeat(err.expr.len()).toRed()
+    echo padding, err.annotation
+    echo ""
 
 template iterValType*(arg: untyped): untyped =
   when compiles(arg[0]):
@@ -40,20 +46,15 @@ template iterValType*(arg: untyped): untyped =
   else:
     typeof(arg)
 
-proc codeAssert*(
-  cond: bool,
-  info: LineInfo,
-  expr: string,
-  annotation: string,
-  msg: string
-         ): void =
+proc codeAssert*(cond: bool, msg: string, annots: varargs[ErrorAnnotation]): void =
   if not cond:
     raise CodeError(
-      line: info.line,
-      column: info.column,
-      filename: info.filename,
-      expr: expr,
-      annotation: annotation,
+      annots: toSeq(annots),
+      # line: info.line,
+      # column: info.column,
+      # filename: info.filename,
+      # expr: expr,
+      # annotation: annotation,
       msg: msg
     )
 
@@ -169,29 +170,39 @@ macro loop*(body: untyped): untyped =
 
   let typeAsserts = collect(newSeq):
     for idx, coll in collectStmts:
-      let info = collectStmts[idx].lineInfoObj()
-      let nodeStr = $collectStmts[idx][1].toStrLit()
-      let nodeLen = (nodeStr).len().newIntLitNode()
-      superQuote do:
-        codeAssert(
-          cond = (typeof(`typeExprs[idx]`) is `resType`),
-          msg = "Type mismatch on `lcollect` expression",
-          annotation = (
-            "Has type `" &
-              $typeof(`typeExprs[idx]`) &
-              "` but expected `" &
-              $typeof(`resType`) &
-              "`"
-          ),
-          info = LineInfo(
-              filename: `info.filename.newStrLitNode()`,
-              line: `info.line.newIntLitNode()`,
-              column: `info.column.newIntLitNode()`
-          ),
-          expr = `newStrLitNode(nodeStr)`
-          )
+      let annots = collect(newSeq):
+        for id in @[idx, 0]:
+          let info = collectStmts[id].lineInfoObj()
+          let nodeStr = $collectStmts[id][1].toStrLit()
+          let nodeLen = (nodeStr).len().newIntLitNode()
+          let annotation =
+            if id != 0:
+              superQuote do: ("Has type `" & $typeof(`typeExprs[idx]`) &
+                "` but expected `" & $typeof(`resType`) & "`")
+            else:
+              superQuote do: ("Inferred type is `" & $typeof(`resType`) & "` ")
 
-  # echo typeAsserts.newStmtList().tostrLit()
+          superQuote do:
+            annots.add ErrorAnnotation(
+              annotation: `annotation`,
+              errpos: LineInfo(
+                  filename: `info.filename.newStrLitNode()`,
+                  line: `info.line.newIntLitNode()`,
+                  column: `info.column.newIntLitNode()`
+              ),
+              expr: `newStrLitNode(nodeStr)`
+            )
+
+
+      superQuote do:
+        block:
+          var annots {.inject.}: seq[ErrorAnnotation]
+          `annots.newStmtList()`
+          codeAssert(
+            cond = (typeof(`typeExprs[idx]`) is `resType`),
+            msg = "Type mismatch on `lcollect` expression",
+            annots = annots
+          )
 
   result = superQuote do:
     block:

@@ -1,7 +1,5 @@
 import hmisc/cl_loop
 
-{.define(raiseOnSyntaxError).}
-
 template notCompiles(body: untyped): untyped =
   not compiles(body)
 
