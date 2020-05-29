@@ -55,7 +55,6 @@ proc substituteEnv(expr: NimNode, env: seq[(NimNode, NimNode)]): NimNode =
   elif expr.kind == nnkIdent:
     return expr
   else:
-    echo expr.treeRepr()
     result = newTree(
       expr.kind,
       toSeq(expr.children()).mapIt(it.substituteEnv(env))
@@ -107,6 +106,17 @@ macro loop*(body: untyped): untyped =
       superQuote do:
         let `decl.vsym` = `decl.itersym`()
 
+  let endStmt =
+    if collectStmts.len > 0:
+      quote do: ress
+    else:
+      Empty()
+
+  let collectCalls = collect(newSeq):
+    for coll in collectStmts:
+      superQuote do:
+        ress.add(`coll[1]`)
+
   result = superQuote do:
     block:
       `resSeq`
@@ -115,3 +125,7 @@ macro loop*(body: untyped): untyped =
         `varAssgns.newStmtList()`
         if `breakCondition`:
           break
+
+        `collectCalls.newStmtList()`
+
+      `endStmt`
