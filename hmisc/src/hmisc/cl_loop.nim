@@ -5,11 +5,25 @@ import sequtils
 import macros
 import strformat
 import sugar
+import strformat
+import strutils
+import os
 
 import colechopkg/types
 export types
 
 ## Implementation of common lisp's loop macro
+
+proc nthLine(file: string, line: int): string =
+  readLines(file, line)[line - 1]
+
+proc highlightNode*(info: LineInfo, length: int, message: string): void =
+  let (dir, name, ext) = info.filename.splitFile()
+  let position = &"{name}{ext} {info.line}:{info.column} "
+  echo position, nthLine(info.filename, info.line)
+  let padding = " ".repeat(position.len + info.column)
+  echo padding, "^".repeat(length).toRed()
+  echo padding, message
 
 template iterValType*(arg: untyped): untyped =
   when compiles(arg[0]):
@@ -17,9 +31,9 @@ template iterValType*(arg: untyped): untyped =
   else:
     typeof(arg)
 
-template quitAssert*(cond: untyped, message: untyped): untyped =
+template quitAssert*(cond: untyped, body: untyped): untyped =
   if not cond:
-    echo message
+    body
     quit(1)
 
 proc makeClosureIteratorDef(iter: NimNode): NimNode =
@@ -133,9 +147,22 @@ macro loop*(body: untyped): untyped =
 
   let typeAsserts = collect(newSeq):
     for idx, coll in collectStmts:
+      let info = collectStmts[idx].lineInfoObj()
+      let nodeLen = ($collectStmts[idx][1].toStrLit()).len().newIntLitNode()
       superQuote do:
-        quitAssert (typeof(`typeExprs[idx]`)) is `resType`,
-          $("failed".toRed())
+        quitAssert (typeof(`typeExprs[idx]`)) is `resType`:
+          echo "\nType mismatch on `lcollect` expression\n"
+          highlightNode(
+            info = LineInfo(
+              filename: `info.filename.newStrLitNode()`,
+              line: `info.line.newIntLitNode()`,
+              column: `info.column.newIntLitNode()`
+            ),
+            length = `nodeLen`,
+            message =
+              "Has type `" & $typeof(`typeExprs[idx]`) &
+                "` but expected `" & $typeof(`resType`) & "`"
+          )
 
   result = superQuote do:
     block:
