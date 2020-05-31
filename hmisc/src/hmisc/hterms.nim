@@ -1,7 +1,7 @@
 ## Term algorithms
 
 import hashes, sequtils, tables, strformat, strutils
-import helpers
+import helpers, deques
 
 type
   Failure* = ref object of CatchableError
@@ -10,6 +10,8 @@ type
     tkFunctor
     tkConstant
     tkPlaceholder
+
+  TermPath = seq[int]
 
   Term*[Sym, Val] = object
     case kind: TermKind
@@ -59,7 +61,7 @@ proc isBound*[Sym, Val](env: TermEnv[Sym, Val], term: Term[Sym, Val]): bool =
   (term in env.values) and env[term] != term
 
 proc `[]`*[Sym, Val](
-  e: TermEnv[Sym, Val], t: Term[Sym, Val]): Term[Sym, Val] = e[t]
+  e: TermEnv[Sym, Val], t: Term[Sym, Val]): Term[Sym, Val] = e.values[t]
 
 proc `[]=`*[Sym, Val](
   system: var RedSystem[Sym, Val], lhs, rhs: Term[Sym, Val]): void =
@@ -85,14 +87,15 @@ proc `$`*[Sym, Val](term: Term[Sym, Val]): string =
     of tkVariable:
       "_" & $term.name & "'".repeat(term.genIdx)
     of tkFunctor:
-      if ($term.sym).validIdentifier():
-        $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
-      else:
-        case term.subt.len():
-          of 1: &"{term.sym}({term.subt[0]})"
-          of 2: &"({term.subt[0]} {term.sym} {term.subt[1]})"
-          else:
-            $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
+      $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
+      # if ($term.sym).validIdentifier():
+      #   $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
+      # else:
+      #   case term.subt.len():
+      #     of 1: &"{term.sym}({term.subt[0]})"
+      #     of 2: &"({term.subt[0]} {term.sym} {term.subt[1]})"
+      #     else:
+      #       $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
     of tkPlaceholder:
       "_"
 
@@ -226,6 +229,8 @@ proc unif*[Sym, Val](
     return bindTerm(val1, val2, env)
   elif val2.kind == tkVariable:
     return bindTerm(val2, val1, env)
+  elif (val1.kind, val2.kind) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
+    raise Failure(msg: "Cannot unify consant and functor")
   else:
     result = env
     if val1.sym != val2.sym:
@@ -235,16 +240,98 @@ proc unif*[Sym, Val](
     for (arg1, arg2) in zip(val1.subt, val2.subt):
       result = unif(arg1, arg2, result)
 
+# proc match*[Sym, Val](t1, t2: Term): TermEnv[Sym, Val] =
+#   case t1.kind:
+#     of tkPlaceholder:
+#       return makeEnvironment()
+#     of tkVariable:
+
+iterator redexes*[Sym, Val](
+  term: Term[Sym, Val]): tuple[red: Term[Sym, Val], path: TermPath] =
+  ## Iterate over all redex in term
+  var que: Deque[(Term[Sym, Val], TermPath)]
+  que.addLast((term, @[0]))
+  while que.len > 0:
+    let (nowTerm, path) = que.popFirst()
+
+    if nowTerm.kind == tkFunctor:
+      for idx, subTerm in nowTerm.subt:
+        que.addLast((subTerm, path & @[idx]))
+
+    yield (red: nowTerm, path: path)
+
+
+proc varlist*[Sym, Var](
+  term: Term[Sym, Var], path: TermPath = @[0]): seq[(Term[Sym, Var], TermPath)] =
+  ## Output list of all variables in term
+  case term.kind:
+    of tkConstant, tkPlaceholder:
+      return @[]
+    of tkVariable:
+      return @[(term, path)]
+    of tkFunctor:
+      for idx, sub in term.subt:
+        result &= sub.varlist(path & @[idx])
+
+
+proc `[]=`*[Sym, Val](term: var Term[Sym, Val], path: TermPath, value: Term[Sym, Val]): void =
+  let ind = "  ".repeat(4 - path.len())
+  # echo ind, "-----"
+  # echo ind, "term: ", term
+  # echo ind, "path: ", path
+  # echo ind, "valu: ", value
+  # defer:
+  #   echo ind, "rest: ", term
+
+  case term.kind:
+    of tkFunctor:
+      # echo ind, "> functor"
+      term.subt[path[0]][path[1..^1]] = value
+    of tkVariable:
+      # echo ind, "> variable"
+      assert (path.len == 0 or (path.len == 1 and path[0] == 0))
+      term = value
+    of tkPlaceholder:
+      assert false, "Cannot assign to placeholder"
+    of tkConstant:
+      assert false, "Cannot assign to constant"
+
+proc substitute*[Sym, Val](
+  term: Term[Sym, Val], env: TermEnv[Sym, Val]): Term[Sym, Val] =
+  ## Substitute all variables in term with their values from environment
+  result = term
+  for (v, path) in term.varlist():
+    if env.isBound(v):
+      result[path] = v.dereference(env)
+
+
 proc reduce*[Sym, Val](
   term: Term[Sym, Val],
   system: RedSystem[Sym, Val]): (Term[Sym, Val], bool) =
-  let tmpTerm = term
-  for lhs, rhs in system:
-    try:
-      let newEnv = unif(lhs, tmpTerm)
-      echo "term: ", term
-      echo "can be reduced using: ", lhs
-      echo "reduced into: ", rhs
-      echo "subst. env: ", $newEnv
-    except:
-      echo "failed"
+  var tmpTerm = term
+  while true:
+    var canReduce = false
+    for (redex, path) in tmpTerm.redexes():
+      for lhs, rhs in system:
+        # echo "reducing ", tmpTerm, " using: ", lhs, " -> ", rhs
+        try:
+          let newEnv = unif(lhs, redex)
+          let tmpNew = rhs.substitute(newEnv)
+          # echo "term: ", redex, " on path ", path
+          echo tmpTerm, " can be reduced using: ", lhs, " into ", tmpNew
+          tmpTerm = tmpNew
+          # echo "reduced into: ", rhs
+          # echo "subst. env: ", $newEnv
+          # echo "reduced: ", reduced
+          if tmpTerm.kind notin {tkVariable, tkConstant}:
+            canReduce = true
+          else:
+            return (tmpTerm, true)
+        except Failure:
+          discard
+          # echo getCurrentExceptionMsg()
+
+    if not canReduce:
+      return (tmpTerm, false)
+
+  return (tmpTerm, true)

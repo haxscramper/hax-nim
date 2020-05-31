@@ -80,10 +80,13 @@ sys["*".mf(@[mv "A", mc 0])] = mc 0
 sys["*".mf(@[mv "A", "S".mf(@[mv "B"])])] =
   "+".mf(@[mv "A", "+".mf(@[mv "A", mv "B"])])
 
-echo reduce(
-  "+".mf(@[
-    "S".mf(@["S".mf(@[mc 0 ])]),
-    "S".mf(@["S".mf(@[mc 0 ])])
-  ]),
-  sys
-)
+let sum = "+".mf(@[mv "A", mc 0])
+
+
+# let sum = "+".mf(@[
+#     "S".mf(@["S".mf(@[mc 0])]),
+#     "S".mf(@["S".mf(@[mc 0])])
+#   ])
+
+echo "========"
+echo reduce(sum, sys)
