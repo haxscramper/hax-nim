@@ -51,26 +51,39 @@ when false:
 
 
 type
-  TermImpl = object
-    case kind: TermKind
-      of tkVariable:
-        name: string
-        genIdx: int
-      of tkFunctor:
-        sym: string
-        subt: seq[TermImpl]
-      of tkConstant:
-        value: string
-      of tkPlaceholder:
-        nil
+  Arithm = Term[string, int]
+  ArithmEnv = TermEnv[string, int]
+  ArithmSys = RedSystem[string, int]
 
 
-proc reduction[T: Term](arg: T): T =
-  return arg
+let mf = makeFunctor[string, int]
+let mc = makeConstant[string, int]
+let mp = makePlaceholder[string, int]
+let mv = makeVariable[string, int]
 
-let t1 = TermImpl()
-let t2 = TermImpl()
-let env = TermEnv[TermImpl]()
+let t1 = Arithm()
+let t2 = Arithm()
+var env = ArithmEnv()
+var sys = ArithmSys()
 
-echo reduction(t1)
-echo unif(t1, t2, env)
+# A + 0 -> A
+sys["+".mf(@[mv "A", mc 0])] = mv "A"
+
+# A + S(B) -> S(A + B)
+sys["+".mf(@[mv "A", "S".mf(@[mv "B"])])] =
+  "S".mf(@["+".mf(@[mv "A", mv "B"])])
+
+# A * 0 -> 0
+sys["*".mf(@[mv "A", mc 0])] = mc 0
+
+# A * S(B) -> A + (A * B)
+sys["*".mf(@[mv "A", "S".mf(@[mv "B"])])] =
+  "+".mf(@[mv "A", "+".mf(@[mv "A", mv "B"])])
+
+echo reduce(
+  "+".mf(@[
+    "S".mf(@["S".mf(@[mc 0 ])]),
+    "S".mf(@["S".mf(@[mc 0 ])])
+  ]),
+  sys
+)
