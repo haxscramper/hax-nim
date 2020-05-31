@@ -87,15 +87,15 @@ proc `$`*[Sym, Val](term: Term[Sym, Val]): string =
     of tkVariable:
       "_" & $term.name & "'".repeat(term.genIdx)
     of tkFunctor:
-      $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
-      # if ($term.sym).validIdentifier():
-      #   $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
-      # else:
-      #   case term.subt.len():
-      #     of 1: &"{term.sym}({term.subt[0]})"
-      #     of 2: &"({term.subt[0]} {term.sym} {term.subt[1]})"
-      #     else:
-      #       $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
+      # $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
+      if ($term.sym).validIdentifier():
+        $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
+      else:
+        case term.subt.len():
+          of 1: &"{term.sym}({term.subt[0]})"
+          of 2: &"{term.subt[0]} {term.sym} {term.subt[1]}"
+          else:
+            $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
     of tkPlaceholder:
       "_"
 
@@ -276,20 +276,11 @@ proc varlist*[Sym, Var](
 
 proc `[]=`*[Sym, Val](term: var Term[Sym, Val], path: TermPath, value: Term[Sym, Val]): void =
   let ind = "  ".repeat(4 - path.len())
-  # echo ind, "-----"
-  # echo ind, "term: ", term
-  # echo ind, "path: ", path
-  # echo ind, "valu: ", value
-  # defer:
-  #   echo ind, "rest: ", term
-
   case term.kind:
     of tkFunctor:
-      # echo ind, "> functor"
-      term.subt[path[0]][path[1..^1]] = value
+      term.subt[path[1]][path[1..^1]] = value
     of tkVariable:
-      # echo ind, "> variable"
-      assert (path.len == 0 or (path.len == 1 and path[0] == 0))
+      assert (path.len == 1)
       term = value
     of tkPlaceholder:
       assert false, "Cannot assign to placeholder"
@@ -313,25 +304,19 @@ proc reduce*[Sym, Val](
     var canReduce = false
     for (redex, path) in tmpTerm.redexes():
       for lhs, rhs in system:
-        # echo "reducing ", tmpTerm, " using: ", lhs, " -> ", rhs
         try:
           let newEnv = unif(lhs, redex)
           let tmpNew = rhs.substitute(newEnv)
-          # echo "term: ", redex, " on path ", path
-          echo tmpTerm, " can be reduced using: ", lhs, " into ", tmpNew
+          echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
           tmpTerm = tmpNew
-          # echo "reduced into: ", rhs
-          # echo "subst. env: ", $newEnv
-          # echo "reduced: ", reduced
           if tmpTerm.kind notin {tkVariable, tkConstant}:
             canReduce = true
+            result[1] = true
           else:
             return (tmpTerm, true)
         except Failure:
           discard
-          # echo getCurrentExceptionMsg()
 
     if not canReduce:
-      return (tmpTerm, false)
-
-  return (tmpTerm, true)
+      result[0] = tmpTerm
+      break
