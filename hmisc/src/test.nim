@@ -85,5 +85,4 @@ let sum = "+".mf(@[
     "S".mf(@["S".mf(@[mc 0])])
   ])
 
-echo "========"
 echo reduce(sum, sys)

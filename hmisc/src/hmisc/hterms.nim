@@ -275,10 +275,12 @@ proc varlist*[Sym, Var](
 
 
 proc `[]=`*[Sym, Val](term: var Term[Sym, Val], path: TermPath, value: Term[Sym, Val]): void =
-  let ind = "  ".repeat(4 - path.len())
   case term.kind:
     of tkFunctor:
-      term.subt[path[1]][path[1..^1]] = value
+      if path.len == 1:
+        term = value
+      else:
+        term.subt[path[1]][path[1..^1]] = value
     of tkVariable:
       assert (path.len == 1)
       term = value
@@ -307,8 +309,10 @@ proc reduce*[Sym, Val](
         try:
           let newEnv = unif(lhs, redex)
           let tmpNew = rhs.substitute(newEnv)
-          echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
-          tmpTerm = tmpNew
+          # echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
+          # echo "with: ", newEnv
+          tmpTerm[path] = tmpNew
+          # tmpTerm = tmpNew
           if tmpTerm.kind notin {tkVariable, tkConstant}:
             canReduce = true
             result[1] = true
