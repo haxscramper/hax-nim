@@ -14,6 +14,7 @@ export types
 
 ## Implementation of common lisp's loop macro
 
+
 type
   ErrorAnnotation = object
     errpos*: LineInfo
@@ -106,15 +107,48 @@ proc substituteEnv(expr: NimNode, env: seq[(NimNode, NimNode)]): NimNode =
           toSeq(expr.children()).mapIt(it.substituteEnv(env))
         )
 
+proc makeIterFor(v: NimNode): NimNode =
+  ident("iterFor__" & $v)
 
-macro loop*(body: untyped): untyped =
-  # defer: echo result.toStrLit()
+type
+  LoopStmtKind = enum
+    lskCollect
+    lskMax
+    lskMin
 
-  result = quote do: 1
-  let stmts = toSeq(body.children()).filterIt(it.kind != nnkEmpty)
+    lskAllOf
+    lskNoneOf
+    lskAnyOf
 
-  proc iterNode(v: NimNode): NimNode =
-    ident("iterFor__" & $v)
+  LoopStmts = object
+    expression: seq[NimNode] ## Expressions of statement arguments
+    kind: LoopStmtKind ## Kind of expression
+    case genVal: bool ## Whether or not this expression adds value to
+                      ## result type
+    of true:
+      tag: int
+    of false:
+      nil
+
+
+  LoopGenConfig = object
+    defType: Opt[NimNode] ## Default return type, if any
+
+proc makeResType(stmts: seq[LoopStmtKind], conf: LoopGenConfig): tuple[
+  typeDecl, typeName: NimNode] =
+  ## Generate statement for declaring loop return type and expression to
+  # IDEA Generate name of the return type based on loop init location
+  if conf.defType.isSome():
+    # TODO generate static type checking assertions
+    result.typeDecl = superQuote do:
+      type LoopResult = `conf.defType.get()`
+  else:
+    # Calcuate return type based on loop statements in body.
+    discard
+
+proc makeIterators(stmts: seq[NimNode]): tuple[
+  iterDecl, typeDecl: NimNode] =
+  ## Create declaration of iterators and type declarations
 
   let forStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lfor"))
   let forIters = collect(newSeq):
@@ -127,7 +161,7 @@ macro loop*(body: untyped): untyped =
         vsym: varn,
         iter: iterDecl,
         itbody: iter,
-        itersym: iterNode(varn)
+        itersym: makeIterFor(varn)
       )
 
   let decls = collect(newSeq):
@@ -135,14 +169,17 @@ macro loop*(body: untyped): untyped =
       superQuote do:
         let `decl.itersym` = `decl.iter`
 
-
-  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcollect"))
-
   let typeExprs = collect(newSeq):
     for coll in collectStmts:
       coll[1].substituteEnv(forIters.mapIt((
-        it[0], Call(iterNode(it[0])))))
+        it[0], Call(makeIterFor(it[0])))))
 
+  return (iterDecl: decls, typeDecl: typeExprs)
+
+macro loop*(arg, body: untyped): untyped =
+  let stmts = toSeq(body.children()).filterIt(it.kind != nnkEmpty)
+  let (iterDecls, typeDecls) = makeIterators(stmts)
+  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcollect"))
   let resType = superQuote do: typeof(`typeExprs[0]`)
 
   let resSeq = superQuote do:
@@ -224,3 +261,8 @@ macro loop*(body: untyped): untyped =
         `collectCalls.newStmtList()`
 
       `endStmt`
+
+
+macro loop1*(body: untyped): untyped =
+  quote do:
+    loop((), `body`)
