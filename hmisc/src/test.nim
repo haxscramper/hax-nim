@@ -1,9 +1,9 @@
 import macros
+import sugar
 import strformat
 import hashes
 import sequtils
 import tables
-import hmisc/hterms
 
 
 when false:
@@ -49,40 +49,76 @@ when false:
   loop [res = all]:
     lfor 12
 
+when false:
+  import hmisc/hterms
+  type
+    Arithm = Term[string, int]
+    ArithmEnv = TermEnv[string, int]
+    ArithmSys = RedSystem[string, int]
 
-type
-  Arithm = Term[string, int]
-  ArithmEnv = TermEnv[string, int]
-  ArithmSys = RedSystem[string, int]
 
+  let mf = makeFunctor[string, int]
+  let mc = makeConstant[string, int]
+  let mp = makePlaceholder[string, int]
+  let mv = makeVariable[string, int]
 
-let mf = makeFunctor[string, int]
-let mc = makeConstant[string, int]
-let mp = makePlaceholder[string, int]
-let mv = makeVariable[string, int]
+  let t1 = Arithm()
+  let t2 = Arithm()
+  var env = ArithmEnv()
+  var sys = ArithmSys()
 
-let t1 = Arithm()
-let t2 = Arithm()
-var env = ArithmEnv()
-var sys = ArithmSys()
+  # A + 0 -> A
+  sys["+".mf(@[mv "A", mc 0])] = mv "A"
 
-# A + 0 -> A
-sys["+".mf(@[mv "A", mc 0])] = mv "A"
+  # A + S(B) -> S(A + B)
+  sys["+".mf(@[mv "A", "S".mf(@[mv "B"])])] =
+    "S".mf(@["+".mf(@[mv "A", mv "B"])])
 
-# A + S(B) -> S(A + B)
-sys["+".mf(@[mv "A", "S".mf(@[mv "B"])])] =
-  "S".mf(@["+".mf(@[mv "A", mv "B"])])
+  # A * 0 -> 0
+  sys["*".mf(@[mv "A", mc 0])] = mc 0
 
-# A * 0 -> 0
-sys["*".mf(@[mv "A", mc 0])] = mc 0
+  # A * S(B) -> A + (A * B)
+  sys["*".mf(@[mv "A", "S".mf(@[mv "B"])])] =
+    "+".mf(@[mv "A", "+".mf(@[mv "A", mv "B"])])
 
-# A * S(B) -> A + (A * B)
-sys["*".mf(@[mv "A", "S".mf(@[mv "B"])])] =
-  "+".mf(@[mv "A", "+".mf(@[mv "A", mv "B"])])
+  let sum = "+".mf(@[
+      "S".mf(@["S".mf(@[mc 0])]),
+      "S".mf(@["S".mf(@[mc 0])])
+    ])
 
-let sum = "+".mf(@[
-    "S".mf(@["S".mf(@[mc 0])]),
-    "S".mf(@["S".mf(@[mc 0])])
+  echo reduce(sum, sys)
+
+when true:
+  import hmisc/hterms_callback
+
+  type
+    Arithm = object
+      case kind: TermKind
+      of tkConstant:
+        val: int
+      of tkVariable:
+        name: string
+      of tkFunctor:
+        sym: string
+        subt: seq[Arithm]
+      of tkPlaceholder:
+        nil
+
+  let impl = TermImpl[Arithm, string, int](
+    getKind: proc(a: Arithm): TermKind = a.kind
+  )
+
+  let s1 = Arithm(kind: tkFunctor, sym: "S", subt: @[
+    Arithm(kind: tkConstant, val: 0)
   ])
 
-echo reduce(sum, sys)
+
+  let s2 = Arithm(kind: tkFunctor, sym: "S", subt: @[
+    Arithm(kind: tkConstant, val: 0)
+  ])
+
+  let rSystem = RedSystem[Arithm](
+    rules: {
+      # Arithm(kind: tkFunctor)
+    }.toTable()
+  )
