@@ -281,7 +281,7 @@ proc reduce*[Obj, VarSym, FunSym, Val](
   term: Obj,
   system: RedSystem[Obj],
   cb: TermImpl[Obj, VarSym, FunSym, Val]
-                ): (Obj, bool) =
+                ): tuple[term: Obj, ok: bool] =
   var tmpTerm = term
   while true:
     var canReduce = false

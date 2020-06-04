@@ -94,11 +94,11 @@ when false:
 import hmisc/hterms_callback
 
 type
-  CaseTreeTerm[Tree, Enum] = object
+  CaseTerm[Tree, Enum] = object
     case tkind: TermKind
       of tkFunctor:
         functor: Enum
-        sons: seq[CaseTreeTerm[Tree, Enum]]
+        sons: seq[CaseTerm[Tree, Enum]]
       of tkConstant:
         value: Tree
       of tkVariable:
@@ -109,13 +109,13 @@ type
 proc makeImpl[Tree, Enum](
   # constantType, functorType: set[Enum],
   # kindField: untyped,
-                            ): TermImpl[CaseTreeTerm[Tree, Enum], string, Enum, Tree] =
+                            ): TermImpl[CaseTerm[Tree, Enum], string, Enum, Tree] =
   # TODO check for disjoint sets
-  TermImpl[CaseTreeTerm[Tree, Enum], string, Enum, Tree](
+  TermImpl[CaseTerm[Tree, Enum], string, Enum, Tree](
     getKind: (
       # Return type of the term based on it's wrapper kind *and*
       # content's kind.
-      proc(t: CaseTreeTerm[Tree, Enum]): TermKind = t.tkind
+      proc(t: CaseTerm[Tree, Enum]): TermKind = t.tkind
         # case t.tkind:
         #   of tkVariable, tkPlaceholder:
         #     return t.tkind
@@ -128,37 +128,37 @@ proc makeImpl[Tree, Enum](
         #       assert false, "Missing value in constant/functor sets: " & $t.content.kindField
     ),
     setNth: (
-      proc(self: var CaseTreeTerm[Tree, Enum], idx: int, value: CaseTreeTerm[Tree, Enum]): void =
+      proc(self: var CaseTerm[Tree, Enum], idx: int, value: CaseTerm[Tree, Enum]): void =
         self.sons[idx] = value
     ),
     getNth: (
-      proc(self: CaseTreeTerm[Tree, Enum], idx: int): auto = self.sons[idx]
+      proc(self: CaseTerm[Tree, Enum], idx: int): auto = self.sons[idx]
     ),
     getNthMod: (
-      proc(self: var CaseTreeTerm[Tree, Enum], idx: int): var CaseTreeTerm[Tree, Enum] =
+      proc(self: var CaseTerm[Tree, Enum], idx: int): var CaseTerm[Tree, Enum] =
         self.sons[idx]
     ),
     getVName: (
-      proc(self: CaseTreeTerm[Tree, Enum]): string = self.name
+      proc(self: CaseTerm[Tree, Enum]): string = self.name
     ),
     getFSym: (
-      proc(self: CaseTreeTerm[Tree, Enum]): Enum = self.functor
+      proc(self: CaseTerm[Tree, Enum]): Enum = self.functor
     ),
     getSubt: (
-      proc(self: CaseTreeTerm[Tree, Enum]): seq[CaseTreeTerm[Tree, Enum]] =
+      proc(self: CaseTerm[Tree, Enum]): seq[CaseTerm[Tree, Enum]] =
         self.sons
     ),
     setSubt: (
-      proc(self: var CaseTreeTerm[Tree, Enum], subt: seq[CaseTreeTerm[Tree, Enum]]): void =
+      proc(self: var CaseTerm[Tree, Enum], subt: seq[CaseTerm[Tree, Enum]]): void =
         self.sons = subt
     ),
     getValue: (
-      proc(self: CaseTreeTerm[Tree, Enum]): Tree =
+      proc(self: CaseTerm[Tree, Enum]): Tree =
         self.value
     ),
 
     unifCheck: (
-      proc(self, other: CaseTreeTerm[Tree, Enum]): bool =
+      proc(self, other: CaseTerm[Tree, Enum]): bool =
         self.tkind == other.tkind and
         (
           block:
@@ -170,21 +170,21 @@ proc makeImpl[Tree, Enum](
     ),
 
     makePlaceholder: (
-      proc(): CaseTreeTerm[Tree, Enum] = CaseTreeTerm[Tree, Enum](
+      proc(): CaseTerm[Tree, Enum] = CaseTerm[Tree, Enum](
         tkind: tkPlaceholder
       )
     ),
     makeConstant: (
-      proc(val: Tree): CaseTreeTerm[Tree, Enum] =
-        CaseTreeTerm[Tree, Enum](tkind: tkConstant, value: val)
+      proc(val: Tree): CaseTerm[Tree, Enum] =
+        CaseTerm[Tree, Enum](tkind: tkConstant, value: val)
     ),
     makeVariable: (
-      proc(name: string): CaseTreeTerm[Tree, Enum] =
-        CaseTreeTerm[Tree, Enum](tkind: tkVariable, name: name)
+      proc(name: string): CaseTerm[Tree, Enum] =
+        CaseTerm[Tree, Enum](tkind: tkVariable, name: name)
     ),
     makeFunctor: (
-      proc(sym: Enum, subt: seq[CaseTreeTerm[Tree, Enum]]): CaseTreeTerm[Tree, Enum] =
-        CaseTreeTerm[Tree, Enum](tkind: tkFunctor, functor: sym, sons: subt)
+      proc(sym: Enum, subt: seq[CaseTerm[Tree, Enum]]): CaseTerm[Tree, Enum] =
+        CaseTerm[Tree, Enum](tkind: tkFunctor, functor: sym, sons: subt)
     )
   )
 
@@ -192,13 +192,13 @@ template defineToTermProc[Tree, Enum](
   kindField, sonsField: untyped,
   functorKinds, constantKinds: set[Enum]
                                     ): untyped =
-  proc toTerm(tree: Tree): CaseTreeTerm[Tree, Enum] =
+  proc toTerm(tree: Tree): CaseTerm[Tree, Enum] =
     if tree.kindField in constantKinds:
-      return CaseTreeTerm[Tree, Enum](
+      return CaseTerm[Tree, Enum](
         tkind: tkConstant, value: tree
       )
     elif tree.kindField in functorKinds:
-      return CaseTreeTerm[Tree, Enum](
+      return CaseTerm[Tree, Enum](
         tkind: tkFunctor, sons: tree.sonsField.mapIt(it.toTerm())
       )
     else:
@@ -206,7 +206,7 @@ template defineToTermProc[Tree, Enum](
         $tree.kindField & " is not in functor/constant sets"
 
 template defineFromTermProc[Tree, Enum](kindField, sonsField: untyped): untyped =
-  proc fromTerm(term: CaseTreeTerm[Tree, Enum]): Tree =
+  proc fromTerm(term: CaseTerm[Tree, Enum]): Tree =
     assert term.tkind in {tkFunctor, tkConstant},
        "Cannot convert under-substituted term back to tree. " &
          $term.tkind & " has to be replaced with valu"
@@ -219,7 +219,7 @@ template defineFromTermProc[Tree, Enum](kindField, sonsField: untyped): untyped 
     else:
       result = term.value
 
-proc hash[Tree, Enum](a: CaseTreeTerm[Tree, Enum]): Hash =
+proc hash[Tree, Enum](a: CaseTerm[Tree, Enum]): Hash =
   # static:
   #   assert compiles(hash(Tree)), "No hash implementation exists for" & $Tree
 
@@ -231,7 +231,7 @@ proc hash[Tree, Enum](a: CaseTreeTerm[Tree, Enum]): Hash =
     of tkFunctor: h = h !& hash(a.functor)
     of tkPlaceholder: discard
 
-proc `==`[Tree, Enum](lhs, rhs: CaseTreeTerm[Tree, Enum]): bool =
+proc `==`[Tree, Enum](lhs, rhs: CaseTerm[Tree, Enum]): bool =
   lhs.tkind == rhs.tkind and (
     case lhs.tkind:
       of tkConstant: lhs.value == rhs.value
@@ -258,20 +258,20 @@ template defineTermSystemFor[Tree, Enum](
     assert compiles(Tree == Tree), "Missing implementation of `== `for " & $typeof(Tree)
 
 
-  proc toTerm(tree: Tree): CaseTreeTerm[Tree, Enum] =
+  proc toTerm(tree: Tree): CaseTerm[Tree, Enum] =
     if tree.kindField in constantKinds:
-      return CaseTreeTerm[Tree, Enum](
+      return CaseTerm[Tree, Enum](
         tkind: tkConstant, value: tree
       )
     elif tree.kindField in functorKinds:
-      return CaseTreeTerm[Tree, Enum](
+      return CaseTerm[Tree, Enum](
         tkind: tkFunctor, sons: tree.sonsField.mapIt(it.toTerm())
       )
     else:
       assert false, $typeof(Tree) & " cannot be converted to CaseTermTree. Kind " &
         $tree.kindField & " is not in functor/constant sets"
 
-  proc fromTerm(term: CaseTreeTerm[Tree, Enum]): Tree =
+  proc fromTerm(term: CaseTerm[Tree, Enum]): Tree =
     assert term.tkind in {tkFunctor, tkConstant},
        "Cannot convert under-substituted term back to tree. " &
          $term.tkind & " has to be replaced with valu"
@@ -299,7 +299,7 @@ type
     akCondition
 
   Ast = object
-    case nodeKind: AstKind
+    case kind: AstKind
     of akStrLit, akIdent:
       strVal: string
     of akIntLit:
@@ -309,33 +309,43 @@ type
 
 proc hash(a: Ast): Hash =
   var h: Hash = 0
-  h = h !& hash(a.nodeKind)
+  h = h !& hash(a.kind)
 
 proc `==`(lhs, rhs: Ast): bool =
-  lhs.nodeKind == rhs.nodeKind and
+  lhs.kind == rhs.kind and
   (
-    case lhs.nodeKind:
+    case lhs.kind:
       of akStrLit, akIdent: lhs.strVal == rhs.strVal
       of akIntLit: lhs.intVal == rhs.intVal
       else: subnodesEq(lhs, rhs, sons)
   )
 
 defineTermSystemFor[Ast, AstKind](
-    kindField = nodeKind,
+    kindField = kind,
     sonsField = sons,
     implName = astImpl,
     functorKinds = {akCall .. akCondition},
     constantKinds = {akStrLit .. akIdent}
 )
 
-let rSystem = RedSystem[CaseTreeTerm[Ast, AstKind]](
+let rSystem = RedSystem[CaseTerm[Ast, AstKind]](
 
 )
 
-let obj = Ast()
+let obj = Ast(kind: akCall, sons: @[
+  Ast(kind: akIdent, strVal: "someFunc"),
+  Ast(kind: akIntLit, intVal: 9000)
+])
 
 let res = reduce(
-  obj.toTerm(),
+  obj.toTerm(
+
+  ),
   rSystem,
   astImpl
 )
+
+if res.ok:
+  echo res.term.fromTerm()
+else:
+  echo "res not ok"
