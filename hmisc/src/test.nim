@@ -265,7 +265,7 @@ template defineTermSystemFor[Tree, Enum](
       )
     elif tree.kindField in functorKinds:
       return CaseTerm[Tree, Enum](
-        tkind: tkFunctor, sons: tree.sonsField.mapIt(it.toTerm())
+        tkind: tkFunctor, functor: tree.kindField, sons: tree.sonsField.mapIt(it.toTerm())
       )
     else:
       assert false, $typeof(Tree) & " cannot be converted to CaseTermTree. Kind " &
@@ -328,19 +328,27 @@ defineTermSystemFor[Ast, AstKind](
     constantKinds = {akStrLit .. akIdent}
 )
 
-let rSystem = RedSystem[CaseTerm[Ast, AstKind]](
+type
+  AstTerm = CaseTerm[Ast, AstKind]
 
-)
+let rSystem = RedSystem[CaseTerm[Ast, AstKind]](rules: @[(
+    AstTerm(tkind: tkFunctor, functor: akCall, sons: @[
+      AstTerm(tkind: tkConstant, value: Ast(kind: akIdent, strVal: "someFunc")),
+      AstTerm(tkind: tkConstant, value: Ast(kind: akIntLit, intVal: 9000))
+    ]).makePattern()
+    ,
+    AstTerm(tkind: tkConstant, value: Ast(kind: akStrLit, strVal: "Hello 9000")).makeGenerator()
+)])
 
 let obj = Ast(kind: akCall, sons: @[
   Ast(kind: akIdent, strVal: "someFunc"),
   Ast(kind: akIntLit, intVal: 9000)
 ])
 
-let res = reduce(
-  obj.toTerm(
+# echo obj.toTerm()
 
-  ),
+let res = reduce(
+  obj.toTerm(),
   rSystem,
   astImpl
 )

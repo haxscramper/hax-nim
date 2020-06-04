@@ -303,6 +303,10 @@ proc reduce*[Obj, VarSym, FunSym, Val](
           else:
             return (tmpTerm, true)
 
+        # else:
+        #   echo redex
+        #   echo "unification failed"
+
     if not canReduce:
       result[0] = tmpTerm
       break
