@@ -5,7 +5,6 @@ import hashes, sequtils, tables, strformat, strutils
 import helpers, deques
 
 type
-  UnifFailure* = ref object of CatchableError
   TermKind* = enum
     tkVariable
     tkFunctor
@@ -42,7 +41,7 @@ type
     of true:
       patt*: Obj
     of false:
-      matcher*: proc(test: Obj): TermEnv[Obj]
+      matcher*: proc(test: Obj): Option[TermEnv[Obj]]
 
   RulePair*[Obj] = tuple[
       rule: TermMatcher[Obj],
@@ -60,7 +59,7 @@ proc assertCorrect*[Obj, Sym, Val](impl: TermImpl[Obj, Sym, Val]): void =
 proc makePattern*[Obj](obj: Obj): TermMatcher[Obj] =
   TermMatcher[Obj](patt: obj, isPattern: true)
 
-proc makeMatcher*[Obj](matcher: proc(test: Obj): TermEnv[Obj]): TermMatcher[Obj] =
+proc makeMatcher*[Obj](matcher: proc(test: Obj): Option[TermEnv[Obj]]): TermMatcher[Obj] =
   TermMatcher[Obj](isPattern: false, matcher: matcher)
 
 proc makeGenerator*[Obj](obj: Obj): proc(env: TermEnv[Obj]): Obj =
@@ -182,7 +181,7 @@ proc unif*[Obj, Sym, Val](
   t1, t2: Obj,
   cb: TermImpl[Obj, Sym, Val],
   env: TermEnv[Obj] = makeEnvironment[Obj]()
-    ): TermEnv[Obj] =
+    ): Option[TermEnv[Obj]] =
   let
     val1 = dereference(t1, env, cb)
     val2 = dereference(t2, env, cb)
@@ -191,23 +190,28 @@ proc unif*[Obj, Sym, Val](
 
   if k1 == tkConstant and k2 == tkConstant:
     if val1 == val2:
-      return env
+      return some(env)
     else:
-      raise UnifFailure(msg: "Unification failed: different constants")
+      return none(TermEnv[Obj])
   elif k1 == tkVariable:
-    return bindTerm(val1, val2, env, cb)
+    return some(bindTerm(val1, val2, env, cb))
   elif k2 == tkVariable:
-    return bindTerm(val2, val1, env, cb)
+    return some(bindTerm(val2, val1, env, cb))
   elif (k1, k2) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
-    raise UnifFailure(msg: "Cannot unify consant and functor")
+    return none(TermEnv[Obj])
   else:
-    result = env
+    var tmpRes = env
     if cb.getTSym(val1) != cb.getTSym(val2):
-      raise UnifFailure(
-        msg: &"Cannot unify functors with different names '{t1}' and '{t2}'")
+      return none(TermEnv[Obj])
 
     for (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
-      result = unif(arg1, arg2, cb, result)
+      let res = unif(arg1, arg2, cb, tmpRes)
+      if res.isSome():
+        tmpRes = res.get()
+      else:
+        return none(TermEnv[Obj])
+
+    return some(tmpRes)
 
 # proc match*[Obj](t1, t2: Term): TermEnv[Obj] =
 #   case t1.kind:
@@ -283,11 +287,13 @@ proc reduce*[Obj, Sym, Val](
     var canReduce = false
     for (redex, path) in tmpTerm.redexes(cb):
       for lhs, gen in system:
-        try:
-          let newEnv: TermEnv[Obj] =
-            case lhs.isPattern:
-              of true: unif(lhs.patt, redex, cb)
-              of false: lhs.matcher(redex)
+        let unifRes: Option[TermEnv[Obj]] =
+          case lhs.isPattern:
+            of true: unif(lhs.patt, redex, cb)
+            of false: lhs.matcher(redex)
+
+        if unifRes.isSome():
+          let newEnv = unifRes.get()
 
           let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
           setAtPath(tmpTerm, path, tmpNew, cb)
@@ -296,8 +302,6 @@ proc reduce*[Obj, Sym, Val](
             result[1] = true
           else:
             return (tmpTerm, true)
-        except UnifFailure:
-          discard
 
     if not canReduce:
       result[0] = tmpTerm

@@ -1,4 +1,5 @@
 import macros
+import options
 import strutils
 import hmisc/halgorithm
 import sugar
@@ -146,7 +147,7 @@ proc `==`(lhs, rhs: Arithm): bool =
   )
 
 
-if false:
+if true:
   let s1 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
     Arithm(tkind: tkConstant, tval: 0)
   ])
@@ -195,9 +196,8 @@ if false:
 
       (
         makeMatcher(
-          proc(t: Arithm): TermEnv[Arithm] =
+          proc(t: Arithm): Option[TermEnv[Arithm]] =
             echo "testing ", t
-            raise UnifFailure(msg: "Test")
         ) , (
           proc(env: TermEnv[Arithm]): Arithm {.closure.} = discard
         )
