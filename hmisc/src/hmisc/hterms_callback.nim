@@ -265,9 +265,10 @@ proc reduce*[Obj, Sym, Val](
           let tmpNew = rhs.substitute(newEnv, cb)
           # echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
           # echo "with: ", newEnv
-          tmpTerm[path] = tmpNew
+          setAtPath(tmpTerm, path, tmpNew, cb)
+          # tmpTerm[path] = tmpNew
           # tmpTerm = tmpNew
-          if tmpTerm.kind notin {tkVariable, tkConstant}:
+          if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
             canReduce = true
             result[1] = true
           else:
