@@ -20,7 +20,7 @@ type
     getNthMod*: proc(self: var Obj, idx: int): var Obj
 
     getVName*: proc(self: Obj): VarSym
-    getTsym*: proc(self: Obj): FunSym # XXX change to `getFSym`
+    getFSym*: proc(self: Obj): FunSym # XXX change to `getFSym`
     getSubt*: proc(self: Obj): seq[Obj]
     setSubt*: proc(self: var Obj, subt: seq[Obj]): void
     getValue*: proc(self: Obj): Val

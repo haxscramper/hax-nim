@@ -90,3 +90,121 @@ when false:
     ])
 
   echo reduce(sum, sys)
+
+import hmisc/hterms_callback
+
+type
+  CaseTreeTerm[Tree, Enum] = object
+    case tkind: TermKind
+      of tkFunctor:
+        functor: Enum
+        sons: seq[CaseTreeTerm[Tree, Enum]]
+      of tkConstant:
+        value: Tree
+      of tkVariable:
+        name: string
+      of tkPlaceholder:
+        nil
+
+template makeImpl[Tree, Enum](
+  # constantType, functorType: set[Enum],
+  # kindField: untyped,
+                            ): TermImpl[CaseTreeTerm[Tree, Enum], string, Enum, Tree] =
+  # TODO check for disjoint sets
+  TermImpl[CaseTreeTerm[Tree, Enum], string, Enum, Tree](
+    getKind: (
+      # Return type of the term based on it's wrapper kind *and*
+      # content's kind.
+      proc(t: CaseTreeTerm[Tree, Enum]): TermKind = t.tkind
+        # case t.tkind:
+        #   of tkVariable, tkPlaceholder:
+        #     return t.tkind
+        #   of tkFunctor, tkConstant:
+        #     if t.content.kindField in constantType:
+        #       return tkConstant
+        #     elif t.content.kindField in functorType:
+        #       return tkFunctor
+        #     else:
+        #       assert false, "Missing value in constant/functor sets: " & $t.content.kindField
+    ),
+    setNth: (
+      proc(self: var CaseTreeTerm[Tree, Enum], idx: int, value: CaseTreeTerm[Tree, Enum]): void =
+        self.sons[idx] = value
+    ),
+    getNth: (
+      proc(self: CaseTreeTerm[Tree, Enum], idx: int): auto = self.sons[idx]
+    ),
+    getNthMod: (
+      proc(self: var CaseTreeTerm[Tree, Enum], idx: int): var CaseTreeTerm[Tree, Enum] =
+        self.sons[idx]
+    ),
+    getVName: (
+      proc(self: CaseTreeTerm[Tree, Enum]): string = self.name
+    ),
+    getFSym: (
+      proc(self: CaseTreeTerm[Tree, Enum]): Enum = self.functor
+    ),
+    getSubt: (
+      proc(self: CaseTreeTerm[Tree, Enum]): seq[CaseTreeTerm[Tree, Enum]] =
+        self.sons
+    ),
+    setSubt: (
+      proc(self: var CaseTreeTerm[Tree, Enum], subt: seq[CaseTreeTerm[Tree, Enum]]): void =
+        self.sons = subt
+    ),
+    getValue: (
+      proc(self: CaseTreeTerm[Tree, Enum]): Tree =
+        self.value
+    ),
+
+    unifCheck: (
+      proc(self, other: CaseTreeTerm[Tree, Enum]): bool =
+        self.tkind == other.tkind and
+        (
+          block:
+            if self.tkind == tkFunctor:
+              self.functor == other.functor
+            else:
+              true
+        )
+    ),
+
+    makePlaceholder: (
+      proc(): CaseTreeTerm[Tree, Enum] = CaseTreeTerm[Tree, Enum](
+        tkind: tkPlaceholder
+      )
+    ),
+    makeConstant: (
+      proc(val: Tree): CaseTreeTerm[Tree, Enum] =
+        CaseTreeTerm[Tree, Enum](tkind: tkConstant, value: val)
+    ),
+    makeVariable: (
+      proc(name: string): CaseTreeTerm[Tree, Enum] =
+        CaseTreeTerm[Tree, Enum](tkind: tkVariable, name: name)
+    ),
+    makeFunctor: (
+      proc(sym: Enum, subt: seq[CaseTreeTerm[Tree, Enum]]): CaseTreeTerm[Tree, Enum] =
+        CaseTreeTerm[Tree, Enum](tkind: tkFunctor, functor: sym, sons: subt)
+    )
+  )
+
+
+type
+  AstKind = enum
+    akStrLit
+    akIntLit
+    akIdent
+
+    akCall
+    akCondition
+
+  Ast = object
+    case nodeKind: AstKind
+    of akStrLit, akIdent:
+      strVal: string
+    of akIntLit:
+      intVal: int
+    else:
+      sons: seq[Ast]
+
+let impl = makeImpl[Ast, AstKind]()
