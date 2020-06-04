@@ -1,4 +1,5 @@
 import macros
+import strutils
 import hmisc/halgorithm
 import sugar
 import strformat
@@ -115,6 +116,25 @@ when true:
       of tkPlaceholder: discard
 
 
+  proc `$`*(term: Arithm): string =
+    case term.tkind:
+      of tkConstant:
+        "'" & $term.tval & "'"
+      of tkVariable:
+        "_" & $term.tname
+      of tkFunctor:
+        if ($term.tsym).validIdentifier():
+          $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
+        else:
+          case term.tsubt.len():
+            of 1: &"{term.tsym}({term.tsubt[0]})"
+            of 2: &"{term.tsubt[0]} {term.tsym} {term.tsubt[1]}"
+            else:
+              $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
+      of tkPlaceholder:
+        "_"
+
+
   proc `==`(lhs, rhs: Arithm): bool =
     lhs.tkind == rhs.tkind and (
       case lhs.tkind:
@@ -159,52 +179,82 @@ when true:
   assertCorrect(cb)
 
   let rSystem = RedSystem[Arithm](
-    rules: {
+    # NOTE this madness is intended to be generated from some kind of
+    # DSL, not written by hand.
+    rules: @[
       # A + 0 -> A
-      Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
-          Arithm(tkind: tkVariable, tname: "A"),
-          Arithm(tkind: tkConstant, tval: 0)
-        ])
-      :
-      Arithm(tkind: tkVariable, tname: "A"),
+      (
+        (
+          Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+            Arithm(tkind: tkVariable, tname: "A"),
+            Arithm(tkind: tkConstant, tval: 0)
+          ]).makePattern()
+        ) , (
+          Arithm(tkind: tkVariable, tname: "A").makeGenerator()
+        )
+      ),
+
+      (
+        makeMatcher(
+          proc(t: Arithm): TermEnv[Arithm] =
+            echo "testing ", t
+            raise UnifFailure(msg: "Test")
+        ) , (
+          proc(env: TermEnv[Arithm]): Arithm {.closure.} = discard
+        )
+      ),
 
       # A + S(B) -> S(A + B)
-      Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
-        Arithm(tkind: tkVariable, tname: "A"),
-        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-          Arithm(tkind: tkVariable, tname: "B")
-        ])
-      ]) :
-      Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-        Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
-          Arithm(tkind: tkVariable, tname: "A"),
-          Arithm(tkind: tkVariable, tname: "B")
-        ])
-      ]),
+      (
+        (
+          Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+            Arithm(tkind: tkVariable, tname: "A"),
+            Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+              Arithm(tkind: tkVariable, tname: "B")
+            ])
+          ]).makePattern()
+        ) , (
+          Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+            Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+              Arithm(tkind: tkVariable, tname: "A"),
+              Arithm(tkind: tkVariable, tname: "B")
+            ])
+          ]).makeGenerator()
+        )
+      ),
 
       # A * 0 -> 0
-      Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
-          Arithm(tkind: tkVariable, tname: "A"),
-          Arithm(tkind: tkConstant, tval: 0)
-        ])
-      :
-      Arithm(tkind: tkConstant, tval: 0),
+      (
+        (
+          Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+            Arithm(tkind: tkVariable, tname: "A"),
+            Arithm(tkind: tkConstant, tval: 0)
+          ]).makePattern()
+        ) , (
+          Arithm(tkind: tkConstant, tval: 0).makeGenerator()
+        )
+      ),
 
       # A * S(B) -> A + (A * B)
-      Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
-        Arithm(tkind: tkVariable, tname: "A"),
-        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-          Arithm(tkind: tkVariable, tname: "B")
-        ])
-      ]) :
-      Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
-        Arithm(tkind: tkVariable, tname: "A"),
-        Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
-          Arithm(tkind: tkVariable, tname: "A"),
-          Arithm(tkind: tkVariable, tname: "B")
-        ])
-      ])
-    }.toTable()
+      (
+        (
+          Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+            Arithm(tkind: tkVariable, tname: "A"),
+            Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+              Arithm(tkind: tkVariable, tname: "B")
+            ])
+          ]).makePattern()
+        ) , (
+          Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+            Arithm(tkind: tkVariable, tname: "A"),
+            Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+              Arithm(tkind: tkVariable, tname: "A"),
+              Arithm(tkind: tkVariable, tname: "B")
+            ])
+          ]).makeGenerator()
+        )
+      )
+    ]
   )
 
   echo reduce(

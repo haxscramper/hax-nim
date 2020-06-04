@@ -5,7 +5,7 @@ import hashes, sequtils, tables, strformat, strutils
 import helpers, deques
 
 type
-  Failure* = ref object of CatchableError
+  UnifFailure* = ref object of CatchableError
   TermKind* = enum
     tkVariable
     tkFunctor
@@ -37,12 +37,35 @@ type
   TermEnv*[Obj] = object
     values*: Table[Obj, Obj]
 
+  TermMatcher*[Obj] = object
+    case isPattern: bool
+    of true:
+      patt*: Obj
+    of false:
+      matcher*: proc(test: Obj): TermEnv[Obj]
+
+  RulePair*[Obj] = tuple[
+      rule: TermMatcher[Obj],
+      gen: proc(env: TermEnv[Obj]): Obj
+    ]
+
   RedSystem*[Obj] = object
-    rules*: Table[Obj, Obj]
+    rules*: seq[RulePair[Obj]]
+    # rules*: Table[Obj, Obj]
 
 proc assertCorrect*[Obj, Sym, Val](impl: TermImpl[Obj, Sym, Val]): void =
   for name, value in impl.fieldPairs():
     assert (not value.isNil()), name & " cannot be nil"
+
+proc makePattern*[Obj](obj: Obj): TermMatcher[Obj] =
+  TermMatcher[Obj](patt: obj, isPattern: true)
+
+proc makeMatcher*[Obj](matcher: proc(test: Obj): TermEnv[Obj]): TermMatcher[Obj] =
+  TermMatcher[Obj](isPattern: false, matcher: matcher)
+
+proc makeGenerator*[Obj](obj: Obj): proc(env: TermEnv[Obj]): Obj =
+  return proc(env: TermEnv[Obj]): Obj =
+    return obj
 
 proc makeEnvironment*[Obj](values: seq[(Obj, Obj)] = @[]): TermEnv[Obj] =
   ## Create new environment using `values` as initial binding values
@@ -59,13 +82,13 @@ proc `[]=`*[Obj](system: var RedSystem[Obj], lhs, rhs: Obj): void =
 proc `[]=`*[Obj](env: var TermEnv[Obj], variable, value: Obj): void =
   env.values[variable] = value
 
-iterator pairs*[Obj](system: RedSystem[Obj]): tuple[lhs, rhs: Obj] =
-  for lhs, rhs in system.rules:
-    yield (lhs, rhs)
+iterator pairs*[Obj](system: RedSystem[Obj]): RulePair[Obj] =
+  for pair in system.rules:
+    yield pair
 
 
-iterator pairs*[Obj](env: TermEnv[Obj]): tuple[lhs, rhs: Obj] =
-  for lhs, rhs in env.values:
+iterator pairs*[Obj](env: TermEnv[Obj]): RulePair[Obj] =
+  for (lhs, rhs) in env.values:
     yield (lhs, rhs)
 
 # func `==`*[Obj](t1, t2: Obj): bool =
@@ -170,17 +193,17 @@ proc unif*[Obj, Sym, Val](
     if val1 == val2:
       return env
     else:
-      raise Failure(msg: "Unification failed: different constants")
+      raise UnifFailure(msg: "Unification failed: different constants")
   elif k1 == tkVariable:
     return bindTerm(val1, val2, env, cb)
   elif k2 == tkVariable:
     return bindTerm(val2, val1, env, cb)
   elif (k1, k2) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
-    raise Failure(msg: "Cannot unify consant and functor")
+    raise UnifFailure(msg: "Cannot unify consant and functor")
   else:
     result = env
     if cb.getTSym(val1) != cb.getTSym(val2):
-      raise Failure(
+      raise UnifFailure(
         msg: &"Cannot unify functors with different names '{t1}' and '{t2}'")
 
     for (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
@@ -259,21 +282,21 @@ proc reduce*[Obj, Sym, Val](
   while true:
     var canReduce = false
     for (redex, path) in tmpTerm.redexes(cb):
-      for lhs, rhs in system:
+      for lhs, gen in system:
         try:
-          let newEnv = unif(lhs, redex, cb)
-          let tmpNew = rhs.substitute(newEnv, cb)
-          # echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
-          # echo "with: ", newEnv
+          let newEnv: TermEnv[Obj] =
+            case lhs.isPattern:
+              of true: unif(lhs.patt, redex, cb)
+              of false: lhs.matcher(redex)
+
+          let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
           setAtPath(tmpTerm, path, tmpNew, cb)
-          # tmpTerm[path] = tmpNew
-          # tmpTerm = tmpNew
           if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
             canReduce = true
             result[1] = true
           else:
             return (tmpTerm, true)
-        except Failure:
+        except UnifFailure:
           discard
 
     if not canReduce:
