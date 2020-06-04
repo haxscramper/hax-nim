@@ -1,4 +1,5 @@
 import macros
+import hmisc/halgorithm
 import sugar
 import strformat
 import hashes
@@ -105,10 +106,26 @@ when true:
         nil
 
   proc hash(a: Arithm): Hash =
-    discard
+    var h: Hash = 0
+    h = h !& hash(a.tkind)
+    case a.tkind:
+      of tkVariable: h = h !& hash(a.tname)
+      of tkConstant: h = h !& hash(a.tval)
+      of tkFunctor: h = h !& hash(a.tsym)
+      of tkPlaceholder: discard
 
-  proc `==`(lsh, rhs: Arithm): bool =
-    discard
+
+  proc `==`(lhs, rhs: Arithm): bool =
+    lhs.tkind == rhs.tkind and (
+      case lhs.tkind:
+        of tkConstant: lhs.tval == rhs.tval
+        of tkVariable: lhs.tname == rhs.tname
+        of tkFunctor:
+          lhs.tsym == rhs.tsym and
+          zip(lhs.tsubt, rhs.tsubt).allOfIt(it[0] == it[1])
+        of tkPlaceholder:
+          true
+    )
 
 
   let s1 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
@@ -194,10 +211,14 @@ when true:
     # S(0) + S(0)
     Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
       Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-        Arithm(tkind: tkConstant, tval: 0)
+        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+          Arithm(tkind: tkConstant, tval: 0)
+        ]),
       ]),
       Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-        Arithm(tkind: tkConstant, tval: 0)
+        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+          Arithm(tkind: tkConstant, tval: 0)
+        ]),
       ])
     ]),
     rSystem,

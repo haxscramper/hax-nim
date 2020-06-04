@@ -124,6 +124,16 @@ template twoPassSortByIt*(
 
   secondSorted
 
+template allOfIt*(s: untyped, op: untyped): bool =
+  var res = true
+  for it {.inject.} in s:
+    if not op:
+      res = false
+      break
+
+  res
+
+
 when isMainModule:
   echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
 
