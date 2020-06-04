@@ -90,64 +90,63 @@ when false:
 
   echo reduce(sum, sys)
 
-when true:
-  import hmisc/hterms_callback
+import hmisc/hterms_callback
 
-  type
-    Arithm = object
-      case tkind: TermKind
-      of tkConstant:
-        tval: int
-      of tkVariable:
-        tname: string
+type
+  Arithm = object
+    case tkind: TermKind
+    of tkConstant:
+      tval: int
+    of tkVariable:
+      tname: string
+    of tkFunctor:
+      tsym: string
+      tsubt: seq[Arithm]
+    of tkPlaceholder:
+      nil
+
+proc hash(a: Arithm): Hash =
+  var h: Hash = 0
+  h = h !& hash(a.tkind)
+  case a.tkind:
+    of tkVariable: h = h !& hash(a.tname)
+    of tkConstant: h = h !& hash(a.tval)
+    of tkFunctor: h = h !& hash(a.tsym)
+    of tkPlaceholder: discard
+
+
+proc `$`*(term: Arithm): string =
+  case term.tkind:
+    of tkConstant:
+      "'" & $term.tval & "'"
+    of tkVariable:
+      "_" & $term.tname
+    of tkFunctor:
+      if ($term.tsym).validIdentifier():
+        $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
+      else:
+        case term.tsubt.len():
+          of 1: &"{term.tsym}({term.tsubt[0]})"
+          of 2: &"{term.tsubt[0]} {term.tsym} {term.tsubt[1]}"
+          else:
+            $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
+    of tkPlaceholder:
+      "_"
+
+proc `==`(lhs, rhs: Arithm): bool =
+  lhs.tkind == rhs.tkind and (
+    case lhs.tkind:
+      of tkConstant: lhs.tval == rhs.tval
+      of tkVariable: lhs.tname == rhs.tname
       of tkFunctor:
-        tsym: string
-        tsubt: seq[Arithm]
+        lhs.tsym == rhs.tsym and
+        zip(lhs.tsubt, rhs.tsubt).allOfIt(it[0] == it[1])
       of tkPlaceholder:
-        nil
-
-  proc hash(a: Arithm): Hash =
-    var h: Hash = 0
-    h = h !& hash(a.tkind)
-    case a.tkind:
-      of tkVariable: h = h !& hash(a.tname)
-      of tkConstant: h = h !& hash(a.tval)
-      of tkFunctor: h = h !& hash(a.tsym)
-      of tkPlaceholder: discard
+        true
+  )
 
 
-  proc `$`*(term: Arithm): string =
-    case term.tkind:
-      of tkConstant:
-        "'" & $term.tval & "'"
-      of tkVariable:
-        "_" & $term.tname
-      of tkFunctor:
-        if ($term.tsym).validIdentifier():
-          $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
-        else:
-          case term.tsubt.len():
-            of 1: &"{term.tsym}({term.tsubt[0]})"
-            of 2: &"{term.tsubt[0]} {term.tsym} {term.tsubt[1]}"
-            else:
-              $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
-      of tkPlaceholder:
-        "_"
-
-
-  proc `==`(lhs, rhs: Arithm): bool =
-    lhs.tkind == rhs.tkind and (
-      case lhs.tkind:
-        of tkConstant: lhs.tval == rhs.tval
-        of tkVariable: lhs.tname == rhs.tname
-        of tkFunctor:
-          lhs.tsym == rhs.tsym and
-          zip(lhs.tsubt, rhs.tsubt).allOfIt(it[0] == it[1])
-        of tkPlaceholder:
-          true
-    )
-
-
+if false:
   let s1 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
     Arithm(tkind: tkConstant, tval: 0)
   ])
