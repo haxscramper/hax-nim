@@ -145,7 +145,7 @@ proc copy*[Obj, VarSym, FunSym, Val](
         resEnv = tmpEnv
         subterms.add tmpArg
 
-      return (cb.makeFunctor(cb.getTSym(term), subterms), resEnv)
+      return (cb.makeFunctor(cb.getFSym(term), subterms), resEnv)
 
     of tkPlaceholder:
       return (term, inputEnv)
@@ -201,7 +201,7 @@ proc unif*[Obj, VarSym, FunSym, Val](
     return none(TermEnv[Obj])
   else:
     var tmpRes = env
-    if cb.getTSym(val1) != cb.getTSym(val2):
+    if cb.getFSym(val1) != cb.getFSym(val2):
       return none(TermEnv[Obj])
 
     for (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):

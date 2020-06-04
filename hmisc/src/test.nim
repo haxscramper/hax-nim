@@ -106,7 +106,7 @@ type
       of tkPlaceholder:
         nil
 
-template makeImpl[Tree, Enum](
+proc makeImpl[Tree, Enum](
   # constantType, functorType: set[Enum],
   # kindField: untyped,
                             ): TermImpl[CaseTreeTerm[Tree, Enum], string, Enum, Tree] =
@@ -188,13 +188,113 @@ template makeImpl[Tree, Enum](
     )
   )
 
+template defineToTermProc[Tree, Enum](
+  kindField, sonsField: untyped,
+  functorKinds, constantKinds: set[Enum]
+                                    ): untyped =
+  proc toTerm(tree: Tree): CaseTreeTerm[Tree, Enum] =
+    if tree.kindField in constantKinds:
+      return CaseTreeTerm[Tree, Enum](
+        tkind: tkConstant, value: tree
+      )
+    elif tree.kindField in functorKinds:
+      return CaseTreeTerm[Tree, Enum](
+        tkind: tkFunctor, sons: tree.sonsField.mapIt(it.toTerm())
+      )
+    else:
+      assert false, $typeof(Tree) & " cannot be converted to CaseTermTree. Kind " &
+        $tree.kindField & " is not in functor/constant sets"
+
+template defineFromTermProc[Tree, Enum](kindField, sonsField: untyped): untyped =
+  proc fromTerm(term: CaseTreeTerm[Tree, Enum]): Tree =
+    assert term.tkind in {tkFunctor, tkConstant},
+       "Cannot convert under-substituted term back to tree. " &
+         $term.tkind & " has to be replaced with valu"
+
+    if term.tkind == tkFunctor:
+      result = Tree(
+        kindField: term.functor,
+        sonsField: term.sons.mapIt(it.fromTerm())
+      )
+    else:
+      result = term.value
+
+proc hash[Tree, Enum](a: CaseTreeTerm[Tree, Enum]): Hash =
+  # static:
+  #   assert compiles(hash(Tree)), "No hash implementation exists for" & $Tree
+
+  var h: Hash = 0
+  h = h !& hash(a.tkind)
+  case a.tkind:
+    of tkVariable: h = h !& hash(a.name)
+    of tkConstant: h = h !& hash(a.value)
+    of tkFunctor: h = h !& hash(a.functor)
+    of tkPlaceholder: discard
+
+proc `==`[Tree, Enum](lhs, rhs: CaseTreeTerm[Tree, Enum]): bool =
+  lhs.tkind == rhs.tkind and (
+    case lhs.tkind:
+      of tkConstant: lhs.value == rhs.value
+      of tkVariable: lhs.name == rhs.name
+      of tkFunctor:
+        lhs.functor == rhs.functor and
+        zip(lhs.sons, rhs.sons).allOfIt(it[0] == it[1])
+      of tkPlaceholder:
+        true
+  )
+
+template subnodesEq(lhs, rhs, field: untyped): untyped =
+  zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
+
+
+template defineTermSystemFor[Tree, Enum](
+  kindField, sonsField: untyped,
+  implName: untyped,
+  functorKinds, constantKinds: set[Enum]
+                                    ): untyped  =
+
+  static:
+    assert compiles(hash(Tree)), "Missing implementation of hash for " & $typeof(Tree)
+    assert compiles(Tree == Tree), "Missing implementation of `== `for " & $typeof(Tree)
+
+
+  proc toTerm(tree: Tree): CaseTreeTerm[Tree, Enum] =
+    if tree.kindField in constantKinds:
+      return CaseTreeTerm[Tree, Enum](
+        tkind: tkConstant, value: tree
+      )
+    elif tree.kindField in functorKinds:
+      return CaseTreeTerm[Tree, Enum](
+        tkind: tkFunctor, sons: tree.sonsField.mapIt(it.toTerm())
+      )
+    else:
+      assert false, $typeof(Tree) & " cannot be converted to CaseTermTree. Kind " &
+        $tree.kindField & " is not in functor/constant sets"
+
+  proc fromTerm(term: CaseTreeTerm[Tree, Enum]): Tree =
+    assert term.tkind in {tkFunctor, tkConstant},
+       "Cannot convert under-substituted term back to tree. " &
+         $term.tkind & " has to be replaced with valu"
+
+    if term.tkind == tkFunctor:
+      result = Tree(
+        kindField: term.functor,
+        sonsField: term.sons.mapIt(it.fromTerm())
+      )
+    else:
+      result = term.value
+
+  const implName = makeImpl[Tree, Enum]()
+
 
 type
   AstKind = enum
+    # Constant values
     akStrLit
     akIntLit
     akIdent
 
+    # Functors
     akCall
     akCondition
 
@@ -207,4 +307,35 @@ type
     else:
       sons: seq[Ast]
 
-let impl = makeImpl[Ast, AstKind]()
+proc hash(a: Ast): Hash =
+  var h: Hash = 0
+  h = h !& hash(a.nodeKind)
+
+proc `==`(lhs, rhs: Ast): bool =
+  lhs.nodeKind == rhs.nodeKind and
+  (
+    case lhs.nodeKind:
+      of akStrLit, akIdent: lhs.strVal == rhs.strVal
+      of akIntLit: lhs.intVal == rhs.intVal
+      else: subnodesEq(lhs, rhs, sons)
+  )
+
+defineTermSystemFor[Ast, AstKind](
+    kindField = nodeKind,
+    sonsField = sons,
+    implName = astImpl,
+    functorKinds = {akCall .. akCondition},
+    constantKinds = {akStrLit .. akIdent}
+)
+
+let rSystem = RedSystem[CaseTreeTerm[Ast, AstKind]](
+
+)
+
+let obj = Ast()
+
+let res = reduce(
+  obj.toTerm(),
+  rSystem,
+  astImpl
+)
