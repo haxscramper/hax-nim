@@ -12,15 +12,15 @@ type
     tkPlaceholder
 
   TermPath = seq[int]
-  TermImpl*[Obj, Sym, Val] = object
+  TermImpl*[Obj, VarSym, FunSym, Val] = object
 
     getKind*: proc(self: Obj): TermKind
     setNth*: proc(self: var Obj, idx: int, value: Obj): void
     getNth*: proc(self: Obj, idx: int): Obj
     getNthMod*: proc(self: var Obj, idx: int): var Obj
 
-    getVName*: proc(self: Obj): Sym
-    getTsym*: proc(self: Obj): Sym
+    getVName*: proc(self: Obj): VarSym
+    getTsym*: proc(self: Obj): FunSym # XXX change to `getFSym`
     getSubt*: proc(self: Obj): seq[Obj]
     setSubt*: proc(self: var Obj, subt: seq[Obj]): void
     getValue*: proc(self: Obj): Val
@@ -30,8 +30,8 @@ type
 
     makePlaceholder*: proc(): Obj
     makeConstant*: proc(val: Val): Obj
-    makeVariable*: proc(name: Sym): Obj
-    makeFunctor*: proc(sym: Sym, subt: seq[Obj]): Obj
+    makeVariable*: proc(name: VarSym): Obj
+    makeFunctor*: proc(sym: FunSym, subt: seq[Obj]): Obj
 
   TermEnv*[Obj] = object
     values*: Table[Obj, Obj]
@@ -52,7 +52,7 @@ type
     rules*: seq[RulePair[Obj]]
     # rules*: Table[Obj, Obj]
 
-proc assertCorrect*[Obj, Sym, Val](impl: TermImpl[Obj, Sym, Val]): void =
+proc assertCorrect*[Obj, VarSym, FunSym, Val](impl: TermImpl[Obj, VarSym, FunSym, Val]): void =
   for name, value in impl.fieldPairs():
     assert (not value.isNil()), name & " cannot be nil"
 
@@ -115,13 +115,13 @@ iterator pairs*[Obj](env: TermEnv[Obj]): RulePair[Obj] =
 #       return true # XXXX
 
 
-proc bindTerm[Obj, Sym, Val](
+proc bindTerm[Obj, VarSym, FunSym, Val](
   variable, value: Obj,
   env: TermEnv[Obj],
-  cb: TermImpl[Obj, Sym, Val]): TermEnv[Obj]
+  cb: TermImpl[Obj, VarSym, FunSym, Val]): TermEnv[Obj]
 
-proc copy*[Obj, Sym, Val](
-  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, Sym, Val]): (Obj, TermEnv[Obj]) =
+proc copy*[Obj, VarSym, FunSym, Val](
+  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, VarSym, FunSym, Val]): (Obj, TermEnv[Obj]) =
   ## Create copy of a term. All variables are replaced with new ones.
   let inputEnv = env
   case cb.getKind(term):
@@ -150,9 +150,9 @@ proc copy*[Obj, Sym, Val](
     of tkPlaceholder:
       return (term, inputEnv)
 
-proc bindTerm[Obj, Sym, Val](
+proc bindTerm[Obj, VarSym, FunSym, Val](
   variable, value: Obj, env: TermEnv[Obj] ,
-  cb: TermImpl[Obj, Sym, Val]): TermEnv[Obj] =
+  cb: TermImpl[Obj, VarSym, FunSym, Val]): TermEnv[Obj] =
   ## Create environment where `variable` is bound to `value`
   result = env
   case cb.getKind(value):
@@ -163,8 +163,8 @@ proc bindTerm[Obj, Sym, Val](
       result = newEnv
       result[variable] = newTerm
 
-proc dereference*[Obj, Sym, Val](
-  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, Sym, Val]): Obj =
+proc dereference*[Obj, VarSym, FunSym, Val](
+  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, VarSym, FunSym, Val]): Obj =
   ## Traverse binding chain in environment `env` and return value of
   ## the `term`
   result = term
@@ -177,9 +177,9 @@ proc dereference*[Obj, Sym, Val](
 
     result = value
 
-proc unif*[Obj, Sym, Val](
+proc unif*[Obj, VarSym, FunSym, Val](
   t1, t2: Obj,
-  cb: TermImpl[Obj, Sym, Val],
+  cb: TermImpl[Obj, VarSym, FunSym, Val],
   env: TermEnv[Obj] = makeEnvironment[Obj]()
     ): Option[TermEnv[Obj]] =
   let
@@ -219,7 +219,7 @@ proc unif*[Obj, Sym, Val](
 #       return makeEnvironment()
 #     of tkVariable:
 
-iterator redexes*[Obj, Sym, Val](term: Obj, cb: TermImpl[Obj, Sym, Val]
+iterator redexes*[Obj, VarSym, FunSym, Val](term: Obj, cb: TermImpl[Obj, VarSym, FunSym, Val]
                                 ): tuple[red: Obj, path: TermPath] =
   ## Iterate over all redex in term
   var que: Deque[(Obj, TermPath)]
@@ -234,8 +234,8 @@ iterator redexes*[Obj, Sym, Val](term: Obj, cb: TermImpl[Obj, Sym, Val]
     yield (red: nowTerm, path: path)
 
 
-proc varlist*[Obj, Sym, Val](
-  term: Obj, cb: TermImpl[Obj, Sym, Val], path: TermPath = @[0]): seq[(Obj, TermPath)] =
+proc varlist*[Obj, VarSym, FunSym, Val](
+  term: Obj, cb: TermImpl[Obj, VarSym, FunSym, Val], path: TermPath = @[0]): seq[(Obj, TermPath)] =
   ## Output list of all variables in term
   case cb.getKind(term):
     of tkConstant, tkPlaceholder:
@@ -247,8 +247,8 @@ proc varlist*[Obj, Sym, Val](
         result &= sub.varlist(cb, path & @[idx])
 
 
-proc setAtPath*[Obj, Sym, Val](
-  term: var Obj, path: TermPath, value: Obj, cb: TermImpl[Obj, Sym, Val]): void =
+proc setAtPath*[Obj, VarSym, FunSym, Val](
+  term: var Obj, path: TermPath, value: Obj, cb: TermImpl[Obj, VarSym, FunSym, Val]): void =
   case cb.getKind(term):
     of tkFunctor:
       if path.len == 1:
@@ -268,8 +268,8 @@ proc setAtPath*[Obj, Sym, Val](
     of tkConstant:
       assert false, "Cannot assign to constant: " & $term & " = " & $value
 
-proc substitute*[Obj, Sym, Val](
-  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, Sym, Val]): Obj =
+proc substitute*[Obj, VarSym, FunSym, Val](
+  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, VarSym, FunSym, Val]): Obj =
   ## Substitute all variables in term with their values from environment
   result = term
   for (v, path) in term.varlist(cb):
@@ -277,10 +277,10 @@ proc substitute*[Obj, Sym, Val](
       result.setAtPath(path, v.dereference(env, cb), cb)
 
 
-proc reduce*[Obj, Sym, Val](
+proc reduce*[Obj, VarSym, FunSym, Val](
   term: Obj,
   system: RedSystem[Obj],
-  cb: TermImpl[Obj, Sym, Val]
+  cb: TermImpl[Obj, VarSym, FunSym, Val]
                 ): (Obj, bool) =
   var tmpTerm = term
   while true:

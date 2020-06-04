@@ -94,6 +94,11 @@ when false:
 import hmisc/hterms_callback
 
 type
+  ArithmOp = enum
+    aopSucc
+    aopAdd
+    aopMult
+
   Arithm = object
     case tkind: TermKind
     of tkConstant:
@@ -101,7 +106,7 @@ type
     of tkVariable:
       tname: string
     of tkFunctor:
-      tsym: string
+      tsym: ArithmOp
       tsubt: seq[Arithm]
     of tkPlaceholder:
       nil
@@ -123,14 +128,20 @@ proc `$`*(term: Arithm): string =
     of tkVariable:
       "_" & $term.tname
     of tkFunctor:
+      let symName =
+        case term.tsym:
+          of aopSucc: "S"
+          of aopAdd: "+"
+          of aopMult: "*"
+
       if ($term.tsym).validIdentifier():
-        $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
+        symName & "(" & term.tsubt.mapIt($it).join(", ") & ")"
       else:
         case term.tsubt.len():
-          of 1: &"{term.tsym}({term.tsubt[0]})"
-          of 2: &"{term.tsubt[0]} {term.tsym} {term.tsubt[1]}"
+          of 1: &"{symName}({term.tsubt[0]})"
+          of 2: &"{term.tsubt[0]} {symName} {term.tsubt[1]}"
           else:
-            $term.tsym & "(" & term.tsubt.mapIt($it).join(", ") & ")"
+            symName & "(" & term.tsubt.mapIt($it).join(", ") & ")"
     of tkPlaceholder:
       "_"
 
@@ -148,16 +159,16 @@ proc `==`(lhs, rhs: Arithm): bool =
 
 
 if true:
-  let s1 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+  let s1 = Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
     Arithm(tkind: tkConstant, tval: 0)
   ])
 
 
-  let s2 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+  let s2 = Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
     Arithm(tkind: tkConstant, tval: 0)
   ])
 
-  let cb = TermImpl[Arithm, string, int](
+  let cb = TermImpl[Arithm, string, ArithmOp, int](
     getVName: (t: Arithm) => t.tname,
     getKind: (t: Arithm) => t.tkind,
     setNth: (t: var Arithm, idx: int, val: Arithm) => (t.tsubt[idx] = val),
@@ -171,7 +182,7 @@ if true:
     makePlaceholder: () => Arithm(tkind: tkPlaceholder),
     makeConstant: (v: int) => Arithm(tkind: tkConstant, tval: v),
     makeVariable: (n: string) => Arithm(tkind: tkVariable, tname: n),
-    makeFunctor: (sym: string, subt: seq[Arithm]) => Arithm(
+    makeFunctor: (sym: ArithmOp, subt: seq[Arithm]) => Arithm(
       tkind: tkFunctor, tsym: sym, tsubt: subt
     )
   )
@@ -185,7 +196,7 @@ if true:
       # A + 0 -> A
       (
         (
-          Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkConstant, tval: 0)
           ]).makePattern()
@@ -206,15 +217,15 @@ if true:
       # A + S(B) -> S(A + B)
       (
         (
-          Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
-            Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+            Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
               Arithm(tkind: tkVariable, tname: "B")
             ])
           ]).makePattern()
         ) , (
-          Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-            Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+            Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
               Arithm(tkind: tkVariable, tname: "B")
             ])
@@ -225,7 +236,7 @@ if true:
       # A * 0 -> 0
       (
         (
-          Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkConstant, tval: 0)
           ]).makePattern()
@@ -237,16 +248,16 @@ if true:
       # A * S(B) -> A + (A * B)
       (
         (
-          Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
-            Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+            Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
               Arithm(tkind: tkVariable, tname: "B")
             ])
           ]).makePattern()
         ) , (
-          Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
-            Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+            Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
               Arithm(tkind: tkVariable, tname: "B")
             ])
@@ -258,14 +269,14 @@ if true:
 
   echo reduce(
     # S(0) + S(0)
-    Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
-      Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+    Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
+      Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+        Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
           Arithm(tkind: tkConstant, tval: 0)
         ]),
       ]),
-      Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
-        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+      Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+        Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
           Arithm(tkind: tkConstant, tval: 0)
         ]),
       ])
