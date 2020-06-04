@@ -104,6 +104,13 @@ when true:
       of tkPlaceholder:
         nil
 
+  proc hash(a: Arithm): Hash =
+    discard
+
+  proc `==`(lsh, rhs: Arithm): bool =
+    discard
+
+
   let impl = TermImpl[Arithm, string, int](
     getKind: proc(a: Arithm): TermKind = a.kind
   )
@@ -117,8 +124,71 @@ when true:
     Arithm(kind: tkConstant, val: 0)
   ])
 
+  let cb = TermImpl[Arithm, string, int](
+    getVName: (t: Arithm) => t.name,
+    getKind: (t: Arithm) => t.kind,
+    setNth: (t: var Arithm, idx: int, val: Arithm) => (t.subt[idx] = val)
+  )
+
   let rSystem = RedSystem[Arithm](
     rules: {
-      # Arithm(kind: tkFunctor)
+      # A + 0 -> A
+      Arithm(kind: tkFunctor, sym: "+", subt: @[
+          Arithm(kind: tkVariable, name: "A"),
+          Arithm(kind: tkConstant, val: 0)
+        ])
+      :
+      Arithm(kind: tkVariable, name: "A"),
+
+      # A + S(B) -> S(A + B)
+      Arithm(kind: tkFunctor, sym: "+", subt: @[
+        Arithm(kind: tkVariable, name: "A"),
+        Arithm(kind: tkFunctor, sym: "S", subt: @[
+          Arithm(kind: tkVariable, name: "B")
+        ])
+      ]) :
+      Arithm(kind: tkFunctor, sym: "S", subt: @[
+        Arithm(kind: tkFunctor, sym: "+", subt: @[
+          Arithm(kind: tkVariable, name: "A"),
+          Arithm(kind: tkVariable, name: "B")
+        ])
+      ]),
+
+      # A * 0 -> 0
+      Arithm(kind: tkFunctor, sym: "*", subt: @[
+          Arithm(kind: tkVariable, name: "A"),
+          Arithm(kind: tkConstant, val: 0)
+        ])
+      :
+      Arithm(kind: tkConstant, val: 0),
+
+      # A * S(B) -> A + (A * B)
+      Arithm(kind: tkFunctor, sym: "*", subt: @[
+        Arithm(kind: tkVariable, name: "A"),
+        Arithm(kind: tkFunctor, sym: "S", subt: @[
+          Arithm(kind: tkVariable, name: "B")
+        ])
+      ]) :
+      Arithm(kind: tkFunctor, sym: "+", subt: @[
+        Arithm(kind: tkVariable, name: "A"),
+        Arithm(kind: tkFunctor, sym: "*", subt: @[
+          Arithm(kind: tkVariable, name: "A"),
+          Arithm(kind: tkVariable, name: "B")
+        ])
+      ])
     }.toTable()
+  )
+
+  echo reduce(
+    # S(0) + S(0)
+    Arithm(kind: tkFunctor, sym: "+", subt: @[
+      Arithm(kind: tkFunctor, sym: "S", subt: @[
+        Arithm(kind: tkConstant, val: 0)
+      ]),
+      Arithm(kind: tkFunctor, sym: "S", subt: @[
+        Arithm(kind: tkConstant, val: 0)
+      ])
+    ]),
+    rSystem,
+    cb
   )

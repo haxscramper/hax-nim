@@ -130,7 +130,7 @@ proc hash*[Sym, Val](t: Term[Sym, Val]): Hash =
 
   result = !$h
 
-func `==`*[Sym, Val](t1, t2: Term[Sym, Val]): bool =
+func `==`*[Obj](t1, t2: Obj): bool =
   ## Check if two terms are **identical**, regardless of the
   ## environemtn value.
   if t1.kind != t2.kind:

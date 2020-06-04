@@ -20,8 +20,8 @@ type
     getNth*: proc(self: Obj, idx: int): Obj
 
     getVName*: proc(self: Obj): Sym
-    getTsymb*: proc(self: Obj): Sym
-    getSubts*: proc(self: Obj): seq[Obj]
+    getTsym*: proc(self: Obj): Sym
+    getSubt*: proc(self: Obj): seq[Obj]
     getValue*: proc(self: Obj): Val
 
     unifCheck*: proc(self, other: Obj): bool ## | Procedure to quickly
@@ -63,29 +63,29 @@ iterator pairs*[Obj](env: TermEnv[Obj]): tuple[lhs, rhs: Obj] =
   for lhs, rhs in env.values:
     yield (lhs, rhs)
 
-func `==`*[Obj](t1, t2: Obj): bool =
-  ## Check if two terms are **identical**, regardless of the
-  ## environemtn value.
-  if t1.kind != t2.kind:
-    return false
+# func `==`*[Obj](t1, t2: Obj): bool =
+#   ## Check if two terms are **identical**, regardless of the
+#   ## environemtn value.
+#   if t1.kind != t2.kind:
+#     return false
 
-  case t1.kind:
-    of tkConstant:
-      return t1.value == t2.value
-    of tkVariable:
-      return t1.name == t2.name
-    of tkFunctor:
-      if t1.sym == t2.sym and t1.subt.len() == t2.subt.len():
-        for (arg1, arg2) in zip(t1.subt, t2.subt):
-          if arg1 != arg2:
-            return false
+#   case t1.kind:
+#     of tkConstant:
+#       return t1.value == t2.value
+#     of tkVariable:
+#       return t1.name == t2.name
+#     of tkFunctor:
+#       if t1.sym == t2.sym and t1.subt.len() == t2.subt.len():
+#         for (arg1, arg2) in zip(t1.subt, t2.subt):
+#           if arg1 != arg2:
+#             return false
 
-        return true
-      else:
-        return false
+#         return true
+#       else:
+#         return false
 
-    of tkPlaceholder:
-      return true # XXXX
+#     of tkPlaceholder:
+#       return true # XXXX
 
 
 proc bindTerm[Obj, Sym, Val](
@@ -104,8 +104,8 @@ proc copy*[Obj, Sym, Val](
       let deref = term.dereference(env)
       if cb.getKind(deref) == tkVariable:
         var newVar = term
-        inc newVar.genIdx
-        var resEnv = bindTerm(deref, newVar, env)
+        # inc newVar.genIdx
+        var resEnv = bindTerm(deref, newVar, env, cb)
         return (newVar, resEnv)
       else:
         return (deref, inputEnv)
@@ -114,7 +114,7 @@ proc copy*[Obj, Sym, Val](
       var resEnv = env
       var resFunctor = cb.makeFunctor(cb.getTSym(term), @[])
       for arg in term.subt:
-        let (tmpArg, tmpEnv) = arg.copy(resEnv)
+        let (tmpArg, tmpEnv) = arg.copy(resEnv, cb)
         resEnv = tmpEnv
         resFunctor.subt.add tmpArg
 
@@ -132,7 +132,7 @@ proc bindTerm[Obj, Sym, Val](
     of tkConstant, tkVariable, tkPlaceholder:
       result[variable] = value
     of tkFunctor:
-      let (newTerm, newEnv) = value.copy(env)
+      let (newTerm, newEnv) = value.copy(env, cb)
       result = newEnv
       result[variable] = newTerm
 
@@ -150,8 +150,10 @@ proc dereference*[Obj](
 
     result = value
 
-proc unif*[Obj](
-  t1, t2: Obj, env: TermEnv[Obj] = makeEnvironment[Obj]()
+proc unif*[Obj, Sym, Val](
+  t1, t2: Obj,
+  cb: TermImpl[Obj, Sym, Val],
+  env: TermEnv[Obj] = makeEnvironment[Obj]()
     ): TermEnv[Obj] =
   let
     val1 = dereference(t1, env)
@@ -163,9 +165,9 @@ proc unif*[Obj](
     else:
       raise Failure(msg: "Unification failed: different constants")
   elif val1.kind == tkVariable:
-    return bindTerm(val1, val2, env)
+    return bindTerm(val1, val2, env, cb)
   elif val2.kind == tkVariable:
-    return bindTerm(val2, val1, env)
+    return bindTerm(val2, val1, env, cb)
   elif (val1.kind, val2.kind) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
     raise Failure(msg: "Cannot unify consant and functor")
   else:
@@ -175,7 +177,7 @@ proc unif*[Obj](
         msg: &"Cannot unify functors with different names '{t1}' and '{t2}'")
 
     for (arg1, arg2) in zip(val1.subt, val2.subt):
-      result = unif(arg1, arg2, result)
+      result = unif(arg1, arg2, cb, result)
 
 # proc match*[Obj](t1, t2: Term): TermEnv[Obj] =
 #   case t1.kind:
@@ -234,16 +236,18 @@ proc substitute*[Obj](
       result[path] = v.dereference(env)
 
 
-proc reduce*[Obj](
+proc reduce*[Obj, Sym, Val](
   term: Obj,
-  system: RedSystem[Obj]): (Obj, bool) =
+  system: RedSystem[Obj],
+  cb: TermImpl[Obj, Sym, Val]
+                ): (Obj, bool) =
   var tmpTerm = term
   while true:
     var canReduce = false
     for (redex, path) in tmpTerm.redexes():
       for lhs, rhs in system:
         try:
-          let newEnv = unif(lhs, redex)
+          let newEnv = unif(lhs, redex, cb)
           let tmpNew = rhs.substitute(newEnv)
           # echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
           # echo "with: ", newEnv
