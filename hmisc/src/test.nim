@@ -93,14 +93,14 @@ when true:
 
   type
     Arithm = object
-      case kind: TermKind
+      case tkind: TermKind
       of tkConstant:
-        val: int
+        tval: int
       of tkVariable:
-        name: string
+        tname: string
       of tkFunctor:
-        sym: string
-        subt: seq[Arithm]
+        tsym: string
+        tsubt: seq[Arithm]
       of tkPlaceholder:
         nil
 
@@ -111,69 +111,80 @@ when true:
     discard
 
 
-  let impl = TermImpl[Arithm, string, int](
-    getKind: proc(a: Arithm): TermKind = a.kind
-  )
-
-  let s1 = Arithm(kind: tkFunctor, sym: "S", subt: @[
-    Arithm(kind: tkConstant, val: 0)
+  let s1 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+    Arithm(tkind: tkConstant, tval: 0)
   ])
 
 
-  let s2 = Arithm(kind: tkFunctor, sym: "S", subt: @[
-    Arithm(kind: tkConstant, val: 0)
+  let s2 = Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+    Arithm(tkind: tkConstant, tval: 0)
   ])
 
   let cb = TermImpl[Arithm, string, int](
-    getVName: (t: Arithm) => t.name,
-    getKind: (t: Arithm) => t.kind,
-    setNth: (t: var Arithm, idx: int, val: Arithm) => (t.subt[idx] = val)
+    getVName: (t: Arithm) => t.tname,
+    getKind: (t: Arithm) => t.tkind,
+    setNth: (t: var Arithm, idx: int, val: Arithm) => (t.tsubt[idx] = val),
+    getNth: (t: Arithm, idx: int) => (t.tsubt[idx]),
+    getNthMod: proc(t: var Arithm, idx: int): var Arithm = t.tsubt[idx],
+    getTsym: (t: Arithm) => t.tsym,
+    getSubt: (t: Arithm) => t.tsubt,
+    setSubt: (t: var Arithm, subt: seq[Arithm]) => (t.tsubt = subt),
+    getValue: (t: Arithm) => t.tval,
+    unifCheck: (t1: Arithm, t2: Arithm) => true,
+    makePlaceholder: () => Arithm(tkind: tkPlaceholder),
+    makeConstant: (v: int) => Arithm(tkind: tkConstant, tval: v),
+    makeVariable: (n: string) => Arithm(tkind: tkVariable, tname: n),
+    makeFunctor: (sym: string, subt: seq[Arithm]) => Arithm(
+      tkind: tkFunctor, tsym: sym, tsubt: subt
+    )
   )
+
+  assertCorrect(cb)
 
   let rSystem = RedSystem[Arithm](
     rules: {
       # A + 0 -> A
-      Arithm(kind: tkFunctor, sym: "+", subt: @[
-          Arithm(kind: tkVariable, name: "A"),
-          Arithm(kind: tkConstant, val: 0)
+      Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+          Arithm(tkind: tkVariable, tname: "A"),
+          Arithm(tkind: tkConstant, tval: 0)
         ])
       :
-      Arithm(kind: tkVariable, name: "A"),
+      Arithm(tkind: tkVariable, tname: "A"),
 
       # A + S(B) -> S(A + B)
-      Arithm(kind: tkFunctor, sym: "+", subt: @[
-        Arithm(kind: tkVariable, name: "A"),
-        Arithm(kind: tkFunctor, sym: "S", subt: @[
-          Arithm(kind: tkVariable, name: "B")
+      Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+        Arithm(tkind: tkVariable, tname: "A"),
+        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+          Arithm(tkind: tkVariable, tname: "B")
         ])
       ]) :
-      Arithm(kind: tkFunctor, sym: "S", subt: @[
-        Arithm(kind: tkFunctor, sym: "+", subt: @[
-          Arithm(kind: tkVariable, name: "A"),
-          Arithm(kind: tkVariable, name: "B")
+      Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+        Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+          Arithm(tkind: tkVariable, tname: "A"),
+          Arithm(tkind: tkVariable, tname: "B")
         ])
       ]),
 
       # A * 0 -> 0
-      Arithm(kind: tkFunctor, sym: "*", subt: @[
-          Arithm(kind: tkVariable, name: "A"),
-          Arithm(kind: tkConstant, val: 0)
+      Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+          Arithm(tkind: tkVariable, tname: "A"),
+          Arithm(tkind: tkConstant, tval: 0)
         ])
       :
-      Arithm(kind: tkConstant, val: 0),
+      Arithm(tkind: tkConstant, tval: 0),
 
       # A * S(B) -> A + (A * B)
-      Arithm(kind: tkFunctor, sym: "*", subt: @[
-        Arithm(kind: tkVariable, name: "A"),
-        Arithm(kind: tkFunctor, sym: "S", subt: @[
-          Arithm(kind: tkVariable, name: "B")
+      Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+        Arithm(tkind: tkVariable, tname: "A"),
+        Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+          Arithm(tkind: tkVariable, tname: "B")
         ])
       ]) :
-      Arithm(kind: tkFunctor, sym: "+", subt: @[
-        Arithm(kind: tkVariable, name: "A"),
-        Arithm(kind: tkFunctor, sym: "*", subt: @[
-          Arithm(kind: tkVariable, name: "A"),
-          Arithm(kind: tkVariable, name: "B")
+      Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+        Arithm(tkind: tkVariable, tname: "A"),
+        Arithm(tkind: tkFunctor, tsym: "*", tsubt: @[
+          Arithm(tkind: tkVariable, tname: "A"),
+          Arithm(tkind: tkVariable, tname: "B")
         ])
       ])
     }.toTable()
@@ -181,12 +192,12 @@ when true:
 
   echo reduce(
     # S(0) + S(0)
-    Arithm(kind: tkFunctor, sym: "+", subt: @[
-      Arithm(kind: tkFunctor, sym: "S", subt: @[
-        Arithm(kind: tkConstant, val: 0)
+    Arithm(tkind: tkFunctor, tsym: "+", tsubt: @[
+      Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+        Arithm(tkind: tkConstant, tval: 0)
       ]),
-      Arithm(kind: tkFunctor, sym: "S", subt: @[
-        Arithm(kind: tkConstant, val: 0)
+      Arithm(tkind: tkFunctor, tsym: "S", tsubt: @[
+        Arithm(tkind: tkConstant, tval: 0)
       ])
     ]),
     rSystem,

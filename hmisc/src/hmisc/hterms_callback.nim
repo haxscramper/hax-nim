@@ -18,10 +18,12 @@ type
     getKind*: proc(self: Obj): TermKind
     setNth*: proc(self: var Obj, idx: int, value: Obj): void
     getNth*: proc(self: Obj, idx: int): Obj
+    getNthMod*: proc(self: var Obj, idx: int): var Obj
 
     getVName*: proc(self: Obj): Sym
     getTsym*: proc(self: Obj): Sym
     getSubt*: proc(self: Obj): seq[Obj]
+    setSubt*: proc(self: var Obj, subt: seq[Obj]): void
     getValue*: proc(self: Obj): Val
 
     unifCheck*: proc(self, other: Obj): bool ## | Procedure to quickly
@@ -38,6 +40,9 @@ type
   RedSystem*[Obj] = object
     rules*: Table[Obj, Obj]
 
+proc assertCorrect*[Obj, Sym, Val](impl: TermImpl[Obj, Sym, Val]): void =
+  for name, value in impl.fieldPairs():
+    assert (not value.isNil()), name & " cannot be nil"
 
 proc makeEnvironment*[Obj](values: seq[(Obj, Obj)] = @[]): TermEnv[Obj] =
   ## Create new environment using `values` as initial binding values
@@ -101,7 +106,7 @@ proc copy*[Obj, Sym, Val](
     of tkConstant:
       return (term, inputEnv)
     of tkVariable:
-      let deref = term.dereference(env)
+      let deref = term.dereference(env, cb)
       if cb.getKind(deref) == tkVariable:
         var newVar = term
         # inc newVar.genIdx
@@ -112,13 +117,13 @@ proc copy*[Obj, Sym, Val](
 
     of tkFunctor:
       var resEnv = env
-      var resFunctor = cb.makeFunctor(cb.getTSym(term), @[])
-      for arg in term.subt:
+      var subterms: seq[Obj]
+      for arg in cb.getSubt(term):
         let (tmpArg, tmpEnv) = arg.copy(resEnv, cb)
         resEnv = tmpEnv
-        resFunctor.subt.add tmpArg
+        subterms.add tmpArg
 
-      return (resFunctor, resEnv)
+      return (cb.makeFunctor(cb.getTSym(term), subterms), resEnv)
 
     of tkPlaceholder:
       return (term, inputEnv)
@@ -128,7 +133,7 @@ proc bindTerm[Obj, Sym, Val](
   cb: TermImpl[Obj, Sym, Val]): TermEnv[Obj] =
   ## Create environment where `variable` is bound to `value`
   result = env
-  case value.kind:
+  case cb.getKind(value):
     of tkConstant, tkVariable, tkPlaceholder:
       result[variable] = value
     of tkFunctor:
@@ -136,15 +141,15 @@ proc bindTerm[Obj, Sym, Val](
       result = newEnv
       result[variable] = newTerm
 
-proc dereference*[Obj](
-  term: Obj, env: TermEnv[Obj]): Obj =
+proc dereference*[Obj, Sym, Val](
+  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, Sym, Val]): Obj =
   ## Traverse binding chain in environment `env` and return value of
   ## the `term`
   result = term
 
   while isBound(env, result):
     let value = env[result]
-    if value.kind == tkConstant or value == result:
+    if cb.getKind(value) == tkConstant or value == result:
       result = value
       break
 
@@ -156,27 +161,29 @@ proc unif*[Obj, Sym, Val](
   env: TermEnv[Obj] = makeEnvironment[Obj]()
     ): TermEnv[Obj] =
   let
-    val1 = dereference(t1, env)
-    val2 = dereference(t2, env)
+    val1 = dereference(t1, env, cb)
+    val2 = dereference(t2, env, cb)
+    k1 = cb.getKind(val1)
+    k2 = cb.getKind(val2)
 
-  if val1.kind == tkConstant and val2.kind == tkConstant:
+  if k1 == tkConstant and k2 == tkConstant:
     if val1 == val2:
       return env
     else:
       raise Failure(msg: "Unification failed: different constants")
-  elif val1.kind == tkVariable:
+  elif k1 == tkVariable:
     return bindTerm(val1, val2, env, cb)
-  elif val2.kind == tkVariable:
+  elif k2 == tkVariable:
     return bindTerm(val2, val1, env, cb)
-  elif (val1.kind, val2.kind) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
+  elif (k1, k2) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
     raise Failure(msg: "Cannot unify consant and functor")
   else:
     result = env
-    if val1.sym != val2.sym:
+    if cb.getTSym(val1) != cb.getTSym(val2):
       raise Failure(
         msg: &"Cannot unify functors with different names '{t1}' and '{t2}'")
 
-    for (arg1, arg2) in zip(val1.subt, val2.subt):
+    for (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
       result = unif(arg1, arg2, cb, result)
 
 # proc match*[Obj](t1, t2: Term): TermEnv[Obj] =
@@ -185,55 +192,62 @@ proc unif*[Obj, Sym, Val](
 #       return makeEnvironment()
 #     of tkVariable:
 
-iterator redexes*[Obj](
-  term: Obj): tuple[red: Obj, path: TermPath] =
+iterator redexes*[Obj, Sym, Val](term: Obj, cb: TermImpl[Obj, Sym, Val]
+                                ): tuple[red: Obj, path: TermPath] =
   ## Iterate over all redex in term
   var que: Deque[(Obj, TermPath)]
   que.addLast((term, @[0]))
   while que.len > 0:
     let (nowTerm, path) = que.popFirst()
 
-    if nowTerm.kind == tkFunctor:
-      for idx, subTerm in nowTerm.subt:
+    if cb.getKind(nowTerm) == tkFunctor:
+      for idx, subTerm in cb.getSubt(nowTerm):
         que.addLast((subTerm, path & @[idx]))
 
     yield (red: nowTerm, path: path)
 
 
-proc varlist*[Obj](term: Obj, path: TermPath = @[0]): seq[(Obj, TermPath)] =
+proc varlist*[Obj, Sym, Val](
+  term: Obj, cb: TermImpl[Obj, Sym, Val], path: TermPath = @[0]): seq[(Obj, TermPath)] =
   ## Output list of all variables in term
-  case term.kind:
+  case cb.getKind(term):
     of tkConstant, tkPlaceholder:
       return @[]
     of tkVariable:
       return @[(term, path)]
     of tkFunctor:
-      for idx, sub in term.subt:
-        result &= sub.varlist(path & @[idx])
+      for idx, sub in cb.getSubt(term):
+        result &= sub.varlist(cb, path & @[idx])
 
 
-proc `[]=`*[Obj](term: var Obj, path: TermPath, value: Obj): void =
-  case term.kind:
+proc setAtPath*[Obj, Sym, Val](
+  term: var Obj, path: TermPath, value: Obj, cb: TermImpl[Obj, Sym, Val]): void =
+  case cb.getKind(term):
     of tkFunctor:
       if path.len == 1:
         term = value
       else:
-        term.subt[path[1]][path[1..^1]] = value
+        setAtPath(
+          term = cb.getNthMod(term, path[1]),
+          path = path[1 .. ^1],
+          value = value,
+          cb
+        )
     of tkVariable:
       assert (path.len == 1)
       term = value
     of tkPlaceholder:
-      assert false, "Cannot assign to placeholder"
+      assert false, "Cannot assign to placeholder: " & $term & " = " & $value
     of tkConstant:
-      assert false, "Cannot assign to constant"
+      assert false, "Cannot assign to constant: " & $term & " = " & $value
 
-proc substitute*[Obj](
-  term: Obj, env: TermEnv[Obj]): Obj =
+proc substitute*[Obj, Sym, Val](
+  term: Obj, env: TermEnv[Obj], cb: TermImpl[Obj, Sym, Val]): Obj =
   ## Substitute all variables in term with their values from environment
   result = term
-  for (v, path) in term.varlist():
+  for (v, path) in term.varlist(cb):
     if env.isBound(v):
-      result[path] = v.dereference(env)
+      result.setAtPath(path, v.dereference(env, cb), cb)
 
 
 proc reduce*[Obj, Sym, Val](
@@ -244,11 +258,11 @@ proc reduce*[Obj, Sym, Val](
   var tmpTerm = term
   while true:
     var canReduce = false
-    for (redex, path) in tmpTerm.redexes():
+    for (redex, path) in tmpTerm.redexes(cb):
       for lhs, rhs in system:
         try:
           let newEnv = unif(lhs, redex, cb)
-          let tmpNew = rhs.substitute(newEnv)
+          let tmpNew = rhs.substitute(newEnv, cb)
           # echo tmpTerm, " $ ", lhs, " -> ", rhs, " into ", tmpNew
           # echo "with: ", newEnv
           tmpTerm[path] = tmpNew
