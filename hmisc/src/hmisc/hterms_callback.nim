@@ -271,7 +271,8 @@ proc setAtPath*[Obj, VarSym, FunSym, Val](
           cb
         )
     of tkVariable:
-      assert (path.len == 1)
+      # echo path
+      # assert (path.len == 1)
       term = value
     of tkPlaceholder:
       assert false, "Cannot assign to placeholder: " & $term & " = " & $value
@@ -310,10 +311,12 @@ proc reduce*[Obj, VarSym, FunSym, Val](
               break outerLoop
 
             inc iterIdx
-            let unifRes: Option[TermEnv[VarSym, Obj]] =
-              case lhs.isPattern:
-                of true: unif(lhs.patt, redex, cb)
-                of false: lhs.matcher(redex)
+            var unifRes: Option[TermEnv[VarSym, Obj]]
+            case lhs.isPattern:
+              of true:
+                unifRes = unif(lhs.patt, redex, cb)
+              of false:
+                unifRes = lhs.matcher(redex)
 
             if unifRes.isSome():
               let newEnv = unifRes.get()

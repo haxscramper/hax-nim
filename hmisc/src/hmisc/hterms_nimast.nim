@@ -158,7 +158,10 @@ proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
   result = quote do:
     block:
       proc tmp(env: NodeEnv): NodeTerm =
-        discard
+        let tmp = quote do:
+          echo "hello"
+
+        tmp.toTerm()
 
       tmp
 
@@ -212,3 +215,4 @@ macro rewriteTest(body: untyped): untyped =
 
 rewriteTest:
   hello(12)
+  echo (12)
