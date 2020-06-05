@@ -1,7 +1,7 @@
 import macros
 import sugar
 
-import hmisc/[hterms_callback, hterms_tree, halgorithm]
+import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
 
 const constantNodes =
   {
@@ -12,13 +12,16 @@ const constantNodes =
   }
 
 const functorNodes = { low(NimNodeKind) .. high(NimNodeKind) } - constantNodes
+proc subnodes(node: NimNode): seq[NimNode] = toSeq(node.children())
 
 proc makeNimNode(kind: NimNodeKind, sons: seq[NimNode]): NimNode =
   return newTree(kind, sons)
 
 type
-  NodeReduction* = RedSystem[string, CaseTerm[NimNode, NimNodeKind]]
-  NodeEnv* = TermEnv[string, CaseTerm[NimNode, NimNodeKind]]
+  NodeTerm = CaseTerm[NimNode, NimNodeKind]
+  NodeReduction* = RedSystem[string, NodeTerm]
+  NodeMatcher* = TermMatcher[string, NodeTerm]
+  NodeEnv* = TermEnv[string, NodeTerm]
 
 defineTermSystemFor[NimNode, NimNodeKind](
   kindField = kind,
@@ -44,6 +47,8 @@ proc mapDFSpost[InTree, OutTree](
 
 macro mapItTreeDFS(
   subnodeCall, outType, inTree, op: untyped): untyped =
+  # TODO add proc for checking if futher recursion is not needed (trim
+  # down arbitrary branches from tree)
   runnableExamples:
     type
       InTest = object
@@ -63,7 +68,7 @@ macro mapItTreeDFS(
   let
     itIdent = ident "it"
     pathIdent = ident "path"
-    subnIdent = ident "subn"
+    subnIdent = ident "subt"
 
   quote do:
     mapDFSpost(
@@ -78,7 +83,49 @@ macro mapItTreeDFS(
                       node.`subnodeCall`
     )
 
+proc makePatternDecl(sectBody: NimNode): tuple[node: NimNode, vars: seq[string]] =
+  var vars: seq[string]
+  let ruleMatcherDef = mapItTreeDFS(subnodes, NimNode, sectBody,
+    block:
+      # AST to declare part of the matcher rule
+      var res: NimNode
 
+      if it.kind == nnkBracket and it[0].kind == nnkBracket:
+        # Nested brackets are used to annotate variables
+        let content = toSeq(it[0].children())
+        let varStr = newStrLitNode($content[0])
+        vars.add $content[0]
+        res = quote do:
+          NodeTerm(tkind: tkVaariable, tname: `varStr`)
+
+      elif it.kind == nnkIdent and it.strVal == "_":
+        # Placeholder variable
+        res = quote do:
+          NodeTerm(tkind: tkPlaceholder)
+      else:
+        # not placeholder, not variable => regular term or functor
+        let term = it.toTerm()
+        case term.tkind:
+          of tkFunctor:
+            let funcSym = ident($term.functor)
+            let subterms = newTree(nnkBracket, subt)
+            res = quote do:
+              NodeTerm(tkind: tkFunctor, tsym: `funcSym`, tsubt: @`subterms`)
+
+          of tkConstant:
+            discard
+          else:
+            discard
+
+      res
+    )
+
+  return (node: ruleMatcherDef, vars: vars)
+
+
+proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
+  ## Declare section for value generator
+  discard
 
 macro makeNodeRewriteSystem(body: untyped): untyped =
   let rules = collect(newSeq):
@@ -87,21 +134,30 @@ macro makeNodeRewriteSystem(body: untyped): untyped =
         node
 
   for rule in rules:
-    for section in rule[1]:
-      if section.kind == nnkCall:
-        let sectBody = section[1]
-        case section[0].strVal():
-          of "patt":
-            echo "found pattern"
-          of "outp":
-            echo "found output"
+    let pattSection = toSeq(rule[1].children()).findItFirst(it[0].strVal() == "patt")
+    let (matcherDecl, varList) = makePatternDecl(pattSection)
 
-        echo sectBody.treeRepr()
+    let genSection = toSeq(rule[1].children()).findItFirst(it[0].strVal() == "outp")
+    let generator = makeGeneratorDecl(genSection, varList)
+
+
+
 
 
 makeNodeRewriteSystem:
   rule:
     patt: Call(Ident("hello"), [[other]])
     outp:
-      echo "calling proc hello with one argument"
-      Call(Ident("hello"), [[other]])
+      quote do:
+        echo "calling proc hello with one argument"
+        echo "argument value: ", `other`
+        hello(`other`)
+
+# dumpTree:
+#   NodeMatcher(
+#     patt: NodeTerm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
+#       NodeTerm(tkind: tkVariable, tname: "A"),
+#       NodeTerm(tkind: tkConstant, tval: 0)
+#     ]),
+#     isPattern: true
+#   )

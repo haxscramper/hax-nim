@@ -387,3 +387,19 @@ template findIt*(s: typed, op: untyped): int =
     if op: result = idx; break
 
   result
+
+template findItFirst*(s: typed, op: untyped): untyped =
+  var res: typeof(s[0])
+  var found: bool = false
+  runnableExamples:
+    assert @["A", "B", "D"].findItFirst(it == "A") == "A"
+
+  for it {.inject.} in s:
+    if op:
+      res = it
+      found = true
+      break
+
+  assert found, "item is missing from sequence"
+
+  res

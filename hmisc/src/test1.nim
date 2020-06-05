@@ -3,7 +3,7 @@ import macros
 dumpTree:
   rule:
     patt:
-      Call(hello, [[@other]])
+      Call(hello, [[other]], _)
     output:
       echo "calling proc hello"
       Call(hello, @other)
