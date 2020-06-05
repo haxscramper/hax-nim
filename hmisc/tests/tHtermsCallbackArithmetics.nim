@@ -89,7 +89,7 @@ test "Arithmetic addition":
     setNth: (t: var Arithm, idx: int, val: Arithm) => (t.tsubt[idx] = val),
     getNth: (t: Arithm, idx: int) => (t.tsubt[idx]),
     getNthMod: proc(t: var Arithm, idx: int): var Arithm = t.tsubt[idx],
-    getTsym: (t: Arithm) => t.tsym,
+    getFsym: (t: Arithm) => t.tsym,
     getSubt: (t: Arithm) => t.tsubt,
     setSubt: (t: var Arithm, subt: seq[Arithm]) => (t.tsubt = subt),
     getValue: (t: Arithm) => t.tval,
@@ -201,4 +201,3 @@ test "Arithmetic addition":
   )
 
   assert "S(S(S(S('0'))))" == $res[0]
-

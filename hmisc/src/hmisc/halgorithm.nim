@@ -133,6 +133,12 @@ template allOfIt*(s: untyped, op: untyped): bool =
 
   res
 
+template subnodesEq*(lhs, rhs, field: untyped): untyped =
+  # TODO DOC
+  zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
+
+
+
 
 when isMainModule:
   echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
