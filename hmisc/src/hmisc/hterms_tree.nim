@@ -134,14 +134,10 @@ proc makeImpl*[Tree, Enum](
 #       result = term.value
 
 template defineTermSystemFor*[Tree, Enum](
-  treeType, functorType: untyped
   kindField, sonsField: untyped,
   implName: untyped,
   functorKinds, constantKinds: set[Enum],
-  treeMaker: proc(kind: functorType, sons: seq[treeType]): treeType =
-             proc(kind: functorType, sons: seq[treeType]): treeType =
-               treeType(kindField: kind, sonsField: sons)
-  ,
+  treeMaker: proc(kind: Enum, sons: seq[Tree]): Tree,
                                     ): untyped  =
 
   static:

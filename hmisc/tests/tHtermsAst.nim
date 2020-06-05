@@ -36,10 +36,18 @@ proc `==`(lhs, rhs: Ast): bool =
       else: subnodesEq(lhs, rhs, sons)
   )
 
+proc makeFunctor(kind: AstKind, sons: seq[Ast]): Ast =
+  case kind:
+    of akStrLit .. akIdent:
+      assert false
+    else:
+      return Ast(kind: kind, sons: sons)
+
 test "Ast rewriting":
   defineTermSystemFor[Ast, AstKind](
       kindField = kind,
       sonsField = sons,
+      treeMaker = makeFunctor,
       implName = astImpl,
       functorKinds = {akCall .. akCondition},
       constantKinds = {akStrLit .. akIdent}
