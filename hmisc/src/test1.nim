@@ -1,15 +1,6 @@
 import macros
-import sugar
 
-type
-  Gen[T] = object
-    val: seq[(T, T)]
+proc test[T1, T2](arg: T2): (T1, T2) =
+  discard
 
-let gen = Gen[int]()
-
-macro `|->`(a, b: untyped): untyped =
-  quote do:
-    `a` + `b`
-
-
-echo 12 |-> 22
+echo test[int, string]("hello")

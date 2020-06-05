@@ -51,16 +51,19 @@ test "Ast rewriting":
   type
     AstTerm = CaseTerm[Ast, AstKind]
 
-  let rSystem = RedSystem[CaseTerm[Ast, AstKind]](rules: @[(
-      AstTerm(tkind: tkFunctor, functor: akCall, sons: @[
+  let rSystem = RedSystem[string, CaseTerm[Ast, AstKind]](rules: @[(
+      makePattern[string, CaseTerm[Ast, AstKind]](
+        AstTerm(tkind: tkFunctor, functor: akCall, sons: @[
+          AstTerm(tkind: tkConstant, value: Ast(
+            kind: akIdent, strVal: "someFunc")),
+          AstTerm(tkind: tkConstant, value: Ast(
+            kind: akIntLit, intVal: 9000))
+      ]))
+    ,
+      makeGenerator[string, CaseTerm[Ast, AstKind]](
         AstTerm(tkind: tkConstant, value: Ast(
-          kind: akIdent, strVal: "someFunc")),
-        AstTerm(tkind: tkConstant, value: Ast(
-          kind: akIntLit, intVal: 9000))
-      ]).makePattern()
-      ,
-      AstTerm(tkind: tkConstant, value: Ast(
-        kind: akStrLit, strVal: "Hello 9000")).makeGenerator()
+          kind: akStrLit, strVal: "Hello 9000")
+      ))
   )])
 
   let obj = Ast(kind: akCall, sons: @[
@@ -79,5 +82,6 @@ test "Ast rewriting":
   if res.ok:
     let resAst = res.term.fromTerm()
     echo resAst
+    assert resAst == Ast(kind: akStrLit, strVal: "Hello 9000")
   else:
     echo "res not ok"

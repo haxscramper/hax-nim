@@ -104,79 +104,81 @@ test "Arithmetic addition":
 
   assertCorrect(cb)
 
-  let rSystem = RedSystem[Arithm](
+  let rSystem = RedSystem[string, Arithm](
     # NOTE this madness is intended to be generated from some kind of
     # DSL, not written by hand.
     rules: @[
       # A + 0 -> A
       (
-        (
+        makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkConstant, tval: 0)
-          ]).makePattern()
+          ])
         ) , (
-          Arithm(tkind: tkVariable, tname: "A").makeGenerator()
+          makeGenerator[string, Arithm](
+            Arithm(tkind: tkVariable, tname: "A"))
         )
       ),
 
       (
-        makeMatcher(
-          proc(t: Arithm): Option[TermEnv[Arithm]] =
+        makeMatcher[string, Arithm](
+          proc(t: Arithm): Option[TermEnv[string, Arithm]] =
             echo "testing ", t
         ) , (
-          proc(env: TermEnv[Arithm]): Arithm {.closure.} = discard
+          proc(env: TermEnv[string, Arithm]): Arithm {.closure.} = discard
         )
       ),
 
       # A + S(B) -> S(A + B)
       (
-        (
+        makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
               Arithm(tkind: tkVariable, tname: "B")
             ])
-          ]).makePattern()
-        ) , (
+          ])
+        ) , makeGenerator[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
             Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
               Arithm(tkind: tkVariable, tname: "B")
             ])
-          ]).makeGenerator()
+          ])
         )
       ),
 
       # A * 0 -> 0
       (
-        (
+        makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkConstant, tval: 0)
-          ]).makePattern()
+          ])
         ) , (
-          Arithm(tkind: tkConstant, tval: 0).makeGenerator()
+          makeGenerator[string, Arithm](
+            Arithm(tkind: tkConstant, tval: 0))
         )
       ),
 
       # A * S(B) -> A + (A * B)
       (
-        (
+        makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
               Arithm(tkind: tkVariable, tname: "B")
             ])
-          ]).makePattern()
-        ) , (
+          ])
+        ) , makeGenerator[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
             Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
               Arithm(tkind: tkVariable, tname: "B")
             ])
-          ]).makeGenerator()
+          ])
         )
       )
     ]

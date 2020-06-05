@@ -5,8 +5,7 @@
 #
 # To run these tests, simply execute `nimble test`.
 
-import unittest
+proc test[T1, T2](arg: T2): (T1, T2) =
+  discard
 
-import hmisc
-test "can add":
-  check add(5, 5) == 10
+echo test[int, string]()
