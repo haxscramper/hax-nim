@@ -90,3 +90,5 @@ when false:
     ])
 
   echo reduce(sum, sys)
+
+import hmisc/hterms_nimast

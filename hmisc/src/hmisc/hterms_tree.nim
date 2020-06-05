@@ -1,6 +1,8 @@
 import hterms_callback
 import hashes, sequtils
 
+export sequtils
+
 type
   CaseTerm*[Tree, Enum] = object
     case tkind*: TermKind
@@ -132,9 +134,14 @@ proc makeImpl*[Tree, Enum](
 #       result = term.value
 
 template defineTermSystemFor*[Tree, Enum](
+  treeType, functorType: untyped
   kindField, sonsField: untyped,
   implName: untyped,
-  functorKinds, constantKinds: set[Enum]
+  functorKinds, constantKinds: set[Enum],
+  treeMaker: proc(kind: functorType, sons: seq[treeType]): treeType =
+             proc(kind: functorType, sons: seq[treeType]): treeType =
+               treeType(kindField: kind, sonsField: sons)
+  ,
                                     ): untyped  =
 
   static:
@@ -151,7 +158,9 @@ template defineTermSystemFor*[Tree, Enum](
       )
     elif tree.kindField in functorKinds:
       return CaseTerm[Tree, Enum](
-        tkind: tkFunctor, functor: tree.kindField, sons: tree.sonsField.mapIt(it.toTerm())
+        tkind: tkFunctor,
+        functor: tree.kindField,
+        sons: toSeq(tree.sonsField).mapIt(it.toTerm())
       )
     else:
       assert false, $typeof(Tree) &
@@ -164,9 +173,9 @@ template defineTermSystemFor*[Tree, Enum](
          $term.tkind & " has to be replaced with valu"
 
     if term.tkind == tkFunctor:
-      result = Tree(
-        kindField: term.functor,
-        sonsField: term.sons.mapIt(it.fromTerm())
+      result = treeMaker(
+        kind = term.functor,
+        sons = term.sons.mapIt(it.fromTerm())
       )
     else:
       result = term.value

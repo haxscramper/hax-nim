@@ -296,7 +296,7 @@ proc reduce*[Obj, VarSym, FunSym, Val](
       for (redex, path) in tmpTerm.redexes(cb):
         if path.len < maxDepth:
           for lhs, gen in system:
-            # Reachedd max iteration count
+            # Reached max iteration count
             if iterIdx > maxIterations:
               break outerLoop
 
