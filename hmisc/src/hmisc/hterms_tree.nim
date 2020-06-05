@@ -138,8 +138,8 @@ template defineTermSystemFor*[Tree, Enum](
                                     ): untyped  =
 
   static:
-    assert compiles(hash(Tree)),
-      "Missing implementation of hash for " & $typeof(Tree)
+    # assert compiles(hash(Tree)),
+    #   "Missing implementation of hash for " & $typeof(Tree)
     assert compiles(Tree == Tree),
       "Missing implementation of `== `for " & $typeof(Tree)
 

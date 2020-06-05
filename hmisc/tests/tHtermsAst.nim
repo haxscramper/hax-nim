@@ -1,7 +1,7 @@
 import hmisc/hterms_callback
 import hmisc/hterms_tree
 
-import hashes, sequtils, strformat, strutils
+import sequtils, strformat, strutils
 import hmisc/halgorithm
 
 import unittest
@@ -25,10 +25,6 @@ type
       intVal: int
     else:
       sons: seq[Ast]
-
-proc hash(a: Ast): Hash =
-  var h: Hash = 0
-  h = h !& hash(a.kind)
 
 proc `==`(lhs, rhs: Ast): bool =
   lhs.kind == rhs.kind and

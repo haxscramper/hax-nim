@@ -4,7 +4,7 @@ import hmisc/hterms_callback
 
 import hmisc/halgorithm
 
-import strutils, sequtils, strformat, sugar, options, hashes
+import strutils, sequtils, strformat, sugar, options
 
 type
   ArithmOp = enum
@@ -24,15 +24,6 @@ type
     of tkPlaceholder:
       nil
 
-proc hash(a: Arithm): Hash =
-  var h: Hash = 0
-  h = h !& hash(a.tkind)
-  case a.tkind:
-    of tkVariable: h = h !& hash(a.tname)
-    of tkConstant: h = h !& hash(a.tval)
-    of tkFunctor: h = h !& hash(a.tsym)
-    of tkPlaceholder: discard
-
 proc `==`(lhs, rhs: Arithm): bool =
   lhs.tkind == rhs.tkind and (
     case lhs.tkind:
@@ -44,8 +35,6 @@ proc `==`(lhs, rhs: Arithm): bool =
       of tkPlaceholder:
         true
   )
-
-
 
 proc `$`*(term: Arithm): string =
   case term.tkind:
@@ -124,7 +113,8 @@ test "Arithmetic addition":
       (
         makeMatcher[string, Arithm](
           proc(t: Arithm): Option[TermEnv[string, Arithm]] =
-            echo "testing ", t
+            discard
+            # echo "testing ", t
         ) , (
           proc(env: TermEnv[string, Arithm]): Arithm {.closure.} = discard
         )
