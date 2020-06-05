@@ -283,33 +283,44 @@ proc substitute*[Obj, VarSym, FunSym, Val](
 proc reduce*[Obj, VarSym, FunSym, Val](
   term: Obj,
   system: RedSystem[VarSym, Obj],
-  cb: TermImpl[Obj, VarSym, FunSym, Val]
+  cb: TermImpl[Obj, VarSym, FunSym, Val],
+  maxDepth: int = 40,
+  maxIterations: int = 4000
                 ): tuple[term: Obj, ok: bool] =
   var tmpTerm = term
-  while true:
-    var canReduce = false
-    for (redex, path) in tmpTerm.redexes(cb):
-      for lhs, gen in system:
-        let unifRes: Option[TermEnv[VarSym, Obj]] =
-          case lhs.isPattern:
-            of true: unif(lhs.patt, redex, cb)
-            of false: lhs.matcher(redex)
 
-        if unifRes.isSome():
-          let newEnv = unifRes.get()
+  block outerLoop:
+    var iterIdx: int = 0
+    while true:
+      var canReduce = false
+      for (redex, path) in tmpTerm.redexes(cb):
+        if path.len < maxDepth:
+          for lhs, gen in system:
+            # Reachedd max iteration count
+            if iterIdx > maxIterations:
+              break outerLoop
 
-          let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
-          setAtPath(tmpTerm, path, tmpNew, cb)
-          if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
-            canReduce = true
-            result[1] = true
-          else:
-            return (tmpTerm, true)
+            inc iterIdx
+            let unifRes: Option[TermEnv[VarSym, Obj]] =
+              case lhs.isPattern:
+                of true: unif(lhs.patt, redex, cb)
+                of false: lhs.matcher(redex)
 
-        # else:
-        #   echo redex
-        #   echo "unification failed"
+            if unifRes.isSome():
+              let newEnv = unifRes.get()
 
-    if not canReduce:
-      result[0] = tmpTerm
-      break
+              let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
+              setAtPath(tmpTerm, path, tmpNew, cb)
+              if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
+                canReduce = true
+                result[1] = true
+              else:
+                return (tmpTerm, true)
+
+            # else:
+            #   echo redex
+            #   echo "unification failed"
+
+      if not canReduce:
+        result[0] = tmpTerm
+        break
