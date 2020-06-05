@@ -1,4 +1,5 @@
 import macros
+import strutils
 import sugar
 
 import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
@@ -83,42 +84,71 @@ macro mapItTreeDFS(
                       node.`subnodeCall`
     )
 
+proc buildPatternDecl(
+  node: NimNode, path: seq[int],
+  subt: seq[NimNode], vars: var seq[string]): NimNode =
+  # let ind = "  ".repeat(path.len())
+  # echo ind, "combining tree at path ", path, " from ", subt.len, " elems"
+  # echo ind, "subnodes:"
+  # for s in subt:
+  #   echo ind, "- ", s.toStrLit()
+
+  # defer:
+  #   echo ind, "result is ", result.toStrLit()
+
+  # AST to declare part of the matcher rule
+  if node.kind == nnkBracket and node[0].kind == nnkBracket:
+    # Nested brackets are used to annotate variables
+    let content = toSeq(node[0].children())
+    let varStr = newStrLitNode($content[0])
+    vars.add $content[0]
+    return quote do:
+      NodeTerm(tkind: tkVariable, name: `varStr`)
+
+  elif node.kind == nnkIdent and node.strVal == "_":
+    # Placeholder variable
+    return quote do:
+      NodeTerm(tkind: tkPlaceholder)
+  else:
+    # not placeholder, not variable => regular term or functor
+    if node.kind == nnkCall and ($node[0])[0].isUpperAscii():
+      let callSym = $node[0]
+      let funcName = ident("nnk" & callSym)
+      let funcEnum: NimNodeKind = parseEnum[NimNodeKind]("nnk" & callSym)
+
+      if funcEnum in functorNodes:
+        let subtMatchers = newTree(nnkBracket, subt)
+        return quote do:
+          NodeTerm(tkind: tkFunctor, functor: `funcName`, sons: @`subtMatchers`)
+      else:
+        var termValue: NimNode
+        if callSym.endsWith("Lit"):
+          let nodeTyle = callSym[0..^3]
+          let valueLit = quote do: 12
+          let valueSym = ident "value"
+          termValue = quote do:
+            ((let `valueSym` = `valueLit`; newLit(value)))
+
+        elif callSym in @["CommentStmt", "Ident", "Sym"]:
+          let strLit = node[1]
+          let nodeMaker = ident("new" & callSym & "Node")
+          let valueSym = ident "value"
+          termValue = quote do:
+            ((let `valueSym` = `strLit`; `nodeMaker`(`strLit`)))
+
+        return quote do:
+          NodeTerm(tkind: tkConstant, value: `termValue`)
+    else:
+      assert (node.kind notin {nnkStmtList}),
+            "Unexpected element kind: " &
+              $node.kind() & " lit: " & $node.toStrLit()
+
+
 proc makePatternDecl(sectBody: NimNode): tuple[node: NimNode, vars: seq[string]] =
   var vars: seq[string]
-  let ruleMatcherDef = mapItTreeDFS(subnodes, NimNode, sectBody,
-    block:
-      # AST to declare part of the matcher rule
-      var res: NimNode
-
-      if it.kind == nnkBracket and it[0].kind == nnkBracket:
-        # Nested brackets are used to annotate variables
-        let content = toSeq(it[0].children())
-        let varStr = newStrLitNode($content[0])
-        vars.add $content[0]
-        res = quote do:
-          NodeTerm(tkind: tkVaariable, tname: `varStr`)
-
-      elif it.kind == nnkIdent and it.strVal == "_":
-        # Placeholder variable
-        res = quote do:
-          NodeTerm(tkind: tkPlaceholder)
-      else:
-        # not placeholder, not variable => regular term or functor
-        let term = it.toTerm()
-        case term.tkind:
-          of tkFunctor:
-            let funcSym = ident($term.functor)
-            let subterms = newTree(nnkBracket, subt)
-            res = quote do:
-              NodeTerm(tkind: tkFunctor, tsym: `funcSym`, tsubt: @`subterms`)
-
-          of tkConstant:
-            discard
-          else:
-            discard
-
-      res
-    )
+  let ruleMatcherDef = mapItTreeDFS(
+    subnodes, NimNode, sectBody,
+    buildPatternDecl(it, path, subt, vars))
 
   return (node: ruleMatcherDef, vars: vars)
 
@@ -133,31 +163,37 @@ macro makeNodeRewriteSystem(body: untyped): untyped =
       if node.kind == nnkCall and node[0] == ident("rule"):
         node
 
-  for rule in rules:
-    let pattSection = toSeq(rule[1].children()).findItFirst(it[0].strVal() == "patt")
-    let (matcherDecl, varList) = makePatternDecl(pattSection)
+  let matcherTuples =  collect(newSeq):
+    for rule in rules:
+      let pattSection = toSeq(rule[1].children()).findItFirst(
+        it[0].strVal() == "patt")[1][0]
+      let (matcherDecl, varList) = makePatternDecl(pattSection)
 
-    let genSection = toSeq(rule[1].children()).findItFirst(it[0].strVal() == "outp")
-    let generator = makeGeneratorDecl(genSection, varList)
+      let genSection = toSeq(rule[1].children()).findItFirst(
+        it[0].strVal() == "outp")[1][0]
+      let generator = makeGeneratorDecl(genSection, varList)
 
-
-
-
-
-makeNodeRewriteSystem:
-  rule:
-    patt: Call(Ident("hello"), [[other]])
-    outp:
       quote do:
-        echo "calling proc hello with one argument"
-        echo "argument value: ", `other`
-        hello(`other`)
+        (`matcherDecl`, `generator`)
+
+  result = newTree(nnkBracket, matcherTuples)
+  echo result.toStrLit()
+
+
+
+
 
 # dumpTree:
-#   NodeMatcher(
-#     patt: NodeTerm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
-#       NodeTerm(tkind: tkVariable, tname: "A"),
-#       NodeTerm(tkind: tkConstant, tval: 0)
-#     ]),
-#     isPattern: true
-#   )
+#   hello(12)
+macro rewriteTest(body: untyped): untyped =
+  let rewrite = makeNodeRewriteSystem:
+    rule:
+      patt: Call(Ident("hello"), [[other]])
+      outp:
+        quote do:
+          echo "calling proc hello with one argument"
+          echo "argument value: ", `other`
+          hello(`other`)
+
+rewriteTest:
+  hello(12)
