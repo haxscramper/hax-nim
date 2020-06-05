@@ -98,7 +98,7 @@ test "Arithmetic addition":
     # DSL, not written by hand.
     rules: @[
       # A + 0 -> A
-      (
+      makeRulePair(
         makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
@@ -110,7 +110,7 @@ test "Arithmetic addition":
         )
       ),
 
-      (
+      makeRulePair(
         makeMatcher[string, Arithm](
           proc(t: Arithm): Option[TermEnv[string, Arithm]] =
             discard
@@ -121,7 +121,7 @@ test "Arithmetic addition":
       ),
 
       # A + S(B) -> S(A + B)
-      (
+      makeRulePair(
         makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
@@ -140,7 +140,7 @@ test "Arithmetic addition":
       ),
 
       # A * 0 -> 0
-      (
+      makeRulePair(
         makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),
@@ -153,7 +153,7 @@ test "Arithmetic addition":
       ),
 
       # A * S(B) -> A + (A * B)
-      (
+      makeRulePair(
         makePattern[string, Arithm](
           Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
             Arithm(tkind: tkVariable, tname: "A"),

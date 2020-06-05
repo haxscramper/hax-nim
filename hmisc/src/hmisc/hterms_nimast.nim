@@ -117,7 +117,7 @@ proc buildPatternDecl(
       let funcEnum: NimNodeKind = parseEnum[NimNodeKind]("nnk" & callSym)
 
       if funcEnum in functorNodes:
-        let subtMatchers = newTree(nnkBracket, subt)
+        let subtMatchers = newTree(nnkBracket, subt.filterIt(not it.isNil))
         return quote do:
           NodeTerm(tkind: tkFunctor, functor: `funcName`, sons: @`subtMatchers`)
       else:
@@ -155,7 +155,12 @@ proc makePatternDecl(sectBody: NimNode): tuple[node: NimNode, vars: seq[string]]
 
 proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
   ## Declare section for value generator
-  discard
+  result = quote do:
+    block:
+      proc tmp(env: NodeEnv): NodeTerm =
+        discard
+
+      tmp
 
 macro makeNodeRewriteSystem(body: untyped): untyped =
   let rules = collect(newSeq):
@@ -163,20 +168,26 @@ macro makeNodeRewriteSystem(body: untyped): untyped =
       if node.kind == nnkCall and node[0] == ident("rule"):
         node
 
-  let matcherTuples =  collect(newSeq):
-    for rule in rules:
-      let pattSection = toSeq(rule[1].children()).findItFirst(
-        it[0].strVal() == "patt")[1][0]
-      let (matcherDecl, varList) = makePatternDecl(pattSection)
+  var matcherTuples: seq[NimNode]
+  for rule in rules:
+    let pattSection = toSeq(rule[1].children()).findItFirst(
+      it[0].strVal() == "patt")[1][0]
+    let (matcherDecl, varList) = makePatternDecl(pattSection)
 
-      let genSection = toSeq(rule[1].children()).findItFirst(
-        it[0].strVal() == "outp")[1][0]
-      let generator = makeGeneratorDecl(genSection, varList)
+    let genSection = toSeq(rule[1].children()).findItFirst(
+      it[0].strVal() == "outp")[1][0]
+    let generator = makeGeneratorDecl(genSection, varList)
 
-      quote do:
-        (`matcherDecl`, `generator`)
+    matcherTuples.add quote do:
+      makeRulePair[string, NodeTerm](
+        NodeMatcher(patt: `matcherDecl`, isPattern: true),
+        `generator`
+      )
 
   result = newTree(nnkBracket, matcherTuples)
+  result = quote do:
+    RedSystem[string, NodeTerm](rules: @`result`)
+
   echo result.toStrLit()
 
 
@@ -194,6 +205,10 @@ macro rewriteTest(body: untyped): untyped =
           echo "calling proc hello with one argument"
           echo "argument value: ", `other`
           hello(`other`)
+
+  let reduced = reduce(body.toTerm(), rewrite, nimAstImpl)
+  if reduced.ok:
+    result = reduced.term.fromTerm()
 
 rewriteTest:
   hello(12)

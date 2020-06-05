@@ -56,7 +56,8 @@ test "Ast rewriting":
   type
     AstTerm = CaseTerm[Ast, AstKind]
 
-  let rSystem = RedSystem[string, CaseTerm[Ast, AstKind]](rules: @[(
+  let rSystem = RedSystem[string, CaseTerm[Ast, AstKind]](rules: @[
+    makeRulePair(
       makePattern[string, CaseTerm[Ast, AstKind]](
         AstTerm(tkind: tkFunctor, functor: akCall, sons: @[
           AstTerm(tkind: tkConstant, value: Ast(

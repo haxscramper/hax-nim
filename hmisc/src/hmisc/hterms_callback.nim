@@ -37,16 +37,17 @@ type
     values*: Table[VarSym, Obj]
 
   TermMatcher*[VarSym, Obj] = object
-    case isPattern: bool
+    case isPattern*: bool
     of true:
       patt*: Obj
     of false:
       matcher*: proc(test: Obj): Option[TermEnv[VarSym, Obj]]
 
-  RulePair*[VarSym, Obj] = tuple[
-      rule: TermMatcher[VarSym, Obj],
-      gen: proc(env: TermEnv[VarSym, Obj]): Obj
-    ]
+  GenProc*[VarSym, Obj] = proc(env: TermEnv[VarSym, Obj]): Obj
+
+  RulePair*[VarSym, Obj] = object
+    rule*: TermMatcher[VarSym, Obj]
+    gen*: GenProc[VarSym, Obj]
 
   RedSystem*[VarSym, Obj] = object
     rules*: seq[RulePair[VarSym, Obj]]
@@ -55,6 +56,11 @@ type
 proc assertCorrect*[Obj, VarSym, FunSym, Val](impl: TermImpl[Obj, VarSym, FunSym, Val]): void =
   for name, value in impl.fieldPairs():
     assert (not value.isNil()), name & " cannot be nil"
+
+proc makeRulePair*[VarSym, Obj](
+  rule: TermMatcher[VarSym, Obj],
+  gen: proc(env: TermEnv[VarSym, Obj]): Obj): RulePair[VarSym, Obj] =
+  RulePair[VarSym, Obj](rule: rule, gen: gen)
 
 proc makePattern*[VarSym, Obj](obj: Obj): TermMatcher[VarSym, Obj] =
   TermMatcher[VarSym, Obj](patt: obj, isPattern: true)
@@ -84,7 +90,8 @@ proc `[]=`*[VarSym, Obj](
 
   env.values[variable] = value
 
-iterator pairs*[VarSym, Obj](system: RedSystem[VarSym, Obj]): RulePair[VarSym, Obj] =
+iterator items*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
+         RulePair[VarSym, Obj] =
   for pair in system.rules:
     yield pair
 
@@ -295,7 +302,9 @@ proc reduce*[Obj, VarSym, FunSym, Val](
       var canReduce = false
       for (redex, path) in tmpTerm.redexes(cb):
         if path.len < maxDepth:
-          for lhs, gen in system:
+          for rule in system:
+            let lhs: TermMatcher[VarSym, Obj] = rule.rule
+            let gen: GenProc[VarSym, Obj] = rule.gen
             # Reached max iteration count
             if iterIdx > maxIterations:
               break outerLoop
