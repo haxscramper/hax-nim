@@ -89,15 +89,6 @@ macro mapItTreeDFS(
 proc buildPatternDecl(
   node: NimNode, path: seq[int],
   subt: seq[NimNode], vars: var seq[string]): NimNode =
-  # let ind = "  ".repeat(path.len())
-  # echo ind, "combining tree at path ", path, " from ", subt.len, " elems"
-  # echo ind, "subnodes:"
-  # for s in subt:
-  #   echo ind, "- ", s.toStrLit()
-
-  # defer:
-  #   echo ind, "result is ", result.toStrLit()
-
   # AST to declare part of the matcher rule
   if node.kind == nnkBracket and node[0].kind == nnkBracket:
     # Nested brackets are used to annotate variables
@@ -229,8 +220,6 @@ proc treeRepr*[Tree, Enum](
 
 
 
-# dumpTree:
-#   hello(12)
 macro rewriteTest(body: untyped): untyped =
   let rewrite = makeNodeRewriteSystem:
     rule:

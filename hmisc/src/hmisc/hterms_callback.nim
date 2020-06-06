@@ -54,7 +54,6 @@ proc `[]=`*[Key, Val](
     curr = addr curr.subn[key]
 
   curr.value = some(val)
-  # echo path
 
 proc prefixHasValue[Key, Val](
   trie: Trie[Key, Val], path: openarray[Key]): bool =
@@ -73,13 +72,6 @@ proc prefixHasValue[Key, Val](
       curr = curr.subn[key]
     else:
       return false
-
-      # if curr.subn[key].isSome():
-      #   return true
-      # else:
-      #   curr = curr.subn[key]
-    # else:
-    #   return false
 
 iterator parentValues*[Key, Val](
   trie: Trie[Key, Val], path: openarray[Key]): Val =
@@ -151,7 +143,6 @@ type
 
   RedSystem*[VarSym, Obj] = object
     rules*: seq[RulePair[VarSym, Obj]]
-    # rules*: Table[Obj, Obj]
 
 proc assertCorrect*[Obj, VarSym, FunSym, Val](impl: TermImpl[Obj, VarSym, FunSym, Val]): void =
   for name, value in impl.fieldPairs():
@@ -208,31 +199,6 @@ iterator pairs*[VarSym, Obj](
 
 proc len*[VarSym, Obj](env: TermEnv[VarSym, Obj]): int =
   env.values.len()
-
-# func `==`*[Obj](t1, t2: Obj): bool =
-#   ## Check if two terms are **identical**, regardless of the
-#   ## environemtn value.
-#   if t1.kind != t2.kind:
-#     return false
-
-#   case t1.kind:
-#     of tkConstant:
-#       return t1.value == t2.value
-#     of tkVariable:
-#       return t1.name == t2.name
-#     of tkFunctor:
-#       if t1.sym == t2.sym and t1.subt.len() == t2.subt.len():
-#         for (arg1, arg2) in zip(t1.subt, t2.subt):
-#           if arg1 != arg2:
-#             return false
-
-#         return true
-#       else:
-#         return false
-
-#     of tkPlaceholder:
-#       return true # XXXX
-
 
 proc bindTerm[Obj, VarSym, FunSym, Val](
   variable, value: Obj,
@@ -332,12 +298,6 @@ proc unif*[Obj, VarSym, FunSym, Val](
 
     return some(tmpRes)
 
-# proc match*[Obj](t1, t2: Term): TermEnv[Obj] =
-#   case t1.kind:
-#     of tkPlaceholder:
-#       return makeEnvironment()
-#     of tkVariable:
-
 iterator redexes*[Obj, VarSym, FunSym, Val](term: Obj, cb: TermImpl[Obj, VarSym, FunSym, Val]
                                 ): tuple[red: Obj, path: TermPath] =
   ## Iterate over all redex in term
@@ -379,8 +339,6 @@ proc setAtPath*[Obj, VarSym, FunSym, Val](
           cb
         )
     of tkVariable:
-      # echo path
-      # assert (path.len == 1)
       term = value
     of tkPlaceholder:
       assert false, "Cannot assign to placeholder: " & $term & " = " & $value
@@ -448,15 +406,6 @@ proc reduce*[Obj, VarSym, FunSym, Val](
               toSeq(rewPaths.parentValues(path)).anyOfIt(idx in it)
             ):
               continue
-            else:
-              discard
-              # echo "  (reduceConstraints == rcApplyOnce) ", 
-              #   (reduceConstraints == rcApplyOnce)
-              # echo "  (rewPaths.prefixHasValue(path)) ",
-              #   (rewPaths.prefixHasValue(path))
-              # echo "  known paths"
-              # for path in rewPaths.paths():
-              #   echo "\t", path
 
             let lhs: TermMatcher[VarSym, Obj] = rule.rule
             let gen: GenProc[VarSym, Obj] = rule.gen
@@ -492,18 +441,11 @@ proc reduce*[Obj, VarSym, FunSym, Val](
               let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
               setAtPath(tmpTerm, path, tmpNew, cb)
 
-              # echo "updated term, new tree:"
-              # echo treeRepr(tmpTerm, cb)
-
               if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
                 canReduce = true
                 result[1] = true
               else:
                 return (tmpTerm, true)
-
-            # else:
-            #   echo redex
-            #   echo "unification failed"
 
       if not canReduce:
         result[0] = tmpTerm
