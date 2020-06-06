@@ -52,20 +52,6 @@ when false:
 
   for (node, path) in test.nodes():
     echo path.join(" "), " ", node.val
-import intsets, options
 
-type
-  Box[V] = object
-    f1: Option[V]
 
-proc `[]`[V](self: Box[V], key: int): V = self.f1.get()
-proc `[]`[V](self: var Box[V], key: int): var V =
-  var curr: ptr Box[V] = addr self
-  if curr.f1.isSome():
-    return curr.f1.get()
-  else:
-    assert false
-
-var box: Box[IntSet]
-
-echo (12 in box[1])
+#=============================  parser test  =============================#

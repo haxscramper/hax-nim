@@ -414,7 +414,7 @@ proc treeRepr*[Obj, VarSym, FunSym, Val](
         cb.getSubt(term).mapIt(treeRepr(it, cb, depth + 1)).join("\n")
 
 type
-  ReduceConstraints = enum
+  ReduceConstraints* = enum
     rcNoConstraints
     rcRewriteOnce
     rcApplyOnce

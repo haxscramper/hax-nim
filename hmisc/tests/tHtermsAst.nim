@@ -49,6 +49,7 @@ test "Ast rewriting":
       sonsField = sons,
       treeMaker = makeFunctor,
       implName = astImpl,
+      val2String = (proc(n: Ast): string = $n),
       functorKinds = {akCall .. akCondition},
       constantKinds = {akStrLit .. akIdent}
   )

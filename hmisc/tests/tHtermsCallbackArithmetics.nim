@@ -88,7 +88,8 @@ test "Arithmetic addition":
     makeVariable: (n: string) => Arithm(tkind: tkVariable, tname: n),
     makeFunctor: (sym: ArithmOp, subt: seq[Arithm]) => Arithm(
       tkind: tkFunctor, tsym: sym, tsubt: subt
-    )
+    ),
+    valStrGen: (proc(n: int): string = $n)
   )
 
   assertCorrect(cb)
@@ -189,7 +190,9 @@ test "Arithmetic addition":
       ])
     ]),
     rSystem,
-    cb
+    cb,
+    reduceConstraints = rcNoConstraints
   )
 
+  echo $res[0]
   assert "S(S(S(S('0'))))" == $res[0]
