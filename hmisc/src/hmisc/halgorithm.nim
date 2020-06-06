@@ -1,4 +1,6 @@
 import sequtils
+import macros
+import sugar
 
 import algorithm
 export algorithm
@@ -136,6 +138,59 @@ template allOfIt*(s: untyped, op: untyped): bool =
 template subnodesEq*(lhs, rhs, field: untyped): untyped =
   # TODO DOC
   zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
+
+
+proc mapDFSpost*[InTree, OutTree](
+  tree: InTree,
+  map: proc(n: InTree, path: seq[int], subn: seq[OutTree]): OutTree,
+  getSubnodes: proc(tree: InTree): seq[InTree],
+  path: seq[int] = @[0]
+                               ): OutTree =
+  ## Convert one tree type into another using post order DFS traversal
+  let nodeRes: seq[OutTree] = collect(newSeq):
+    for idx, node in getSubnodes(tree):
+      mapDFSpost(node, map, getSubnodes, path & @[idx])
+
+  return map(tree, path, nodeRes)
+
+
+macro mapItTreeDFS*(
+  subnodeCall, outType, inTree, op: untyped): untyped =
+  # TODO add proc for checking if futher recursion is not needed (trim
+  # down arbitrary branches from tree)
+  runnableExamples:
+    type
+      InTest = object
+        val: int
+        sub: seq[InTest]
+
+      OutTest = object
+        val: string
+        sub: seq[OutTest]
+
+    block:
+      let tmp = InTest()
+      echo mapItTreeDFS(
+        sub, OutTest, InTest(),
+        OutTest(val: $it.val & "+"))
+
+  let
+    itIdent = ident "it"
+    pathIdent = ident "path"
+    subnIdent = ident "subt"
+
+  quote do:
+    mapDFSpost(
+      `inTree`,
+      map =
+        proc(
+          `itIdent`: typeof(`inTree`), `pathIdent`: seq[int],
+          `subnIdent`: seq[`outType`]): `outType` =
+            `op`
+      ,
+      getSubnodes = proc(node: typeof(`inTree`)): seq[typeof(`inTree`)] =
+                      node.`subnodeCall`
+    )
 
 
 
