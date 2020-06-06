@@ -54,7 +54,7 @@ proc `[]=`*[Key, Val](
     curr = addr curr.subn[key]
 
   curr.value = some(val)
-  echo path
+  # echo path
 
 proc prefixHasValue[Key, Val](
   trie: Trie[Key, Val], path: openarray[Key]): bool =

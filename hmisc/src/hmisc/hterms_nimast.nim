@@ -209,8 +209,6 @@ macro makeNodeRewriteSystem(body: untyped): untyped =
   result = quote do:
     RedSystem[string, NodeTerm](rules: @`result`)
 
-  echo result.toStrLit()
-
 
 proc treeRepr*[Tree, Enum](
   term: CaseTerm[Tree, Enum],
@@ -238,8 +236,10 @@ macro rewriteTest(body: untyped): untyped =
     rule:
       patt: Call(Ident("hello"), [[other]])
       outp:
+        let exprStr = ($other.toStrLit()).newLit()
         quote do:
           echo "calling proc hello with one argument"
+          echo "expr: ", `exprStr`
           echo "argument value: ", `other`
           hello(`other`)
 
@@ -255,4 +255,4 @@ macro rewriteTest(body: untyped): untyped =
 proc hello(param: int) = echo param
 
 rewriteTest:
-  hello(12)
+  hello(12 + 999)
