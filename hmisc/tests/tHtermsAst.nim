@@ -44,14 +44,17 @@ proc makeFunctor(kind: AstKind, sons: seq[Ast]): Ast =
       return Ast(kind: kind, sons: sons)
 
 test "Ast rewriting":
-  defineTermSystemFor[Ast, AstKind](
-      kindField = kind,
-      sonsField = sons,
-      treeMaker = makeFunctor,
-      implName = astImpl,
-      val2String = (proc(n: Ast): string = $n),
-      functorKinds = {akCall .. akCondition},
-      constantKinds = {akStrLit .. akIdent}
+  defineTermSystemFor(
+    treeType = Ast,
+    enumType = AstKind,
+    kindField = kind,
+    sonsField = sons,
+    treeMaker = makeFunctor,
+    implName = astImpl,
+    val2String = (proc(n: Ast): string = $n),
+    functorKinds = {akCall .. akCondition},
+    constantKinds = {akStrLit .. akIdent},
+    doExport = false
   )
 
   type

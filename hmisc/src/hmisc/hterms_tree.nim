@@ -1,5 +1,7 @@
 import hterms_callback
+import macros
 import hashes, sequtils
+import halgorithm
 
 export sequtils
 
@@ -15,6 +17,27 @@ type
         name*: string
       of tkPlaceholder:
         nil
+
+proc hash*[Tree, Enum](a: CaseTerm[Tree, Enum]): Hash =
+  var h: Hash = 0
+  h = h !& hash(a.tkind)
+  case a.tkind:
+    of tkVariable: h = h !& hash(a.name)
+    of tkConstant: h = h !& hash(a.value)
+    of tkFunctor: h = h !& hash(a.functor)
+    of tkPlaceholder: discard
+
+proc `==`*[Tree, Enum](lhs, rhs: CaseTerm[Tree, Enum]): bool =
+  lhs.tkind == rhs.tkind and (
+    case lhs.tkind:
+      of tkConstant: lhs.value == rhs.value
+      of tkVariable: lhs.name == rhs.name
+      of tkFunctor:
+        lhs.functor == rhs.functor and
+        subnodesEq(lhs, rhs, sons)
+      of tkPlaceholder:
+        true
+  )
 
 proc makeImpl*[Tree, Enum](
   # constantType, functorType: set[Enum],
@@ -135,74 +158,107 @@ proc makeImpl*[Tree, Enum](
 #     else:
 #       result = term.value
 
-template defineTermSystemFor*[Tree, Enum](
+macro defineTermSystemFor*(
+  treeType, enumType: untyped,
   kindField, sonsField: untyped,
   implName, val2String: untyped,
-  functorKinds, constantKinds: set[Enum],
-  treeMaker: proc(kind: Enum, sons: seq[Tree]): Tree,
-                                    ): untyped  =
+  functorKinds, constantKinds: untyped,
+  treeMaker: untyped,
+  doExport: bool = true
+      ): untyped  =
 
-  static:
-    # assert compiles(hash(Tree)),
-    #   "Missing implementation of hash for " & $typeof(Tree)
-    assert compiles(Tree == Tree),
-      "Missing implementation of `== `for " & $typeof(Tree)
+  let trueSym = quote do: true
+  let falseSym = quote do: false
 
+  let
+    treeSym = ident "tree"
+    termSym = ident "term"
 
-  proc toTerm(tree: Tree): CaseTerm[Tree, Enum] =
-    if tree.kindField in constantKinds:
-      return CaseTerm[Tree, Enum](
-        tkind: tkConstant, value: tree
+  if doExport == trueSym:
+    result = quote do:
+      static:
+        var val: `treeType`
+        assert compiles(val == val),
+          "Missing implementation of `== `for " & $typeof(`treeType`)
+
+      proc toTerm*(`treeSym`: `treeType`): CaseTerm[`treeType`, `enumType`] =
+        if tree.`kindField` in `constantKinds`:
+          return CaseTerm[`treeType`, `enumType`](
+            tkind: tkConstant, value: tree
+          )
+        elif tree.`kindField` in `functorKinds`:
+          return CaseTerm[`treeType`, `enumType`](
+            tkind: tkFunctor,
+            functor: tree.`kindField`,
+            sons: toSeq(tree.`sonsField`).mapIt(it.toTerm())
+          )
+        else:
+          assert false, $typeof(`treeType`) &
+            " cannot be converted to CaseTermTree. Kind " &
+            $tree.`kindField` & " is not in functor/constant sets"
+
+      proc fromTerm*(`termSym`: CaseTerm[`treeType`, `enumType`]): `treeType` =
+        assert term.tkind in {tkFunctor, tkConstant},
+           "Cannot convert under-substituted term back to tree. " &
+             $term.tkind & " has to be replaced with value"
+
+        if term.tkind == tkFunctor:
+          result = `treeMaker`(
+            kind = term.functor,
+            sons = term.sons.mapIt(it.fromTerm())
+          )
+        else:
+          result = term.value
+
+      const `implName`* = makeImpl[`treeType`, `enumType`](
+        strGen = `val2String`
       )
-    elif tree.kindField in functorKinds:
-      return CaseTerm[Tree, Enum](
-        tkind: tkFunctor,
-        functor: tree.kindField,
-        sons: toSeq(tree.sonsField).mapIt(it.toTerm())
+
+  elif doExport == falseSym:
+#===================  do not export generated symbols  ===================#
+
+    result = quote do:
+      static:
+        var val: `treeType`
+        assert compiles(val == val),
+          "Missing implementation of `== `for " & $typeof(`treeType`)
+
+      proc toTerm(`treeSym`: `treeType`): CaseTerm[`treeType`, `enumType`] =
+        if tree.`kindField` in `constantKinds`:
+          return CaseTerm[`treeType`, `enumType`](
+            tkind: tkConstant, value: tree
+          )
+        elif tree.`kindField` in `functorKinds`:
+          return CaseTerm[`treeType`, `enumType`](
+            tkind: tkFunctor,
+            functor: tree.`kindField`,
+            sons: toSeq(tree.`sonsField`).mapIt(it.toTerm())
+          )
+        else:
+          assert false, $typeof(`treeType`) &
+            " cannot be converted to CaseTermTree. Kind " &
+            $tree.`kindField` & " is not in functor/constant sets"
+
+      proc fromTerm(`termSym`: CaseTerm[`treeType`, `enumType`]): `treeType` =
+        assert term.tkind in {tkFunctor, tkConstant},
+           "Cannot convert under-substituted term back to tree. " &
+             $term.tkind & " has to be replaced with value"
+
+        if term.tkind == tkFunctor:
+          result = `treeMaker`(
+            kind = term.functor,
+            sons = term.sons.mapIt(it.fromTerm())
+          )
+        else:
+          result = term.value
+
+      const `implName` = makeImpl[`treeType`, `enumType`](
+        strGen = `val2String`
       )
-    else:
-      assert false, $typeof(Tree) &
-        " cannot be converted to CaseTermTree. Kind " &
-        $tree.kindField & " is not in functor/constant sets"
-
-  proc fromTerm(term: CaseTerm[Tree, Enum]): Tree =
-    assert term.tkind in {tkFunctor, tkConstant},
-       "Cannot convert under-substituted term back to tree. " &
-         $term.tkind & " has to be replaced with value"
-
-    if term.tkind == tkFunctor:
-      result = treeMaker(
-        kind = term.functor,
-        sons = term.sons.mapIt(it.fromTerm())
-      )
-    else:
-      result = term.value
-
-  const implName = makeImpl[Tree, Enum](
-    strGen = val2String
-  )
+#=================================  end  =================================#
+  else:
+    assert false, "Expeced either `true` or `false` for `doExport`"
 
 
-proc hash*[Tree, Enum](a: CaseTerm[Tree, Enum]): Hash =
-  # static:
-  #   assert compiles(hash(Tree)), "No hash implementation exists for" & $Tree
 
-  var h: Hash = 0
-  h = h !& hash(a.tkind)
-  case a.tkind:
-    of tkVariable: h = h !& hash(a.name)
-    of tkConstant: h = h !& hash(a.value)
-    of tkFunctor: h = h !& hash(a.functor)
-    of tkPlaceholder: discard
 
-proc `==`*[Tree, Enum](lhs, rhs: CaseTerm[Tree, Enum]): bool =
-  lhs.tkind == rhs.tkind and (
-    case lhs.tkind:
-      of tkConstant: lhs.value == rhs.value
-      of tkVariable: lhs.name == rhs.name
-      of tkFunctor:
-        lhs.functor == rhs.functor and
-        zip(lhs.sons, rhs.sons).allOfIt(it[0] == it[1])
-      of tkPlaceholder:
-        true
-  )

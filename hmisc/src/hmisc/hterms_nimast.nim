@@ -5,6 +5,8 @@ import sugar
 
 import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
 
+export hterms_callback, hterms_tree
+
 const constantNodes =
   {
     nnkNone, nnkEmpty, nnkNilLit, # Empty node
@@ -25,7 +27,9 @@ type
   NodeMatcher* = TermMatcher[string, NodeTerm]
   NodeEnv* = TermEnv[string, NodeTerm]
 
-defineTermSystemFor[NimNode, NimNodeKind](
+defineTermSystemFor(
+  treeType = NimNode,
+  enumType = NimNodeKind,
   kindField = kind,
   sonsField = children,
   implName = nimAstImpl,
@@ -165,14 +169,14 @@ proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
         let res {.inject.} =
           block:
             `sectBody`
- 
+
         res.toTerm()
 
       tmp
 
 
 
-macro makeNodeRewriteSystem(body: untyped): untyped =
+macro makeNodeRewriteSystem*(body: untyped): untyped =
   let rules = collect(newSeq):
     for node in body:
       if node.kind == nnkCall and node[0] == ident("rule"):
@@ -217,31 +221,3 @@ proc treeRepr*[Tree, Enum](
     of tkFunctor:
       return ind & "fun " & $term.functor & "\n" &
         term.sons.mapIt(it.treeRepr(treeStr, depth + 1)).join("\n")
-
-
-
-macro rewriteTest(body: untyped): untyped =
-  let rewrite = makeNodeRewriteSystem:
-    rule:
-      patt: Call(Ident("hello"), [[other]])
-      outp:
-        let exprStr = ($other.toStrLit()).newLit()
-        quote do:
-          echo "calling proc hello with one argument"
-          echo "expr: ", `exprStr`
-          echo "argument value: ", `other`
-          hello(`other`)
-
-  let term = body.toTerm()
-  let nodeTree = proc(n: NimNode): string = n.treeRepr()
-
-  let reduced = reduce(
-    term, rewrite, nimAstImpl
-  )
-  if reduced.ok:
-    result = reduced.term.fromTerm()
-
-proc hello(param: int) = echo param
-
-rewriteTest:
-  hello(12 + 999)
