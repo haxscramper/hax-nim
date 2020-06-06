@@ -19,6 +19,7 @@ type
 proc makeImpl*[Tree, Enum](
   # constantType, functorType: set[Enum],
   # kindField: untyped,
+  strGen: proc(t: Tree): string
   ): TermImpl[CaseTerm[Tree, Enum], string, Enum, Tree] =
   # TODO check for disjoint sets
   TermImpl[CaseTerm[Tree, Enum], string, Enum, Tree](
@@ -97,7 +98,8 @@ proc makeImpl*[Tree, Enum](
     makeFunctor: (
       proc(sym: Enum, subt: seq[CaseTerm[Tree, Enum]]): CaseTerm[Tree, Enum] =
         CaseTerm[Tree, Enum](tkind: tkFunctor, functor: sym, sons: subt)
-    )
+    ),
+    valStrGen: strGen
   )
 
 # template defineToTermProc*[Tree, Enum](
@@ -135,7 +137,7 @@ proc makeImpl*[Tree, Enum](
 
 template defineTermSystemFor*[Tree, Enum](
   kindField, sonsField: untyped,
-  implName: untyped,
+  implName, val2String: untyped,
   functorKinds, constantKinds: set[Enum],
   treeMaker: proc(kind: Enum, sons: seq[Tree]): Tree,
                                     ): untyped  =
@@ -176,7 +178,9 @@ template defineTermSystemFor*[Tree, Enum](
     else:
       result = term.value
 
-  const implName = makeImpl[Tree, Enum]()
+  const implName = makeImpl[Tree, Enum](
+    strGen = val2String
+  )
 
 
 proc hash*[Tree, Enum](a: CaseTerm[Tree, Enum]): Hash =

@@ -28,9 +28,10 @@ defineTermSystemFor[NimNode, NimNodeKind](
   kindField = kind,
   sonsField = children,
   implName = nimAstImpl,
+  val2String = (proc(n: NimNode): string = n.treeRepr()),
   treeMaker = makeNimNode,
   functorKinds = functorNodes,
-  constantKinds = constantNodes
+  constantKinds = constantNodes,
 )
 
 proc mapDFSpost[InTree, OutTree](
@@ -210,6 +211,22 @@ macro makeNodeRewriteSystem(body: untyped): untyped =
   echo result.toStrLit()
 
 
+proc treeRepr*[Tree, Enum](
+  term: CaseTerm[Tree, Enum],
+  treeStr: proc(tree: Tree): string,
+  depth: int = 0): string =
+
+  let ind = "  ".repeat(depth)
+  case term.tkind:
+    of tkConstant:
+      return treeStr(term.value).split("\n").mapIt(ind & "cst " & it).join("\n")
+    of tkPlaceholder:
+      return ind & "plh _"
+    of tkVariable:
+      return ind & "var " & term.name
+    of tkFunctor:
+      return ind & "fun " & $term.functor & "\n" &
+        term.sons.mapIt(it.treeRepr(treeStr, depth + 1)).join("\n")
 
 
 
@@ -225,10 +242,15 @@ macro rewriteTest(body: untyped): untyped =
           echo "argument value: ", `other`
           hello(`other`)
 
-  let reduced = reduce(body.toTerm(), rewrite, nimAstImpl)
+  let term = body.toTerm()
+  let nodeTree = proc(n: NimNode): string = n.treeRepr()
+
+  let reduced = reduce(
+    term, rewrite, nimAstImpl,
+    maxDepth = 5
+  )
   if reduced.ok:
     result = reduced.term.fromTerm()
 
 rewriteTest:
   hello(12)
-  echo (12)

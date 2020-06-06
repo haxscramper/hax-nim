@@ -32,6 +32,7 @@ type
     makeConstant*: proc(val: Val): Obj
     makeVariable*: proc(name: VarSym): Obj
     makeFunctor*: proc(sym: FunSym, subt: seq[Obj]): Obj
+    valStrGen*: proc(val: Val): string
 
   TermEnv*[VarSym, Obj] = object
     values*: Table[VarSym, Obj]
@@ -240,7 +241,6 @@ iterator redexes*[Obj, VarSym, FunSym, Val](term: Obj, cb: TermImpl[Obj, VarSym,
   que.addLast((term, @[0]))
   while que.len > 0:
     let (nowTerm, path) = que.popFirst()
-
     if cb.getKind(nowTerm) == tkFunctor:
       for idx, subTerm in cb.getSubt(nowTerm):
         que.addLast((subTerm, path & @[idx]))
@@ -291,6 +291,24 @@ proc substitute*[Obj, VarSym, FunSym, Val](
     if env.isBound(cb.getVName(v)):
       result.setAtPath(path, v.dereference(env, cb), cb)
 
+proc treeRepr*[Obj, VarSym, FunSym, Val](
+  term: Obj,
+  cb: TermImpl[Obj, VarSym, FunSym, Val],
+  depth: int = 0): string =
+
+  let ind = "  ".repeat(depth)
+  case cb.getKind(term):
+    of tkConstant:
+      return cb.valStrGen(cb.getValue(term))
+        .split("\n").mapIt(ind & "cst " & it).join("\n")
+    of tkPlaceholder:
+      return ind & "plh _"
+    of tkVariable:
+      return ind & "var " & cb.getVName(term)
+    of tkFunctor:
+      return ind & "fun " & $(cb.getFSym(term)) & "\n" &
+        cb.getSubt(term).mapIt(treeRepr(it, cb, depth + 1)).join("\n")
+
 
 proc reduce*[Obj, VarSym, FunSym, Val](
   term: Obj,
@@ -307,6 +325,7 @@ proc reduce*[Obj, VarSym, FunSym, Val](
       var canReduce = false
       for (redex, path) in tmpTerm.redexes(cb):
         if path.len < maxDepth:
+          # echo "rewriting at path ", path
           for rule in system:
             let lhs: TermMatcher[VarSym, Obj] = rule.rule
             let gen: GenProc[VarSym, Obj] = rule.gen
@@ -329,6 +348,10 @@ proc reduce*[Obj, VarSym, FunSym, Val](
               # New value from generator
               let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
               setAtPath(tmpTerm, path, tmpNew, cb)
+
+              echo "updated term, new tree:"
+              echo treeRepr(tmpTerm, cb)
+
               if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
                 canReduce = true
                 result[1] = true

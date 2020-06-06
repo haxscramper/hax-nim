@@ -25,3 +25,30 @@ when false:
     gen = proc(env: TermEnv[int]): float =
             discard
   )
+
+type
+  Tree = object
+    val: string
+    sub: seq[Tree]
+
+import deques
+import strutils
+
+iterator nodes(tree: Tree): tuple[node: Tree, path: seq[int]] =
+  var que: Deque[(Tree, seq[int])]
+  que.addLast((tree, @[0]))
+  while que.len > 0:
+    let (nowTerm, path) = que.popFirst()
+    for idx, subTerm in nowTerm.sub:
+      que.addLast((subTerm, path & @[idx]))
+
+    yield (node: nowTerm, path: path)
+
+let test = Tree(val: "12", sub: @[
+  Tree(val: "222", sub: @[Tree(val: "(())")]),
+  Tree(val: "222", sub: @[Tree(val: "(()00)")]),
+  Tree(val: "222", sub: @[Tree(val: "((--))")])
+])
+
+for (node, path) in test.nodes():
+  echo path.join(" "), " ", node.val
