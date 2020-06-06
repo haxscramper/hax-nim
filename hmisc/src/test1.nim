@@ -52,43 +52,20 @@ when false:
 
   for (node, path) in test.nodes():
     echo path.join(" "), " ", node.val
-
-import tables, options
+import intsets, options
 
 type
-  Trie*[Key, Val] = object
-    subn: Table[Key, Trie[Key, Val]]
-    value: Option[Val]
+  Box[V] = object
+    f1: Option[V]
 
-proc `[]`*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): Val =
-  ## Get value at path
-  var curr = trie
-  for key in path:
-    if key in curr.subn:
-      curr = curr.subn[key]
-    else:
-      raise newException(
-        KeyError, "Trie key not found: " & $path)
-
-  if curr.value.isNone():
-    raise newException(
-      KeyError, "Trie key not found: " & $path)
+proc `[]`[V](self: Box[V], key: int): V = self.f1.get()
+proc `[]`[V](self: var Box[V], key: int): var V =
+  var curr: ptr Box[V] = addr self
+  if curr.f1.isSome():
+    return curr.f1.get()
   else:
-    curr.value.get()
+    assert false
 
-proc `[]=`*[Key, Val](
-  trie: var Trie[Key, Val], path: openarray[Key], val: Val) =
-  ## Set value at path
-  var curr: ptr Trie[Key, Val] = addr trie
-  for key in path:
-    if key notin curr.subn:
-      curr.subn[key] = Trie[Key, Val]()
+var box: Box[IntSet]
 
-    curr = addr curr.subn[key]
-
-  curr.value = some(val)
-
-var tr = Trie[int, string]()
-
-tr[[0, 2]] = "12"
-assert tr[[0, 2]] == "12"
+echo (12 in box[1])

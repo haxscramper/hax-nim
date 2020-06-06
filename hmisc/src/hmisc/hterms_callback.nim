@@ -2,7 +2,106 @@
 ## values/types from terms.
 
 import hashes, sequtils, tables, strformat, strutils
-import helpers, deques
+import helpers, deques, intsets
+
+type
+  Trie*[Key, Val] = object
+    subn: Table[Key, Trie[Key, Val]]
+    value: Option[Val]
+
+proc `[]`*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): Val =
+  ## Get value at path
+  var curr = trie
+  for key in path:
+    if key in curr.subn:
+      curr = curr.subn[key]
+    else:
+      raise newException(
+        KeyError, "Trie key not found: " & $path)
+
+  if curr.value.isNone():
+    raise newException(
+      KeyError, "Trie key not found: " & $path)
+  else:
+    return curr.value.get()
+
+
+proc `[]`*[Key, Val](
+  trie: var Trie[Key, Val], path: openarray[Key]): var Val =
+  ## Get value at path
+  var curr: ptr Trie[Key, Val] = addr trie
+  for key in path:
+    if key in curr.subn:
+      curr = addr curr.subn[key]
+    else:
+      raise newException(
+        KeyError, "Trie key not found: " & $path)
+
+  if curr.value.isNone():
+    raise newException(
+      KeyError, "Trie key not found: " & $path)
+  else:
+    return curr.value.get()
+
+proc `[]=`*[Key, Val](
+  trie: var Trie[Key, Val], path: openarray[Key], val: Val) =
+  ## Set value at path
+  var curr: ptr Trie[Key, Val] = addr trie
+  for key in path:
+    if key notin curr.subn:
+      curr.subn[key] = Trie[Key, Val]()
+
+    curr = addr curr.subn[key]
+
+  curr.value = some(val)
+  echo path
+
+proc prefixHasValue[Key, Val](
+  trie: Trie[Key, Val], path: openarray[Key]): bool =
+  ## Return true of trie contains object on path that is prefix of
+  ## `path` parameter. I.e in situations like `trie: [0, 0, 1] ->
+  ## some(T)` and `path = [0, 0, 1, 2]` it will return `true` since
+  ## `[0, 0, 1]` is a prefix for path and it also has some value
+  ## associated with it. `trie: [0, 0, 2] -> some(T)` will return
+  ## `false` for the same path as there is not value on `[0, 0]`
+  var curr: Trie[Key, Val] = trie
+  for key in path:
+    if curr.value.isSome():
+      return true
+
+    if key in curr.subn:
+      curr = curr.subn[key]
+    else:
+      return false
+
+      # if curr.subn[key].isSome():
+      #   return true
+      # else:
+      #   curr = curr.subn[key]
+    # else:
+    #   return false
+
+iterator parentValues*[Key, Val](
+  trie: Trie[Key, Val], path: openarray[Key]): Val =
+  var curr = trie
+  for key in path:
+    if curr.value.isSome():
+      yield curr.value.get()
+
+    if key in curr.subn:
+      curr = curr.subn[key]
+
+proc paths[Key, Val](trie: Trie[Key, Val]): seq[seq[Key]] =
+  for key, subtrie in trie.subn:
+    for path in subtrie.paths():
+      result.add @[key] & path
+
+proc contains*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): bool =
+  try:
+    discard trie[path]
+    return true
+  except KeyError:
+    return false
 
 type
   TermKind* = enum
@@ -95,6 +194,11 @@ iterator items*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
          RulePair[VarSym, Obj] =
   for pair in system.rules:
     yield pair
+
+iterator pairs*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
+         (int, RulePair[VarSym, Obj]) =
+  for idx, pair in system.rules:
+    yield (idx, pair)
 
 
 iterator pairs*[VarSym, Obj](
@@ -309,24 +413,51 @@ proc treeRepr*[Obj, VarSym, FunSym, Val](
       return ind & "fun " & $(cb.getFSym(term)) & "\n" &
         cb.getSubt(term).mapIt(treeRepr(it, cb, depth + 1)).join("\n")
 
+type
+  ReduceConstraints = enum
+    rcNoConstraints
+    rcRewriteOnce
+    rcApplyOnce
 
 proc reduce*[Obj, VarSym, FunSym, Val](
   term: Obj,
   system: RedSystem[VarSym, Obj],
   cb: TermImpl[Obj, VarSym, FunSym, Val],
   maxDepth: int = 40,
-  maxIterations: int = 4000
+  maxIterations: int = 4000,
+  reduceConstraints: ReduceConstraints = rcApplyOnce
                 ): tuple[term: Obj, ok: bool] =
   var tmpTerm = term
-
+  var rewPaths: Trie[int, IntSet]
   block outerLoop:
     var iterIdx: int = 0
     while true:
       var canReduce = false
       for (redex, path) in tmpTerm.redexes(cb):
-        if path.len < maxDepth:
+        if path.len < maxDepth and not (
+          # Avoid rewriting anyting on this path
+          reduceConstraints == rcRewriteOnce and
+          rewPaths.prefixHasValue(path)
+        ):
           # echo "rewriting at path ", path
-          for rule in system:
+          for idx, rule in system:
+            if (
+              # Avoid using this rule again on the same path
+              (reduceConstraints == rcApplyOnce) and
+              (rewPaths.prefixHasValue(path)) and
+              toSeq(rewPaths.parentValues(path)).anyOfIt(idx in it)
+            ):
+              continue
+            else:
+              discard
+              # echo "  (reduceConstraints == rcApplyOnce) ", 
+              #   (reduceConstraints == rcApplyOnce)
+              # echo "  (rewPaths.prefixHasValue(path)) ",
+              #   (rewPaths.prefixHasValue(path))
+              # echo "  known paths"
+              # for path in rewPaths.paths():
+              #   echo "\t", path
+
             let lhs: TermMatcher[VarSym, Obj] = rule.rule
             let gen: GenProc[VarSym, Obj] = rule.gen
             # Reached max iteration count
@@ -343,14 +474,26 @@ proc reduce*[Obj, VarSym, FunSym, Val](
 
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
+              # echo "rule #", idx, " can be applied on path ", path
+              case reduceConstraints:
+                of rcApplyOnce:
+                  if path notin rewPaths:
+                    # echo "adding value to path ", path
+                    rewPaths[path] = IntSet()
+
+                  rewPaths[path].incl idx
+                of rcRewriteOnce: rewPaths[path] = IntSet()
+                else:
+                  discard
+
               let newEnv = unifRes.get()
 
               # New value from generator
               let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
               setAtPath(tmpTerm, path, tmpNew, cb)
 
-              echo "updated term, new tree:"
-              echo treeRepr(tmpTerm, cb)
+              # echo "updated term, new tree:"
+              # echo treeRepr(tmpTerm, cb)
 
               if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
                 canReduce = true

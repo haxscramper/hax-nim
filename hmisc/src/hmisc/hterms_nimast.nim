@@ -1,4 +1,5 @@
 import macros
+import tables
 import strutils
 import sugar
 
@@ -246,11 +247,12 @@ macro rewriteTest(body: untyped): untyped =
   let nodeTree = proc(n: NimNode): string = n.treeRepr()
 
   let reduced = reduce(
-    term, rewrite, nimAstImpl,
-    maxDepth = 5
+    term, rewrite, nimAstImpl
   )
   if reduced.ok:
     result = reduced.term.fromTerm()
+
+proc hello(param: int) = echo param
 
 rewriteTest:
   hello(12)
