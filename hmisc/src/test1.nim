@@ -56,4 +56,5 @@ when false:
 
 #=============================  parser test  =============================#
 dumpTree:
-  proc ed*()
+  lcoll(b, a)
+  lcoll b, a

@@ -28,14 +28,23 @@ type
   NodeEnv* = TermEnv[string, NodeTerm]
 
 defineTermSystemFor(
-  treeType = NimNode,
-  enumType = NimNodeKind,
-  kindField = kind,
-  sonsField = children,
-  implName = nimAstImpl,
+  treeType = NimNode, # Use `NimNode` for case term value type
+  enumType = NimNodeKind, # Use `NimNodeKind` as functor
+  kindField = kind, # Use `kind` command for accessing node fields
+  sonsField = children, # Use `children` command for accessing noe fields
+  implName = nimAstImpl, # Implementation const will be called `nimAstImpl`
+
+  # To avoid exceptions for non-strlit nodes use this proc to get
+  # string for nim node
   val2String = (proc(n: NimNode): string = n.treeRepr()),
+
+  # Procedure to create new instance of nim node
   treeMaker = makeNimNode,
+
+  # Node kinds that should be considered functors
   functorKinds = functorNodes,
+
+  # Node kinds that should be considered 'constants'
   constantKinds = constantNodes,
 )
 
@@ -43,6 +52,18 @@ defineTermSystemFor(
 proc buildPatternDecl(
   node: NimNode, path: seq[int],
   subt: seq[NimNode], vars: var seq[string]): NimNode =
+  ## Convert pattern declaraion into pattern matcher.
+  ## 
+  ## :params:
+  ##    :node: current node to convert into pattern matchers
+  ##    :path: path for current node
+  ##    :subt: List of subterms for which patterns have already been
+  ##           created
+  ##    :vars: List of variables discovered during tree traversal.
+  ##           Newfound variables are appended to it.  
+  # IDEA TODO write generalized version of this proc for generatic
+  # patern matchers for any kind of homogenous AST wit enum as functor
+
   # AST to declare part of the matcher rule
   if node.kind == nnkBracket and node[0].kind == nnkBracket:
     # Nested brackets are used to annotate variables
@@ -64,10 +85,18 @@ proc buildPatternDecl(
       let funcEnum: NimNodeKind = parseEnum[NimNodeKind]("nnk" & callSym)
 
       if funcEnum in functorNodes:
+        # Genreate matcher for functor
         let subtMatchers = newTree(nnkBracket, subt.filterIt(not it.isNil))
         return quote do:
-          NodeTerm(tkind: tkFunctor, functor: `funcName`, sons: @`subtMatchers`)
+          NodeTerm(
+            tkind: tkFunctor, # Will match functor nodes in tree
+            functor: `funcName`, # Literal value for functor kind
+            sons: @`subtMatchers` # Wrap all subnode matchers into sequence
+          )
       else:
+        # Literal value. It is necessary to implement two-level hop
+        # with values: *generate code* that will generate NimNode
+        # literals.
         var termValue: NimNode
         if callSym.endsWith("Lit"):
           let nodeTyle = callSym[0..^3]
@@ -91,7 +120,9 @@ proc buildPatternDecl(
               $node.kind() & " lit: " & $node.toStrLit()
 
 
-proc makePatternDecl(sectBody: NimNode): tuple[node: NimNode, vars: seq[string]] =
+proc makePatternDecl(
+  sectBody: NimNode): tuple[node: NimNode, vars: seq[string]] =
+  ## Declare pattern matcher for section body
   var vars: seq[string]
   let ruleMatcherDef = mapItTreeDFS(
     subnodes, NimNode, sectBody,
@@ -127,6 +158,7 @@ proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
 
 
 macro makeNodeRewriteSystem*(body: untyped): untyped =
+  ## Create term rewriting system instance for nim node ast
   let rules = collect(newSeq):
     for node in body:
       if node.kind == nnkCall and node[0] == ident("rule"):
@@ -159,6 +191,7 @@ proc treeRepr*[Tree, Enum](
   term: CaseTerm[Tree, Enum],
   treeStr: proc(tree: Tree): string,
   depth: int = 0): string =
+  ## Generate tree representation for `CaseTerm`
 
   let ind = "  ".repeat(depth)
   case term.tkind:

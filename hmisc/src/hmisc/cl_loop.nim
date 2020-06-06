@@ -12,6 +12,8 @@ import os
 import colechopkg/types
 export types
 
+import ast_pattern_matching
+
 ## Implementation of common lisp's loop macro
 
 
@@ -132,152 +134,33 @@ type
       nil
 
 
-  LoopGenConfig = object
+  LoopGenConf = object
     case retTuple: bool ## Single or multiple value return
       of true:
-        flds: seq[tuple[name, ftype: string]] ## | Multiple
+        flds: seq[string] ## | Multiple
         ## value return. List of tuple field names along with return
         ## types.
-        # List of name/ftype pairs is generated alter processing macro
-        # body. In statement like `lcoll out, i.name` first argument
-        # to lcoll corresponds to `name` in the pair. Generated type
-        # will have name `Type<Name>`. In this example tuple will be:
-        # `(name: "out", type: "TypeOut")`
       of false:
         rtype: NimNode ## |
         ## Single value return
 
     defType: Opt[NimNode] ## Default return type, if any
 
-proc makeResType(stmts: seq[LoopStmtKind], conf: LoopGenConfig): tuple[
-  typeDecl, typeName: NimNode] =
-  ## Generate statement for declaring loop return type and expression to
-  # IDEA Generate name of the return type based on loop init location
-  if conf.defType.isSome():
-    # TODO generate static type checking assertions
-    result.typeDecl = superQuote do:
-      type LoopResult = `conf.defType.get()`
-  else:
-    # Calcuate return type based on loop statements in body.
-    discard
+proc fillLoopConf(conf: var LoopGenConf, body: NimNode): void =
+  matchAstRecursive(body):
+  of nnkCall(`fld`, `expr`):
+    conf.flds.add $fld
+  of nnkCommand(`fld`, `expr`):
+    echo "found lcoll"
 
-proc makeIterators(stmts: seq[NimNode]): tuple[
-  iterDecl, typeDecl: NimNode] =
-  ## Create declaration of iterators and type declarations
-
-  let forStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lfor"))
-  let forIters = collect(newSeq):
-    for fs in forStmts:
-      let varn = fs[1][1]
-      let iter = fs[1][2]
-
-      let iterDecl = makeClosureIteratorDef(iter)
-      (
-        vsym: varn,
-        iter: iterDecl,
-        itbody: iter,
-        itersym: makeIterFor(varn)
-      )
-
-  let decls = collect(newSeq):
-    for decl in forIters:
-      superQuote do:
-        let `decl.itersym` = `decl.iter`
-
-
-  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcoll"))
-  let typeExprs = collect(newSeq):
-    for coll in collectStmts:
-      coll[1].substituteEnv(forIters.mapIt((
-        it[0], Call(makeIterFor(it[0])))))
-
-  return (iterDecl: decls.newStmtList(), typeDecl: typeExprs.newStmtList())
 
 macro loop*(arg, body: untyped): untyped =
-  let stmts = toSeq(body.children()).filterIt(it.kind != nnkEmpty)
-  let (iterDecls, typeDecls) = makeIterators(stmts)
-  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcoll"))
-  let resType = superQuote do: typeof(`typeDecls[0]`)
+  var conf = LoopGenConf() # IMPLEMENT determine loop configuration
 
-  let resSeq = superQuote do:
-    var ress {.inject.}: seq[`resType`]
+  conf.fillLoopConf(body)
 
-  let breakCondition = forIters.mapIt(
-    Call("finished", it.itersym)
-  ).foldlInfix(ident "or")
-
-  let varAssgns = collect(newSeq):
-    for decl in forIters:
-      superQuote do:
-        let `decl.vsym` = `decl.itersym`()
-
-  let endStmt =
-    if collectStmts.len > 0:
-      quote do: ress
-    else:
-      Empty()
-
-  let collectCalls = collect(newSeq):
-    for coll in collectStmts:
-      superQuote do:
-        ress.add(`coll[1]`)
-
-  let typeAsserts = collect(newSeq):
-    for idx, coll in collectStmts:
-      let annots = collect(newSeq):
-        for id in @[idx, 0]:
-          let info = collectStmts[id].lineInfoObj()
-          let nodeStr = $collectStmts[id][1].toStrLit()
-          let nodeLen = (nodeStr).len().newIntLitNode()
-          let annotation =
-            if id != 0:
-              superQuote do: ("Has type `" & $typeof(`typeExprs[idx]`) &
-                "` but expected `" & $typeof(`resType`) & "`")
-            else:
-              superQuote do: ("Inferred type is `" & $typeof(`resType`) & "` ")
-
-          superQuote do:
-            annots.add ErrorAnnotation(
-              annotation: `annotation`,
-              errpos: LineInfo(
-                  filename: `info.filename.newStrLitNode()`,
-                  line: `info.line.newIntLitNode()`,
-                  column: `info.column.newIntLitNode()`
-              ),
-              expr: `newStrLitNode(nodeStr)`
-            )
-
-
-      superQuote do:
-        block:
-          var annots {.inject.}: seq[ErrorAnnotation]
-          `annots.newStmtList()`
-          codeAssert(
-            cond = (typeof(`typeExprs[idx]`) is `resType`),
-            msg = "Type mismatch on `lcollect` expression",
-            annots = annots
-          )
-
-  result = superQuote do:
-    block:
-      `newStmtList(decls)`
-      `resSeq`
-
-      static:
-        try:
-          `typeAsserts.newStmtList()`
-        except CodeError:
-          highlightErr(CodeError(getCurrentException()))
-          quit(1)
-
-      while true:
-        `varAssgns.newStmtList()`
-        if `breakCondition`:
-          break
-
-        `collectCalls.newStmtList()`
-
-      `endStmt`
+  result = quote do:
+    1
 
 
 macro loop1*(body: untyped): untyped =

@@ -16,27 +16,35 @@ type
   TermPath = seq[int]
   TermImpl*[Obj, VarSym, FunSym, Val] = object
 
-    getKind*: proc(self: Obj): TermKind
+    getKind*: proc(self: Obj): TermKind ## Get term kind
     setNth*: proc(self: var Obj, idx: int, value: Obj): void
     getNth*: proc(self: Obj, idx: int): Obj
     getNthMod*: proc(self: var Obj, idx: int): var Obj
 
     getVName*: proc(self: Obj): VarSym
-    getFSym*: proc(self: Obj): FunSym # XXX change to `getFSym`
+    getFSym*: proc(self: Obj): FunSym
     getSubt*: proc(self: Obj): seq[Obj]
     setSubt*: proc(self: var Obj, subt: seq[Obj]): void
-    getValue*: proc(self: Obj): Val
 
-    unifCheck*: proc(self, other: Obj): bool ## | Procedure to quickly
-    ## check if two objects can be unified at all
+    getValue*: proc(self: Obj): Val
+    ## Get value for term `self`
+
+    unifCheck*: proc(self, other: Obj): bool
+    ## Procedure to quickly check if two objects can be unified at all
 
     makePlaceholder*: proc(): Obj
+    ## Generate instance of `tkPlaceholder` term
     makeConstant*: proc(val: Val): Obj
+    ## Generate instance of `tkConstant` term
     makeVariable*: proc(name: VarSym): Obj
+    ## Generate instance of `tkVariable` term
     makeFunctor*: proc(sym: FunSym, subt: seq[Obj]): Obj
+    ## Generate instance of `tkFunctor` term using `subt` as subterms
     valStrGen*: proc(val: Val): string
+    ## Conver value to string.
 
   TermEnv*[VarSym, Obj] = object
+    ## Mapping between varuable symbols and values
     values*: Table[VarSym, Obj]
 
   TermMatcher*[VarSym, Obj] = object
@@ -56,22 +64,27 @@ type
     rules*: seq[RulePair[VarSym, Obj]]
 
 proc assertCorrect*[Obj, VarSym, FunSym, Val](impl: TermImpl[Obj, VarSym, FunSym, Val]): void =
+  ## Check if all fields in `impl` have been correctly initalized
   for name, value in impl.fieldPairs():
     assert (not value.isNil()), name & " cannot be nil"
 
 proc makeRulePair*[VarSym, Obj](
   rule: TermMatcher[VarSym, Obj],
   gen: proc(env: TermEnv[VarSym, Obj]): Obj): RulePair[VarSym, Obj] =
+  ## Create rule pair insance
   RulePair[VarSym, Obj](rule: rule, gen: gen)
 
 proc makePattern*[VarSym, Obj](obj: Obj): TermMatcher[VarSym, Obj] =
+  ## Create term matcher instance with for patterns
   TermMatcher[VarSym, Obj](patt: obj, isPattern: true)
 
 proc makeMatcher*[VarSym, Obj](
   matcher: proc(test: Obj): Option[TermEnv[VarSym, Obj]]): TermMatcher[VarSym, Obj] =
+  ## Create term matcher instance for matching procs
   TermMatcher[VarSym, Obj](isPattern: false, matcher: matcher)
 
 proc makeGenerator*[VarSym, Obj](obj: Obj): proc(env: TermEnv[VarSym, Obj]): Obj =
+  ## Create closure proc that will output `obj` as value
   return proc(env: TermEnv[VarSym, Obj]): Obj =
     return obj
 
@@ -80,35 +93,44 @@ proc makeEnvironment*[VarSym, Obj](values: seq[(VarSym, Obj)] = @[]): TermEnv[Va
   TermEnv[VarSym, Obj](values: values.toTable())
 
 proc isBound*[VarSym, Obj](env: TermEnv[VarSym, Obj], term: VarSym): bool =
+  ## Check if variable is bound to somethin in `env`
   (term in env.values) # and env[term] != term
 
-proc `[]`*[VarSym, Obj](e: TermEnv[VarSym, Obj], t: VarSym): Obj = e.values[t]
+proc `[]`*[VarSym, Obj](e: TermEnv[VarSym, Obj], t: VarSym): Obj =
+  ## Access value from environment.
+  e.values[t]
 
 proc `[]=`*[VarSym, Obj](system: var RedSystem[VarSym, Obj], lhs, rhs: Obj): void =
+  ## Add rule to environment
   system.rules[lhs] = rhs
 
 proc `[]=`*[VarSym, Obj](
   env: var TermEnv[VarSym, Obj], variable: VarSym, value: Obj): void =
+  ## Set value for variable in environemt
 
   env.values[variable] = value
 
 iterator items*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
          RulePair[VarSym, Obj] =
+  ## Iterate over all rules in rewriting system
   for pair in system.rules:
     yield pair
 
 iterator pairs*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
          (int, RulePair[VarSym, Obj]) =
+  ## Iterate over all rules with their indices in rewriting system
   for idx, pair in system.rules:
     yield (idx, pair)
 
 
 iterator pairs*[VarSym, Obj](
   env: TermEnv[VarSym, Obj]): (VarSym, Obj) =
+  ## Iterate over all variables and values in evnironment
   for lhs, rhs in pairs(env.values):
     yield (lhs, rhs)
 
 proc len*[VarSym, Obj](env: TermEnv[VarSym, Obj]): int =
+  ## Get number of itesm in enviroenmt
   env.values.len()
 
 proc bindTerm[Obj, VarSym, FunSym, Val](
@@ -117,7 +139,8 @@ proc bindTerm[Obj, VarSym, FunSym, Val](
   cb: TermImpl[Obj, VarSym, FunSym, Val]): TermEnv[VarSym, Obj]
 
 proc copy*[Obj, VarSym, FunSym, Val](
-  term: Obj, env: TermEnv[VarSym, Obj], cb: TermImpl[Obj, VarSym, FunSym, Val]): (Obj, TermEnv[VarSym, Obj]) =
+  term: Obj, env: TermEnv[VarSym, Obj],
+  cb: TermImpl[Obj, VarSym, FunSym, Val]): (Obj, TermEnv[VarSym, Obj]) =
   ## Create copy of a term. All variables are replaced with new ones.
   let inputEnv = env
   case cb.getKind(term):
@@ -178,6 +201,9 @@ proc unif*[Obj, VarSym, FunSym, Val](
   cb: TermImpl[Obj, VarSym, FunSym, Val],
   env: TermEnv[VarSym, Obj] = makeEnvironment[VarSym, Obj]()
     ): Option[TermEnv[VarSym, Obj]] =
+  ## Attempt to unify two terms. On success substitution (environment)
+  ## is return for which two terms `t1` and `t2` could be considered
+  ## equal.
   let
     val1 = dereference(t1, env, cb)
     val2 = dereference(t2, env, cb)
@@ -296,6 +322,28 @@ proc reduce*[Obj, VarSym, FunSym, Val](
   maxIterations: int = 4000,
   reduceConstraints: ReduceConstraints = rcApplyOnce
                 ): tuple[term: Obj, ok: bool] =
+  ## Perform reduction of `term` using `system` rules.
+  ## 
+  ## Iterate over all subterms (redexes) in `term` and try each reduction
+  ## rule in `system`. If rule matches, replace subterm with output of
+  ## the rule value generator.
+  ## 
+  ## :params:
+  ##    :term: term to reduce
+  ##    :system: collection of rules (matcher - generator pairs)
+  ##    :cb: implementation callbacks for term
+  ##    :maxDepth: do not reduce terms deeper than this value
+  ##    :maxIterations: stop reduction attempts after reaching this value
+  ##    :reduceConstaints: Configuration for continous application of
+  ##                       reduction rules on the same paths.
+  ##       - **rcNoConstaints** Reduce as long as reduction can take
+  ##         place
+  ##       - **rcRewriteOnce** do not rewrite subterm or any of it's
+  ##         descendants after it has been reduced once
+  ##       - **rcApplyOnce** do not use the same rule on term or any of
+  ##         it's descendants after rule has been applied once. Reduction
+  ##         of the term (or descendants) might still take place but
+  ##         using different rules.  
   var tmpTerm = term
   var rewPaths: Trie[int, IntSet]
   block outerLoop:

@@ -44,6 +44,7 @@ proc makeImpl*[Tree, Enum](
   # kindField: untyped,
   strGen: proc(t: Tree): string
   ): TermImpl[CaseTerm[Tree, Enum], string, Enum, Tree] =
+  ## Create instance of implementation callbacks for particular `CaseTerm`.
   # TODO check for disjoint sets
   TermImpl[CaseTerm[Tree, Enum], string, Enum, Tree](
     getKind: (
@@ -122,6 +123,33 @@ macro defineTermSystemFor*(
   treeMaker: untyped,
   doExport: bool = true
       ): untyped  =
+  ## Horrible boilerplate automation setup
+  ## 
+  ## :params:
+  ##    :treeType: Type that will be used as value for `CaseTerm`
+  ##               constants
+  ##    :enumType: Type that will be used as functor for `CaseTerm`
+  ##               functors
+  ##    :kindField: Field in `treeType` that is used to determine it's
+  ##                type. Should be `typeof(enumType)`
+  ##    :sonsField: Field in `treeType` that is used to get list of the
+  ##                children for tree instance
+  ##    :implName: Name of the implementation `const` that will be
+  ##               generated for this particular instance
+  ##    :val2String: Function for converting `treeType` to string
+  ##    :functorKinds: Set of kinds that will be converted into functor
+  ##                   case term. Should support `in` operator. For most
+  ##                   cases `set[enumType]` will suffice
+  ##    :constantKinds: Set of kinds that will be converted into constant
+  ##                    case terms. Same requirements as `functorKinds`.
+  ##    :treeMaker: procedure to generate instance of new `treeType`. Two
+  ##                parameters are expected: `treeMaker(kind: enumType,
+  ##                sons: seq[treeType])`
+  ##    :doExport: Whether or not to mark generated procs/consts as
+  ##               exported. `true` by default, should be used only for
+  ##               unit testing.
+  ## 
+  ## For application see `hterms_nimast.nim`  
 
   let trueSym = quote do: true
   let falseSym = quote do: false
