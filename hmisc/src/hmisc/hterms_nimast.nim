@@ -155,15 +155,29 @@ proc makePatternDecl(sectBody: NimNode): tuple[node: NimNode, vars: seq[string]]
 
 proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
   ## Declare section for value generator
+  let varDecls = collect(newSeq):
+    for v in vars:
+      let id = ident(v)
+      let strl = newLit(v)
+      quote do:
+        let `id`: NimNode = env[`strl`].fromTerm()
+
+  let varStmts = varDecls.newStmtList()
+
+  let envs = ident "env"
   result = quote do:
     block:
-      proc tmp(env: NodeEnv): NodeTerm =
-        let tmp = quote do:
-          echo "hello"
-
-        tmp.toTerm()
+      proc tmp(`envs`: NodeEnv): NodeTerm =
+        `varStmts`
+        let res {.inject.} =
+          block:
+            `sectBody`
+ 
+        res.toTerm()
 
       tmp
+
+
 
 macro makeNodeRewriteSystem(body: untyped): untyped =
   let rules = collect(newSeq):
@@ -175,10 +189,12 @@ macro makeNodeRewriteSystem(body: untyped): untyped =
   for rule in rules:
     let pattSection = toSeq(rule[1].children()).findItFirst(
       it[0].strVal() == "patt")[1][0]
+
     let (matcherDecl, varList) = makePatternDecl(pattSection)
 
     let genSection = toSeq(rule[1].children()).findItFirst(
-      it[0].strVal() == "outp")[1][0]
+      it[0].strVal() == "outp")[1].newStmtList()
+
     let generator = makeGeneratorDecl(genSection, varList)
 
     matcherTuples.add quote do:

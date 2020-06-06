@@ -96,9 +96,13 @@ iterator items*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
     yield pair
 
 
-iterator pairs*[VarSym, Obj](env: TermEnv[VarSym, Obj]): RulePair[VarSym, Obj] =
-  for (lhs, rhs) in env.values:
+iterator pairs*[VarSym, Obj](
+  env: TermEnv[VarSym, Obj]): (VarSym, Obj) =
+  for lhs, rhs in pairs(env.values):
     yield (lhs, rhs)
+
+proc len*[VarSym, Obj](env: TermEnv[VarSym, Obj]): int =
+  env.values.len()
 
 # func `==`*[Obj](t1, t2: Obj): bool =
 #   ## Check if two terms are **identical**, regardless of the
@@ -318,9 +322,11 @@ proc reduce*[Obj, VarSym, FunSym, Val](
               of false:
                 unifRes = lhs.matcher(redex)
 
+            # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
               let newEnv = unifRes.get()
 
+              # New value from generator
               let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
               setAtPath(tmpTerm, path, tmpNew, cb)
               if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:

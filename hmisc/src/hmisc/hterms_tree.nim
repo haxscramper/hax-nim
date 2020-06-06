@@ -166,7 +166,7 @@ template defineTermSystemFor*[Tree, Enum](
   proc fromTerm(term: CaseTerm[Tree, Enum]): Tree =
     assert term.tkind in {tkFunctor, tkConstant},
        "Cannot convert under-substituted term back to tree. " &
-         $term.tkind & " has to be replaced with valu"
+         $term.tkind & " has to be replaced with value"
 
     if term.tkind == tkFunctor:
       result = treeMaker(
