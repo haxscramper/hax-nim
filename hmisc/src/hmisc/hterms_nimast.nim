@@ -5,7 +5,7 @@ import sugar
 
 import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
 
-export hterms_callback, hterms_tree
+export hterms_callback, hterms_tree, macros
 
 const constantNodes =
   {
