@@ -3,6 +3,8 @@
 import hashes, sequtils, tables, strformat, strutils
 import helpers, deques
 
+export tables
+
 type
   Failure* = ref object of CatchableError
   TermKind* = enum
@@ -130,7 +132,7 @@ proc hash*[Sym, Val](t: Term[Sym, Val]): Hash =
 
   result = !$h
 
-func `==`*[Obj](t1, t2: Obj): bool =
+func `==`*[Sym, Val](t1, t2: Term[Sym, Val]): bool =
   ## Check if two terms are **identical**, regardless of the
   ## environemtn value.
   if t1.kind != t2.kind:
@@ -305,7 +307,7 @@ proc reduce*[Sym, Val](
   while true:
     var canReduce = false
     for (redex, path) in tmpTerm.redexes():
-      for lhs, rhs in system:
+      for lhs, rhs in system.rules:
         try:
           let newEnv = unif(lhs, redex)
           let tmpNew = rhs.substitute(newEnv)
