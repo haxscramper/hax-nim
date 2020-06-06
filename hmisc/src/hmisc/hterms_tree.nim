@@ -50,16 +50,6 @@ proc makeImpl*[Tree, Enum](
       # Return type of the term based on it's wrapper kind *and*
       # content's kind.
       proc(t: CaseTerm[Tree, Enum]): TermKind = t.tkind
-        # case t.tkind:
-        #   of tkVariable, tkPlaceholder:
-        #     return t.tkind
-        #   of tkFunctor, tkConstant:
-        #     if t.content.kindField in constantType:
-        #       return tkConstant
-        #     elif t.content.kindField in functorType:
-        #       return tkFunctor
-        #     else:
-        #       assert false, "Missing value in constant/functor sets: " & $t.content.kindField
     ),
     setNth: (
       proc(self: var CaseTerm[Tree, Enum],
@@ -124,40 +114,6 @@ proc makeImpl*[Tree, Enum](
     ),
     valStrGen: strGen
   )
-
-# template defineToTermProc*[Tree, Enum](
-#   kindField, sonsField: untyped,
-#   functorKinds, constantKinds: set[Enum]
-#                                     ): untyped =
-#   proc toTerm(tree: Tree): CaseTerm[Tree, Enum] =
-#     if tree.kindField in constantKinds:
-#       return CaseTerm[Tree, Enum](
-#         tkind: tkConstant, value: tree
-#       )
-#     elif tree.kindField in functorKinds:
-#       return CaseTerm[Tree, Enum](
-#         tkind: tkFunctor, sons: tree.sonsField.mapIt(it.toTerm())
-#       )
-#     else:
-#       assert false, $typeof(Tree) &
-#         " cannot be converted to CaseTermTree. Kind " &
-#         $tree.kindField & " is not in functor/constant sets"
-
-# template defineFromTermProc[Tree, Enum](
-#   kindField, sonsField: untyped): untyped =
-#   proc fromTerm(term: CaseTerm[Tree, Enum]): Tree =
-#     assert term.tkind in {tkFunctor, tkConstant},
-#        "Cannot convert under-substituted term back to tree. " &
-#          $term.tkind & " has to be replaced with valu"
-
-#     if term.tkind == tkFunctor:
-#       result = Tree(
-#         kindField: term.functor,
-#         sonsField: term.sons.mapIt(it.fromTerm())
-#       )
-#     else:
-#       result = term.value
-
 macro defineTermSystemFor*(
   treeType, enumType: untyped,
   kindField, sonsField: untyped,

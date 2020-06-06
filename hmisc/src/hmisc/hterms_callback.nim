@@ -334,11 +334,9 @@ proc reduce*[Obj, VarSym, FunSym, Val](
 
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
-              # echo "rule #", idx, " can be applied on path ", path
               case reduceConstraints:
                 of rcApplyOnce:
                   if path notin rewPaths:
-                    # echo "adding value to path ", path
                     rewPaths[path] = IntSet()
 
                   rewPaths[path].incl idx
