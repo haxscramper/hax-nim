@@ -10,6 +10,4 @@ static:
     echo "Exception caught"
 
 
-echo loop1((
-  lfor i in 0..2; lfor q in @[1,2,4];
-  lcollect i; lcollect "i * q"))
+echo loop1((lfor i in 0..2; lcoll i))

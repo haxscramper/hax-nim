@@ -24,6 +24,7 @@ type
   CodeError* = ref object of CatchableError
     annots: seq[ErrorAnnotation]
 
+
 proc nthLine(file: string, line: int): string =
   readLines(file, line)[line - 1]
 
@@ -132,6 +133,20 @@ type
 
 
   LoopGenConfig = object
+    case retTuple: bool ## Single or multiple value return
+      of true:
+        flds: seq[tuple[name, ftype: string]] ## | Multiple
+        ## value return. List of tuple field names along with return
+        ## types.
+        # List of name/ftype pairs is generated alter processing macro
+        # body. In statement like `lcoll out, i.name` first argument
+        # to lcoll corresponds to `name` in the pair. Generated type
+        # will have name `Type<Name>`. In this example tuple will be:
+        # `(name: "out", type: "TypeOut")`
+      of false:
+        rtype: NimNode ## |
+        ## Single value return
+
     defType: Opt[NimNode] ## Default return type, if any
 
 proc makeResType(stmts: seq[LoopStmtKind], conf: LoopGenConfig): tuple[
@@ -169,18 +184,20 @@ proc makeIterators(stmts: seq[NimNode]): tuple[
       superQuote do:
         let `decl.itersym` = `decl.iter`
 
+
+  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcoll"))
   let typeExprs = collect(newSeq):
     for coll in collectStmts:
       coll[1].substituteEnv(forIters.mapIt((
         it[0], Call(makeIterFor(it[0])))))
 
-  return (iterDecl: decls, typeDecl: typeExprs)
+  return (iterDecl: decls.newStmtList(), typeDecl: typeExprs.newStmtList())
 
 macro loop*(arg, body: untyped): untyped =
   let stmts = toSeq(body.children()).filterIt(it.kind != nnkEmpty)
   let (iterDecls, typeDecls) = makeIterators(stmts)
-  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcollect"))
-  let resType = superQuote do: typeof(`typeExprs[0]`)
+  let collectStmts = stmts.filterIt(it.kind == nnkCommand and it[0].eqIdent("lcoll"))
+  let resType = superQuote do: typeof(`typeDecls[0]`)
 
   let resSeq = superQuote do:
     var ress {.inject.}: seq[`resType`]
