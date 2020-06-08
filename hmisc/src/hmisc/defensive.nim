@@ -1,4 +1,5 @@
 import colechopkg/lib
+import macros
 import terminal
 import re
 import helpers
@@ -25,8 +26,8 @@ export helpers
 
 ]##
 
-## Collection of helper functions to provide verbose messages for
-## common errors
+## Collection of helper functions to provide verbose messages,
+## additional exception types and logging
 
 #=======================  more verbose exceptions  =======================#
 
@@ -334,6 +335,34 @@ template safeRunCommand*(
 
 
 #=====================  exception-related features  ======================#
+
+type
+  ErrorAnnotation = object
+    errpos*: LineInfo
+    expr*: string
+    annotation*: string
+
+  CodeError* = ref object of CatchableError
+    errpos: LineInfo ## Position of original error
+    annots: seq[ErrorAnnotation] ## Additional error annotations
+
+
+proc nthLine(file: string, line: int): string =
+  readLines(file, line)[line - 1]
+
+proc highlightErr*(err: CodeError): void =
+
+  echo "\n", err.msg, "\n"
+
+  for err in err.annots:
+    let (dir, name, ext) = err.errpos.filename.splitFile()
+    let position = &"{name}{ext} {err.errpos.line}:{err.errpos.column} "
+    let padding = " ".repeat(position.len + err.errpos.column)
+
+    echo position, nthLine(err.errpos.filename, err.errpos.line)
+    echo padding, "^".repeat(err.expr.len()).toRed()
+    echo padding, err.annotation
+    echo ""
 
 # DOC use formatting only on literal nodes, pas non-literal as-is
 template optFmt(arg: string{lit}): untyped = &arg

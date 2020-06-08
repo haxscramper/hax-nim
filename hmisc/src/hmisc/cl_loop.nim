@@ -17,33 +17,6 @@ import ast_pattern_matching
 ## Implementation of common lisp's loop macro
 
 
-type
-  ErrorAnnotation = object
-    errpos*: LineInfo
-    expr*: string
-    annotation*: string
-
-  CodeError* = ref object of CatchableError
-    annots: seq[ErrorAnnotation]
-
-
-proc nthLine(file: string, line: int): string =
-  readLines(file, line)[line - 1]
-
-proc highlightErr*(err: CodeError): void =
-
-  echo "\n", err.msg, "\n"
-
-  for err in err.annots:
-    let (dir, name, ext) = err.errpos.filename.splitFile()
-    let position = &"{name}{ext} {err.errpos.line}:{err.errpos.column} "
-    let padding = " ".repeat(position.len + err.errpos.column)
-
-    echo position, nthLine(err.errpos.filename, err.errpos.line)
-    echo padding, "^".repeat(err.expr.len()).toRed()
-    echo padding, err.annotation
-    echo ""
-
 template iterValType*(arg: untyped): untyped =
   when compiles(arg[0]):
     typeof(arg[0])

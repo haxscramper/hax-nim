@@ -10,6 +10,8 @@ bin = @["wiptest"]
 # Dependencies
 
 requires "nim >= 1.2.0"
+requires "regex"
+requires "hmisc"
 
 after test:
   exec "./wiptest"
