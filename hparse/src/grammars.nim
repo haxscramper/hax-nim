@@ -64,17 +64,9 @@ template mapPairs*(s: untyped, op: untyped): untyped =
   when openarrPairs:
     type TLhs = type((s[0][0]))
     type TRhs = type((s[0][1]))
-    static:
-      echo "using array types"
   else:
     type TLhs = type((pairs(s).nthType1))
     type TRhs = type((pairs(s).nthType2))
-    static:
-      echo "using `pairs()` types"
-
-  static:
-    echo typeof(TLhs)
-    echo typeof(TRhs)
 
   type TRes = type((
     block:
