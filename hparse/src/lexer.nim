@@ -1,9 +1,7 @@
 # To support lexing in both compiled and interpreted environments as
 # well as at compile-time
-when nimvm or defined(nimscript):
-  import regex
-else:
-  import re
+import regex
+import streams
 
 type
   Matcher[Tok] = object
@@ -29,7 +27,7 @@ type
     matchers*: seq[Matcher[Tok]]
 
 
-  TokStream[Tok] = object
+  TokStream*[Tok] = object
     ## Buffer for tokens. Modeled after `std/streams` implementation
     curPos: int ## Current position in buffer
     buffer: seq[Tok] ## Token buffer
@@ -55,7 +53,7 @@ proc next[Tok](ts: var TokStream): Tok =
       if stop:
         ts.atEnd = true
 
-      buffer.add tok
+      ts.buffer.add tok
       inc ts.curPos
 
 iterator items[Tok](ts: var TokStream[Tok]): Tok =

@@ -34,4 +34,8 @@ let grammar = {
   ])
 }.toGrammar()
 
+static: echo "asd"
+
 let compGrammar = computeGrammar(grammar)
+
+static: echo "asd"
