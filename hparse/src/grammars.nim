@@ -52,11 +52,9 @@ type
         patts*: seq[CompPatt[TKind]]
       of pkOptional, pkZeroOrMore, pkOneOrMore:
         opt*: seq[CompPatt[TKind]] ## Single instance that will be repeated
-        # Due to limitation of the C backend it is necessary to not
-        # use recursive defintions. I could've used `Option[]` but
-        # decided to go with `seq` since I should not have a situation
-        # where `opt` field is `none` - it is just a workaround to
-        # allow recursive field
+        # I could've used `Option[]` but decided to go with `seq`
+        # since I should not have a situation where `opt` field is
+        # `none` - it is just a workaround to allow recursive field
 
 
   CompRule*[TKind] = object

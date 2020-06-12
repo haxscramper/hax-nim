@@ -33,8 +33,6 @@ func topoSort[Vertex](
                    else: @[]
     )
 
-  static: echo "running topo sort"
-
   var adjList: Table[Hash, HashSet[Hash]]
   var vertData: Table[Hash, Vertex]
   var inCounts: Table[Hash, int]
@@ -80,8 +78,6 @@ func topoSort[Vertex](
     if adj.len > 0:
       raise LogicError(msg: "Cannot perform topological sort on graph with cycles")
 
-  static: echo "finished topo sort"
-  debugecho "runtime finished topo sort"
   if revese:
     return sortednodes.reversed().mapIt(vertData[it])
   else:
@@ -117,25 +113,24 @@ proc computeFirst[TKind](patt: Patt[TKind], other: NTermSets[TKind]): FirstSet[T
 
 proc computePatt[TKind](patt: Patt[TKind], sets: NTermSets[TKind]): CompPatt[TKind] =
   ## Generate FIRST set for pattern `patt`
-  echo "Generating FIRST"
-  case patt.kind:
+  let kind = patt.kind
+  case kind:
     of pkTerm:
       result = CompPatt[TKind](kind: pkTerm, tok: patt.tok)
       result.first.incl patt.tok
     of pkConcat:
       result = CompPatt[TKind](kind: pkConcat, patts: patt.patts.mapIt(computePatt(it, sets)))
-      result.first.incl computeFirst(patt.patts[0], other)
+      result.first.incl computeFirst(patt.patts[0], sets)
     of pkAlternative:
       result = CompPatt[TKind](kind: pkConcat, patts: patt.patts.mapIt(computePatt(it, sets)))
       for p in patt.patts:
-        result.first.incl computeFirst(p, other)
+        result.first.incl computeFirst(p, sets)
     of pkOptional, pkZeroOrMore, pkOneOrMore:
-      result = CompPatt[TKind](kind: patt.kind, opt: patt.opt)
-      result.first.incl computeFirst(patt.opt, other)
+      result = CompPatt[TKind](kind: kind, opt: @[computePatt(patt.opt, sets)])
+      result.first.incl computeFirst(patt.opt, sets)
     of pkNterm:
+      # FIRST sets for nonterminals are stored in `sets`
       result = CompPatt[TKind](kind: pkNterm, sym: patt.sym)
-      result.first.incl other.first[patt.sym]
-
 
 template doIt(s, action: untyped): untyped =
   type Item = type((s[0]))
@@ -160,7 +155,6 @@ proc necessaryTerms[TKind](rhs: Patt[TKind]): seq[NTermSym] =
 proc computeGrammar*[TKind](g: Grammar[TKind]): CompGrammar[TKind] =
   ## Generate first/follow sets for all rules in grammar. Rules in
   ## resulting grammar are ordered based on topological sorting.
-  static: echo "computing grammar"
   var sets: NTermSets[TKind]
   # Just because I can sqeeze it into <= 4 lines does not mean that it
   # is a good idea. But code above performs topological sort of the
@@ -169,11 +163,14 @@ proc computeGrammar*[TKind](g: Grammar[TKind]): CompGrammar[TKind] =
   # left-recursive. (REVIEW: check if left recursion cannot occur from
   # some other type of grammar)
 
-  echo "hello"
   let sortedRules = g.rules.topoSort(
     deps = ((r) => (r.patts.necessaryTerms().mapIt(it.hash))),
     idgen = ((r) => hash(r.nterm))
   )
+
+  echo "order of rule generation"
+  for rule in sortedRules:
+    echo "- ", rule.nterm
 
   for rule in sortedRules:
     let compPatt = computePatt(rule.patts, sets)

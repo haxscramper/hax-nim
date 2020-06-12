@@ -104,7 +104,7 @@ if false:
 
 #=================================  v3  ==================================#
 import tables, sets
-if true:
+if false:
   proc test(
     vt: openarray[string],
     dp: proc(v: string): seq[Hash],
@@ -120,7 +120,7 @@ if true:
 
 #=================================  v4  ==================================#
 
-if true:
+if false:
   proc test[T](
     vt: openarray[T],
     dp: proc(v: T): seq[Hash],
@@ -138,3 +138,11 @@ if true:
     ["12"],
     proc(v: string): seq[Hash] = @[hash(v)]
   )
+
+#========================  recursive case object  ========================#
+
+type
+  Test[T] = object
+    f2: Test[T]
+
+let t = Test[int]()
