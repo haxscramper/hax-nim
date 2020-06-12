@@ -37,3 +37,6 @@ macro grammarTest() =
   }.toGrammar()
 
   let compGrammar = computeGrammar(grammar)
+  let impl = makeGrammarParser(compGrammar)
+
+grammarTest()

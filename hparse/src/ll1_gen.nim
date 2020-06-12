@@ -152,7 +152,8 @@ proc necessaryTerms[TKind](rhs: Patt[TKind]): seq[NTermSym] =
     else:
       return @[]
 
-proc computeGrammar*[TKind](g: Grammar[TKind]): CompGrammar[TKind] =
+proc computeGrammar*[TKind](g: Grammar[TKind]
+  ): CompGrammar[TKind] =
   ## Generate first/follow sets for all rules in grammar. Rules in
   ## resulting grammar are ordered based on topological sorting.
   var sets: NTermSets[TKind]
@@ -168,18 +169,18 @@ proc computeGrammar*[TKind](g: Grammar[TKind]): CompGrammar[TKind] =
     idgen = ((r) => hash(r.nterm))
   )
 
-  echo "order of rule generation"
-  for rule in sortedRules:
-    echo "- ", rule.nterm
-
   for rule in sortedRules:
     let compPatt = computePatt(rule.patts, sets)
     sets.first[rule.nterm] = compPatt.first
     result.rules.add CompRule[TKind](nterm: rule.nterm, patts: compPatt)
 
-proc newSetLiteral[T](s: set[T]): NimNode =
+  result.sets = sets
+
+proc makeSetLiteral[T](s: set[T]): NimNode =
   ## Create new set literal
-  discard
+  result = nnkCurly.newTree()
+  for elem in s:
+    result.add ident($elem)
 
 type
   CodeGenConf = object
@@ -187,67 +188,117 @@ type
     toksIdent: string ## Identifier name for token stream object
     parsIdent: string ## Identifier name for parser object
 
-proc makeParseBlock[TKind](patt: CompPatt[TKind], conf: CodeGenConf): NimNode
+proc makeParseBlock[TKind](
+  patt: CompPatt[TKind],
+  conf: CodeGenConf,
+  sets: NTermSets[TKind]): NimNode
 
-proc makeAltBlock[TKind](alt: CompPatt[TKind], conf: CodeGenConf): NimNode =
+proc makeAltBlock[TKind](
+  alt: CompPatt[TKind],
+  conf: CodeGenConf,
+  sets: NTermSets[TKind]): NimNode =
   ## Create code block for parsing alternative pattern
   assert alt.kind == pkAlternative
   result = nnkCaseStmt.newTree(ident conf.laIdent)
   for patt in alt.patts:
-    result.add nnkOfBranch(
-      newSetLiteral(patt.first),
-      makeParseBlock(patt)
+    result.add nnkOfBranch.newTree(
+      makeSetLiteral(patt.first),
+      makeParseBlock(patt, conf, sets)
     )
 
   let elseBody = quote do:
     raise CodeError(msg: "Unexpected token")
 
-  result.add nnkElse(elsebody)
+  result.add nnkElse.newTree(elsebody)
 
 proc makeParserName(sym: NTermSym): string =
   ## Converter nonterminal name into parsing proc name
   "parse" & sym.capitalizeAscii()
 
-proc makeTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
-  assert nterm.patt.kind == pkNTerm
-  let ntermIdent = ident(makeParserName(nterm.patt.sym))
+proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
+  assert term.kind == pkTerm
+  let toksIdent = ident(conf.toksIdent)
+  let tokIdent = ident($term.tok)
+  return quote do:
+    `toksIdent`.peek().kind == `tokIdent`
+
+proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
+  assert nterm.kind == pkNTerm
+  let ntermIdent = ident(makeParserName(nterm.sym))
   let lexerIdent = ident(conf.toksIdent)
   quote do:
     `ntermIdent`(`lexerIdent`)
 
-proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
-  discard
+proc makeConcatBlock[TKind](
+  nterm: CompPatt[TKind],
+  conf: CodeGenConf,
+  sets: NTermSets[TKind]): NimNode =
+  assert nterm.kind == pkConcat
+  let parseStmts = collect(newSeq):
+    for patt in nterm.patts:
+      makeParseBlock(patt, conf, sets)
 
-proc makeConcatBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
-  discard
+  return parseStmts.newStmtList()
 
 proc makeNtoMTimesBlock[TKind](
-  nterm: CompPatt[TKind], conf: CodeGenConf,
+  nterm: CompPatt[TKind], conf: CodeGenConf, sets: NtermSets[TKind],
   mintimes, maxtimes: int): NimNode =
-  assert nterm.patt.kind in {pkZeroOrMore, pkOneOrMore, pkOptional}
+  assert nterm.kind in {pkZeroOrMore, pkOneOrMore, pkOptional}
+  let
+    toksIdent = ident(conf.toksIdent)
+    laLiteral = makeSetLiteral(nterm.first)
+    bodyParse = makeParseBlock(nterm.opt[0], conf, sets)
+    minLit = newLit(mintimes)
+    maxLit = newLit(maxtimes)
 
-proc makeParseBlock[TKind](patt: CompPatt[TKind], conf: CodeGenConf): NimNode =
+  let countConstraints =
+    if maxtimes > 0:
+      nnkPar.newTree(nnkInfix.newTree(
+        ident "<",
+        ident "cnt",
+        maxLit))
+    else:
+      ident("true")
+
+  return quote do:
+    var cnt = 0
+    while `countConstraints` and `toksIdent`.peek().kind in `laLiteral`:
+      `bodyParse`
+      inc cnt
+
+    if cnt < `minLit`:
+      # Error - expected at least `mintimes` elements
+      discard
+
+
+proc makeParseBlock[TKind](
+  patt: CompPatt[TKind],
+  conf: CodeGenConf,
+  sets: NTermSets[TKind]): NimNode =
   ## Generate code block to parse pattern `patt`.
-  case patt.patt.kind:
+  echo "dispatching ", patt.kind
+  return case patt.kind:
     of pkTerm:
       makeTermBlock(patt, conf)
     of pkOptional:
-      makeNtoMTimesBlock(patt, conf, 0, 1)
+      makeNtoMTimesBlock(patt, conf, sets, 0, 1)
     of pkNterm:
       makeNTermBlock(patt, conf)
     of pkAlternative:
-      makeAltBlock(patt, conf)
+      makeAltBlock(patt, conf, sets)
     of pkConcat:
-      makeConcatBlock(patt, conf)
+      makeConcatBlock(patt, conf, sets)
     of pkZeroOrMore:
-      makeNtoMTimesBlock(patt, conf, 0, -1)
+      makeNtoMTimesBlock(patt, conf, sets, 0, -1)
     of pkOneOrMore:
-      makeNtoMTimesBlock(patt, conf, 1, -1)
+      makeNtoMTimesBlock(patt, conf, sets, 1, -1)
 
-proc makeRuleParser[TKind](rule: CompRule[TKind], conf: CodeGenConf
-                          ): tuple[decl, impl: NimNode] =
+proc makeRuleParser[TKind](
+  rule: CompRule[TKind],
+  conf: CodeGenConf,
+  sets: NTermSets[TKind]): tuple[decl, impl: NimNode] =
   ## Generate implementation for proc to parse rule
-  let procName = rule.nterm.makeParserName()
+  let procName = ident(rule.nterm.makeParserName())
   let toks = ident(conf.toksIdent)
   let parser = ident(conf.parsIdent)
 
@@ -256,10 +307,12 @@ proc makeRuleParser[TKind](rule: CompRule[TKind], conf: CodeGenConf
     # stream used to get lookahead.
     proc `procName`[Tok](`toks`: var TokStream[Tok])
 
-  let parseBody = rule.patts.makeParseBlock(conf)
+  let parseBody = rule.patts.makeParseBlock(conf, sets)
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok]) =
       `parseBody`
+
+  return (decl: decl, impl: impl)
 
 
 proc makeGrammarParser*[TKind](
@@ -271,9 +324,15 @@ proc makeGrammarParser*[TKind](
       )): NimNode =
 
   ## Generate code for parsing grammar `gram`
-  echo "Generating grammar parser implemenetation"
+  var decls: seq[NimNode]
+  var impls: seq[NimNode]
   for rule in gram.rules:
-    let (decl, impl) = makeRuleParser(rule, conf)
+    let (decl, impl) = makeRuleParser(rule, conf, gram.sets)
+    decls.add decl
+    impls.add impl
 
-    echo decl.toStrLit()
-    echo impl.toStrLit()
+  let declsBlock = decls.newStmtList()
+  let implsBlock = impls.newStmtList()
+
+  echo $declsBlock.toStrLit()
+  echo $implsBlock.toStrLit()

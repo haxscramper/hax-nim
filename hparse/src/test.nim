@@ -141,8 +141,6 @@ if false:
 
 #========================  recursive case object  ========================#
 
-type
-  Test[T] = object
-    f2: Test[T]
-
-let t = Test[int]()
+dumpTree:
+  (cnt < aaa)
+  true

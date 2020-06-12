@@ -62,6 +62,7 @@ type
     patts*: CompPatt[TKind]
 
   CompGrammar*[TKind] = object
+    sets*: NTermSets[TKind]
     rules*: seq[CompRule[TKind]]
 
 proc nthType1*[T1, T2](a: (T1, T2)): T1 = discard

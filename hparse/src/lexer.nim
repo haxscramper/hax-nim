@@ -56,6 +56,16 @@ proc next[Tok](ts: var TokStream): Tok =
       ts.buffer.add tok
       inc ts.curPos
 
+proc move[Tok](ts: var TokStream[Tok], shift: int = -1): void =
+  ts.curPos = ts.curPos + shift
+
+proc peek[Tok](ts: var TokStream): Tok =
+  ## Get next token from token stream without changing position
+  let next = ts.next()
+  ts.move(-1)
+  return next
+
+
 iterator items[Tok](ts: var TokStream[Tok]): Tok =
   ## Iterate over tokems in tokens stream. New parsing is done only
   ## when buffer is reached.
