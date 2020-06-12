@@ -144,3 +144,11 @@ if false:
 dumpTree:
   (cnt < aaa)
   true
+
+iterator testIter(test: seq[int]): int {.closure.} =
+  for item in test:
+    yield item
+
+static:
+  for i in testIter(@[1,2,3,]):
+    echo i

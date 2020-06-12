@@ -65,8 +65,6 @@ type
     sets*: NTermSets[TKind]
     rules*: seq[CompRule[TKind]]
 
-proc nthType1*[T1, T2](a: (T1, T2)): T1 = discard
-proc nthType2*[T1, T2](a: (T1, T2)): T2 = discard
 
 # iterator pairs*[T1, T2](s: openarray[(T1, T2)]): (T1, T2) =
 #   for item in s:
