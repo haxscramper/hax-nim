@@ -8,6 +8,9 @@ import grammars
 import hashes, tables, sets
 export tables, sets
 
+import parser_common
+export parser_common
+
 import lexer
 export lexer
 
@@ -211,6 +214,8 @@ proc makeAltBlock[TKind](
 
   result.add nnkElse.newTree(elsebody)
 
+  echo "generated parser for alt block"
+
 proc makeParserName(sym: NTermSym): string =
   ## Converter nonterminal name into parsing proc name
   "parse" & sym.capitalizeAscii()
@@ -250,6 +255,7 @@ proc makeNtoMTimesBlock[TKind](
     bodyParse = makeParseBlock(nterm.opt[0], conf, sets)
     minLit = newLit(mintimes)
     maxLit = newLit(maxtimes)
+    cnt = ident("cnt")
 
   let countConstraints =
     if maxtimes > 0:
@@ -260,15 +266,26 @@ proc makeNtoMTimesBlock[TKind](
     else:
       ident("true")
 
+  let minNumAssert =
+    if mintimes > 0:
+      quote do:
+        if `cnt` < `minLit`:
+          raise SyntaxError(
+            msg: "Expected at least " & $(`minLit`) & " elements but found only " & $`cnt`
+          )
+    else:
+      newEmptyNode()
+
+
   return quote do:
-    var cnt = 0
+    # TEST WARNING possible variable shadowing if parsing rule
+    # contains nested `{N,M}` rules.
+    var `cnt` = 0
     while `countConstraints` and `toksIdent`.peek().kind in `laLiteral`:
       `bodyParse`
-      inc cnt
+      inc `cnt`
+      `minNumAssert`
 
-    if cnt < `minLit`:
-      # Error - expected at least `mintimes` elements
-      discard
 
 
 proc makeParseBlock[TKind](
