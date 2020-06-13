@@ -116,7 +116,7 @@ type
 
 proc multiline(chunk: Chunk): bool = chunk.content.len > 1
 
-proc makeChunk(content: seq[string], ident: int): Chunk =
+proc makeChunk(content: seq[string]): Chunk =
   Chunk(
     content: content,
     maxWidth: content.mapIt(it.len()).max()
@@ -135,21 +135,20 @@ proc pstringRecursive(
 
 proc arrangeKVPair(
   name: string, chunk: Chunk, conf: PPrintConf,
-  nameWidth: int): Chunk =
+  nameWidth: int, header: string = ""): Chunk =
   let prefWidth = nameWidth + conf.kvSeparator.len()
   let pref = name & conf.kvSeparator
 
   if nameWidth > conf.wrapLargerThan or
      (chunk.maxWidth + prefWidth) > conf.maxWidth:
-    discard
     # Put chunk and name on separate lines
+    echo "sdfsf"
   else:
     # Put chunk on the same line as name
     return makeChunk(@[
-      pref & (" ".repeat(prefWidth - pref.len())) & chunk.content[0]
+      (" ".repeat(prefWidth - pref.len())) & pref & chunk.content[0]
     ] &
-      chunk.content[1..^1].mapIt(" ".repeat(prefWidth) & it),
-      ident = 0
+      chunk.content[1..^1].mapIt(" ".repeat(prefWidth) & it)
     )
 
 
@@ -184,27 +183,28 @@ proc arrangeKVPairs(
 
 
     if singleLine.len < (conf.maxWidth - ident):
-      return @[
-          makeChunk(
-          ident = ident,
-          content = @[singleLine]
-        )
-      ]
-
-    return input.mapIt(
-      arrangeKVPair(it.name, it.val, conf, maxFld)
-    )
+      return @[makeChunk(content = @[singleLine])]
+    case current.kind:
+      of okComposed:
+        return
+          makeChunk(@[current.name]) &
+          input.mapIt(
+            arrangeKVPair(it.name, it.val, conf, maxFld + 2, header = current.name)
+          )
+      else:
+        return input.mapIt(arrangeKVPair(it.name, it.val, conf, maxFld))
 
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk] =
   case current.kind:
     of okConstant:
-      return @[makeChunk(content = @[ current.strLit ], ident = ident)]
+      return @[makeChunk(content = @[ current.strLit ])]
     of okComposed:
       if not current.sectioned:
         let maxFld = current.fldPairs.mapIt(it.name.len()).max()
         result = current.fldPairs.mapIt(
-          (it.name, pstringRecursive(it.value, conf, maxFld + ident).makeChunk())
+          (it.name, pstringRecursive(
+            it.value, conf, maxFld + ident).makeChunk())
         ).arrangeKVPairs(conf, current, ident + maxFld)
     of okTable:
       let maxFld = current.valPairs.mapIt(it.key.len()).max()
@@ -252,7 +252,7 @@ type
     f3: Table[int, string]
 
 let conf = PPrintConf(
-  maxWidth: 80,
+  maxWidth: 40,
   identStr: "  ",
   seqSeparator: ", ",
   seqPrefix: "-",
