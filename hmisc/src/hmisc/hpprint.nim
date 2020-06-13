@@ -49,17 +49,28 @@ type
 
 
 proc toSimpleTree[Obj](entry: Obj): ObjTree =
-  when compiles(pairs(entry)):
+  when not (
+      (entry is seq) or
+      (entry is array) or
+      (entry is openarray) or
+      (entry is string)
+    ) and compiles(for k, v in pairs(entry): discard):
     result = ObjTree(
       kind: okTable,
-      keyType: $typeof(pairs(entry).nthType1()),
-      valType: $typeof(pairs(entry).nthType2())
+      keyType: $typeof((pairs(entry).nthType1)),
+      valType: $typeof((pairs(entry).nthType2))
     )
 
-    for key, val in pairs(entry):
-      result.valPairs.add((key, val))
 
-  elif (entry is seq) or (compiles(items(entry))):
+    static:
+      echo "entry is ", typeof(entry)
+
+    for key, val in pairs(entry):
+      result.valPairs.add(($key, toSimpleTree(val)))
+
+  elif not (
+      (entry is string)
+    ) and (compiles(for i in items(entry): discard)):
     result = ObjTree(
       kind: okSequence,
       itemType: $typeof(items(entry))
@@ -77,7 +88,16 @@ proc toSimpleTree[Obj](entry: Obj): ObjTree =
     for name, value in entry.fieldPairs():
       result.fldPairs.add((name, toSimpleTree(value)))
   else:
-    discard
+    when entry is string:
+      let val = "\"" & entry & "\""
+    else:
+      let val = $entry
+
+    result = ObjTree(
+      kind: okConstant,
+      constType: $typeof(Obj),
+      strLit: val
+    )
 
 
 type
@@ -87,6 +107,8 @@ type
     wrapLargerThan: int
 
     kvSeparator: string
+    objWrapper: (string, string)
+
     seqSeparator: string
     seqPrefix: string
     seqWrapper: (string, string)
@@ -94,11 +116,11 @@ type
   Chunk = object
     content: seq[string]
     maxWidth: int
-    ident: string
+    ident: int
 
 proc multiline(chunk: Chunk): bool = chunk.content.len > 1
 
-proc makeChunk(content: seq[string], ident: string): Chunk =
+proc makeChunk(content: seq[string], ident: int): Chunk =
   Chunk(
     ident: ident,
     content: content,
@@ -113,50 +135,61 @@ proc makeChunk(other: seq[Chunk]): Chunk =
 
   result.maxWidth = result.content.mapIt(it.len()).max()
 
+
 proc pstringRecursive(
-  current: ObjTree,
-  conf: PPrintCOnf,
-  ident: string = ""): seq[Chunk] =
+  current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk]
+
+proc arrangeKVPairs(
+  input: seq[tuple[name: string, val: Chunk]],
+  conf: PPrintConf, current: ObjTree, ident: int): seq[Chunk] =
+  let maxFld = input.mapIt(it.name.len()).max()
+  if not input.anyOfIt(it.val.multiline()):
+    # No multiline chunks present, can theoretically fit on a single line
+    let singleLine = &"{current.name}{conf.objWrapper[0]}" &
+      input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
+        conf.seqSeparator
+      ) &
+      &"{conf.objWrapper[1]}"
+
+    if singleLine.len < (conf.maxWidth - ident):
+      return @[
+          makeChunk(
+          ident = ident,
+          content = @[singleLine]
+        )
+      ]
+
+  if maxFld > conf.wrapLargerThan:
+    # Putting field value on next line
+    discard
+  else:
+    # Putting field value on the same line
+    discard
+
+
+proc pstringRecursive(
+  current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk] =
   case current.kind:
     of okConstant:
-      return @[Chunk(content: @[ current.strLit ])]
+      return @[makeChunk(content = @[ current.strLit ], ident = ident)]
     of okComposed:
-      if current.sectioned:
+      echo "composed entry ", current.name
+      if not current.sectioned:
         let maxFld = current.fldPairs.mapIt(it.name.len()).max()
-        let fldChunks: seq[(string, Chunk)] = current.fldPairs.mapIt(
-          (
-            it.name,
-            pstringRecursive(it.value, conf, " ".repeat(maxFld) & ident
-            ).makeChunk()
-          )
-        )
-
-        if not fldChunks.anyOfIt(it[1].multiline()):
-          # No multiline chunks present, can theoretically fit on a single line
-          let singleLineWidth = (
-            current.name.len()
-          )
-
-        if maxFld > conf.wrapLargerThan:
-          # Putting field value on next line
-          discard
-        else:
-          # Putting field value on the same line
-          discard
-
-
+        return current.fldPairs.mapIt(
+          (it.name,
+           pstringRecursive(it.value, conf, maxFld + ident).makeChunk())
+        ).arrangeKVPairs(conf, current, ident)
 
     of okSequence:
       let values: seq[Chunk] = current.valItems.mapIt(
-        pstringRecursive(it, conf, ident & conf.identStr)).concat()
+        pstringRecursive(it, conf, ident + conf.identStr.len())).concat()
 
       let sumWidth = values.mapIt(it.content.len()).sum() +
         conf.seqSeparator.len() * (values.len() - 1) +
         (conf.seqWrapper[0].len() + conf.seqWrapper[1].len())
 
-      let padSize = ident.len()
-
-      if values.anyOfIt(it.multiline) or (sumWidth > conf.maxWidth - padSize):
+      if values.anyOfIt(it.multiline) or (sumWidth > conf.maxWidth - ident):
         let padding = " ".repeat(conf.seqPrefix.len())
         for item in values:
           result.add makeChunk(
@@ -194,7 +227,15 @@ let conf = PPrintConf(
   seqSeparator: ", ",
   seqPrefix: "-",
   seqWrapper: ("[", "]"),
+  objWrapper: ("(", ")"),
   kvSeparator: ": "
 )
 
-echo toSimpleTree(Obj1()).prettyString(conf)
+let tree = toSimpleTree(Obj1(
+  f1: 123123,
+  f2: @[12,23,3,4,222,5],
+  f3: {12 : "hello", 22 : "q32a"}.toTable()
+))
+
+echo tree
+echo tree.prettyString(conf)
