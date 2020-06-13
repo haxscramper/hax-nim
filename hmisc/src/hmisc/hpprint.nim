@@ -1,7 +1,7 @@
 # TODO account for control codes in stings
 
 import hmisc/helpers
-import tables, sequtils, math, strutils, strformat, sugar
+import tables, sequtils, math, strutils, strformat
 
 type
   ObjKind = enum
@@ -61,9 +61,6 @@ proc toSimpleTree[Obj](entry: Obj): ObjTree =
       valType: $typeof((pairs(entry).nthType2))
     )
 
-
-    static:
-      echo "entry is ", typeof(entry)
 
     for key, val in pairs(entry):
       result.valPairs.add(($key, toSimpleTree(val)))
@@ -139,17 +136,44 @@ proc makeChunk(other: seq[Chunk]): Chunk =
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk]
 
+proc arrangeKVPair(
+  name: string, chunk: Chunk, conf: PPrintConf,
+  nameWidth: int): Chunk =
+  let prefWidth = nameWidth + conf.kvSeparator.len()
+  let pref = name & conf.kvSeparator
+
+  if nameWidth > conf.wrapLargerThan or
+     (chunk.maxWidth + prefWidth) > conf.maxWidth:
+    discard
+    # Put chunk and name on separate lines
+  else:
+    # Put chunk on the same line as name
+    return makeChunk(@[
+      pref & (" ".repeat(prefWidth - pref.len())) & chunk.content[0]
+    ] &
+      chunk.content[1..^1].mapIt(" ".repeat(prefWidth) & it),
+      ident = 0
+    )
+
+
 proc arrangeKVPairs(
   input: seq[tuple[name: string, val: Chunk]],
   conf: PPrintConf, current: ObjTree, ident: int): seq[Chunk] =
   let maxFld = input.mapIt(it.name.len()).max()
   if not input.anyOfIt(it.val.multiline()):
     # No multiline chunks present, can theoretically fit on a single line
-    let singleLine = &"{current.name}{conf.objWrapper[0]}" &
+    let (wrapBeg, wrapEnd) =
+      if current.kind == okComposed:
+        (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+      else:
+        # TODO use configurable wrapper begin/end
+        ("{", "}")
+
+    let singleLine =  wrapBeg &
       input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
         conf.seqSeparator
-      ) &
-      &"{conf.objWrapper[1]}"
+      ) & wrapEnd
+
 
     if singleLine.len < (conf.maxWidth - ident):
       return @[
@@ -159,13 +183,9 @@ proc arrangeKVPairs(
         )
       ]
 
-  if maxFld > conf.wrapLargerThan:
-    # Putting field value on next line
-    discard
-  else:
-    # Putting field value on the same line
-    discard
-
+    return input.mapIt(
+      arrangeKVPair(it.name, it.val, conf, maxFld)
+    )
 
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk] =
@@ -173,14 +193,16 @@ proc pstringRecursive(
     of okConstant:
       return @[makeChunk(content = @[ current.strLit ], ident = ident)]
     of okComposed:
-      echo "composed entry ", current.name
       if not current.sectioned:
         let maxFld = current.fldPairs.mapIt(it.name.len()).max()
-        return current.fldPairs.mapIt(
-          (it.name,
-           pstringRecursive(it.value, conf, maxFld + ident).makeChunk())
-        ).arrangeKVPairs(conf, current, ident)
-
+        result = current.fldPairs.mapIt(
+          (it.name, pstringRecursive(it.value, conf, maxFld + ident).makeChunk())
+        ).arrangeKVPairs(conf, current, ident + maxFld)
+    of okTable:
+      let maxFld = current.valPairs.mapIt(it.key.len()).max()
+      return current.valPairs.mapIt(
+        (it.key, pstringRecursive(it.val, conf, maxFld + ident).makeChunk())
+      ).arrangeKVPairs(conf, current, ident + maxFld)
     of okSequence:
       let values: seq[Chunk] = current.valItems.mapIt(
         pstringRecursive(it, conf, ident + conf.identStr.len())).concat()
@@ -206,9 +228,6 @@ proc pstringRecursive(
               conf.seqWrapper[1]
         ])]
 
-    else:
-      discard
-
 proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string
   for chunk in pstringRecursive(tree, conf):
@@ -228,7 +247,8 @@ let conf = PPrintConf(
   seqPrefix: "-",
   seqWrapper: ("[", "]"),
   objWrapper: ("(", ")"),
-  kvSeparator: ": "
+  kvSeparator: ": ",
+  wrapLargerThan: 10
 )
 
 let tree = toSimpleTree(Obj1(
@@ -237,5 +257,4 @@ let tree = toSimpleTree(Obj1(
   f3: {12 : "hello", 22 : "q32a"}.toTable()
 ))
 
-echo tree
 echo tree.prettyString(conf)
