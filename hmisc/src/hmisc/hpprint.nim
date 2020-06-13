@@ -113,20 +113,17 @@ type
   Chunk = object
     content: seq[string]
     maxWidth: int
-    ident: int
 
 proc multiline(chunk: Chunk): bool = chunk.content.len > 1
 
 proc makeChunk(content: seq[string], ident: int): Chunk =
   Chunk(
-    ident: ident,
     content: content,
     maxWidth: content.mapIt(it.len()).max()
   )
 
 proc makeChunk(other: seq[Chunk]): Chunk =
   result = Chunk(
-    ident: other[0].ident,
     content: other.mapIt(it.content).concat()
   )
 
@@ -163,16 +160,27 @@ proc arrangeKVPairs(
   if not input.anyOfIt(it.val.multiline()):
     # No multiline chunks present, can theoretically fit on a single line
     let (wrapBeg, wrapEnd) =
-      if current.kind == okComposed:
-        (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
-      else:
-        # TODO use configurable wrapper begin/end
-        ("{", "}")
+      case current.kind:
+        of okComposed:
+          (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+        of okSequence:
+          (conf.seqWrapper[0], conf.seqWrapper[1])
+        of okTable:
+          # TODO use configurable wrapper begin/end
+          ("{", "}")
+        else:
+          assert false, "Cannot arrange kv pair in constant"
+          (".", ".")
 
-    let singleLine =  wrapBeg &
-      input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
-        conf.seqSeparator
-      ) & wrapEnd
+
+    var singleLine =
+      if current.kind == okSequence:
+        input.mapIt(&"{it.val.content[0]}").join(conf.seqSeparator)
+      else:
+        input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
+          conf.seqSeparator)
+
+    singleLine = wrapBeg & singleLine & wrapEnd
 
 
     if singleLine.len < (conf.maxWidth - ident):
@@ -204,35 +212,38 @@ proc pstringRecursive(
         (it.key, pstringRecursive(it.val, conf, maxFld + ident).makeChunk())
       ).arrangeKVPairs(conf, current, ident + maxFld)
     of okSequence:
-      let values: seq[Chunk] = current.valItems.mapIt(
-        pstringRecursive(it, conf, ident + conf.identStr.len())).concat()
+      result = current.valItems.mapIt(
+        ("", pstringRecursive(it, conf, ident).makeChunk())
+      ).arrangeKVPairs(conf, current, ident)
+      # let values: seq[Chunk] = current.valItems.mapIt(
+      #   pstringRecursive(it, conf, ident + conf.identStr.len())).concat()
 
-      let sumWidth = values.mapIt(it.content.len()).sum() +
-        conf.seqSeparator.len() * (values.len() - 1) +
-        (conf.seqWrapper[0].len() + conf.seqWrapper[1].len())
+      # let sumWidth = values.mapIt(it.content.len()).sum() +
+      #   conf.seqSeparator.len() * (values.len() - 1) +
+      #   (conf.seqWrapper[0].len() + conf.seqWrapper[1].len())
 
-      if values.anyOfIt(it.multiline) or (sumWidth > conf.maxWidth - ident):
-        let padding = " ".repeat(conf.seqPrefix.len())
-        for item in values:
-          result.add makeChunk(
-            content = @[conf.seqPrefix & item.content[0]] &
-              item.content[1..^1].mapIt(padding & it),
-            ident = ident
-          )
-      else:
-        result = @[makeChunk(
-          ident = ident,
-          content = @[
-              conf.seqWrapper[0] &
-              values.join(conf.seqSeparator) &
-              conf.seqWrapper[1]
-        ])]
+      # if values.anyOfIt(it.multiline) or (sumWidth > conf.maxWidth - ident):
+      #   let padding = " ".repeat(conf.seqPrefix.len())
+      #   for item in values:
+      #     result.add makeChunk(
+      #       content = @[conf.seqPrefix & item.content[0]] &
+      #         item.content[1..^1].mapIt(padding & it),
+      #       ident = ident
+      #     )
+      # else:
+      #   result = @[makeChunk(
+      #     ident = ident,
+      #     content = @[
+      #         conf.seqWrapper[0] &
+      #         values.join(conf.seqSeparator) &
+      #         conf.seqWrapper[1]
+      #   ])]
 
 proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string
   for chunk in pstringRecursive(tree, conf):
     for line in chunk.content:
-      echo chunk.ident, line
+      echo line
 
 type
   Obj1 = object
