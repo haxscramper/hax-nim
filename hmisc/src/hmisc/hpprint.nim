@@ -150,6 +150,13 @@ proc makeChunk(other: seq[Chunk]): Chunk =
 
   result.maxWidth = result.content.mapIt(it.len()).max()
 
+template echov(variable: untyped, other: varargs[string, `$`]): untyped =
+  let pref = "  ".repeat(getStackTraceEntries().len)
+
+  when variable is string:
+    echo pref, astToStr(variable), ": \"", variable, "\" ", other.join(" ")
+  else:
+    echo pref, astToStr(variable), ": ", variable, " ", other.join(" ")
 
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk]
@@ -157,6 +164,7 @@ proc pstringRecursive(
 proc arrangeKVPair(
   name: string, chunk: Chunk, conf: PPrintConf,
   nameWidth: int, header: string = "", kind: ObjKind = okComposed): Chunk =
+
   let prefWidth =
     case kind:
       of okComposed: nameWidth + conf.kvSeparator.len()
@@ -165,14 +173,12 @@ proc arrangeKVPair(
   let pref =
     case kind:
       of okComposed: name & conf.kvSeparator
-      else: name & conf.seqPrefix
+      else: conf.seqPrefix
 
   if nameWidth > conf.wrapLargerThan or
      (chunk.maxWidth + prefWidth) > conf.maxWidth:
     # Put chunk and name on separate lines
     assert false
-    echo name
-    echo chunk
   else:
     # Put chunk on the same line as name
     return makeChunk(@[
@@ -186,6 +192,7 @@ proc arrangeKVPairs(
   input: seq[tuple[name: string, val: Chunk]],
   conf: PPrintConf, current: ObjTree, ident: int): seq[Chunk] =
   let maxFld = input.mapIt(it.name.len()).max()
+
   if not input.anyOfIt(it.val.multiline()):
     # No multiline chunks present, can theoretically fit on a single line
     let (wrapBeg, wrapEnd) =
@@ -206,7 +213,8 @@ proc arrangeKVPairs(
 
 
     var singleLine =
-      if current.kind == okSequence or (current.kind == okComposed and (not current.namedFields)):
+      if current.kind == okSequence or (
+        current.kind == okComposed and (not current.namedFields)):
         input.mapIt(&"{it.val.content[0]}").join(conf.seqSeparator)
       else:
         input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
@@ -228,8 +236,23 @@ proc arrangeKVPairs(
               header = current.name, kind = current.kind)
           )
       else:
-        return input.mapIt(arrangeKVPair(
+        result = input.mapIt(arrangeKVPair(
           it.name, it.val, conf, maxFld, kind = current.kind))
+
+  else:
+    case current.kind:
+      of okSequence:
+        result = input.mapIt(arrangeKVPair(
+          name = "",
+          chunk = it.val,
+          conf = conf,
+          nameWidth = 0,
+          kind = okSequence
+        ))
+
+      else:
+        discard
+
 
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk] =
@@ -250,7 +273,7 @@ proc pstringRecursive(
       ).arrangeKVPairs(conf, current, ident + maxFld)
     of okSequence:
       result = current.valItems.mapIt(
-        ("", pstringRecursive(it, conf, ident).makeChunk())
+        ("", pstringRecursive(it, conf, ident + conf.seqPrefix.len()).makeChunk())
       ).arrangeKVPairs(conf, current, ident)
 
 proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =

@@ -138,16 +138,16 @@ proc testEq*[A, B](lhs: A, rhs: B) =
     )
 
     if '\n' in lhsStr:
-      echo "Expected: "
+      echo "LHS: "
       echo lhsStr
     else:
-      echo "Expected: ", lhsStr
+      echo "LHS: ", lhsStr
 
     if '\n' in rhsStr:
-      echo "Found: "
+      echo "RHS: "
       echo rhsStr
     else:
-      echo "Found: ", rhsStr
+      echo "RHS: ", rhsStr
 
     echo ""
 
