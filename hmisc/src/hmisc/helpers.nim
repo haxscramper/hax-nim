@@ -1,4 +1,5 @@
 import options, sequtils
+import unittest
 import random
 import std/wordwrap
 import strutils
@@ -128,11 +129,33 @@ macro quoteDoInterpolStmt*(body: untyped): untyped =
 
 proc testEq*[A, B](lhs: A, rhs: B) =
   if lhs != rhs:
-    echo "Test failed"
-    echo "lhs: ", lhs
-    echo "rhs: ", rhs
+    let lhsStr = $lhs
+    let rhsStr = $rhs
+
+    testEnded(
+      ConsoleOutputFormatter(colorOutput: true, isInSuite: true),
+      TestResult(testName: "Equality comparison", status: FAILED)
+    )
+
+    if '\n' in lhsStr:
+      echo "Expected: "
+      echo lhsStr
+    else:
+      echo "Expected: ", lhsStr
+
+    if '\n' in rhsStr:
+      echo "Found: "
+      echo rhsStr
+    else:
+      echo "Found: ", rhsStr
+
     echo ""
 
+template assertEq*(lhs, rhs: untyped): untyped =
+  let lhsVal = lhs
+  let rhsVal = rhs
+  testEq(lhsVal, rhsVal)
+  assert lhsVal == rhsVal
 
 # TODO use static hashtable instead of searching whole list each time.
 proc matchWith*[K, V](

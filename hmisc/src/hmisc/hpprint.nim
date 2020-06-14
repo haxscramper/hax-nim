@@ -2,6 +2,7 @@
 
 import hmisc/helpers
 import tables, sequtils, math, strutils, strformat
+import typetraits
 
 type
   ObjKind = enum
@@ -32,7 +33,8 @@ type
         valType: string
         valPairs: seq[tuple[key: string, val: ObjTree]]
       of okComposed:
-        anonymous: bool
+        namedObject: bool
+        namedFields: bool
         name: string
         case sectioned: bool
           of false:
@@ -78,9 +80,28 @@ proc toSimpleTree[Obj](entry: Obj): ObjTree =
 
   elif (entry is object) or (entry is tuple):
     when entry is object:
-      result = ObjTree(kind: okComposed, name: $typeof(Obj), sectioned: false)
+      result = ObjTree(
+        kind: okComposed,
+        name: $typeof(Obj),
+        sectioned: false,
+        namedObject: true,
+        namedFields: true
+      )
+    elif isNamedTuple(Obj):
+      result = ObjTree(
+        kind: okComposed,
+        name: $typeof(Obj),
+        sectioned: false,
+        namedObject: false,
+        namedFields: true
+      )
     else:
-      result = ObjTree(kind: okComposed, anonymous: true, sectioned: false)
+      result = ObjTree(
+        kind: okComposed,
+        sectioned: false,
+        namedFields: false,
+        namedObject: false
+      )
 
     for name, value in entry.fieldPairs():
       result.fldPairs.add((name, toSimpleTree(value)))
@@ -135,14 +156,23 @@ proc pstringRecursive(
 
 proc arrangeKVPair(
   name: string, chunk: Chunk, conf: PPrintConf,
-  nameWidth: int, header: string = ""): Chunk =
-  let prefWidth = nameWidth + conf.kvSeparator.len()
-  let pref = name & conf.kvSeparator
+  nameWidth: int, header: string = "", kind: ObjKind = okComposed): Chunk =
+  let prefWidth =
+    case kind:
+      of okComposed: nameWidth + conf.kvSeparator.len()
+      else: nameWidth + conf.seqPrefix.len()
+
+  let pref =
+    case kind:
+      of okComposed: name & conf.kvSeparator
+      else: name & conf.seqPrefix
 
   if nameWidth > conf.wrapLargerThan or
      (chunk.maxWidth + prefWidth) > conf.maxWidth:
     # Put chunk and name on separate lines
-    echo "sdfsf"
+    assert false
+    echo name
+    echo chunk
   else:
     # Put chunk on the same line as name
     return makeChunk(@[
@@ -161,7 +191,10 @@ proc arrangeKVPairs(
     let (wrapBeg, wrapEnd) =
       case current.kind:
         of okComposed:
-          (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+          if current.namedObject:
+            (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+          else:
+            (&"{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
         of okSequence:
           (conf.seqWrapper[0], conf.seqWrapper[1])
         of okTable:
@@ -173,7 +206,7 @@ proc arrangeKVPairs(
 
 
     var singleLine =
-      if current.kind == okSequence:
+      if current.kind == okSequence or (current.kind == okComposed and (not current.namedFields)):
         input.mapIt(&"{it.val.content[0]}").join(conf.seqSeparator)
       else:
         input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
@@ -184,15 +217,19 @@ proc arrangeKVPairs(
 
     if singleLine.len < (conf.maxWidth - ident):
       return @[makeChunk(content = @[singleLine])]
+
     case current.kind:
       of okComposed:
         return
           makeChunk(@[current.name]) &
           input.mapIt(
-            arrangeKVPair(it.name, it.val, conf, maxFld + 2, header = current.name)
+            arrangeKVPair(
+              it.name, it.val, conf, maxFld + 2,
+              header = current.name, kind = current.kind)
           )
       else:
-        return input.mapIt(arrangeKVPair(it.name, it.val, conf, maxFld))
+        return input.mapIt(arrangeKVPair(
+          it.name, it.val, conf, maxFld, kind = current.kind))
 
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk] =
@@ -215,35 +252,10 @@ proc pstringRecursive(
       result = current.valItems.mapIt(
         ("", pstringRecursive(it, conf, ident).makeChunk())
       ).arrangeKVPairs(conf, current, ident)
-      # let values: seq[Chunk] = current.valItems.mapIt(
-      #   pstringRecursive(it, conf, ident + conf.identStr.len())).concat()
-
-      # let sumWidth = values.mapIt(it.content.len()).sum() +
-      #   conf.seqSeparator.len() * (values.len() - 1) +
-      #   (conf.seqWrapper[0].len() + conf.seqWrapper[1].len())
-
-      # if values.anyOfIt(it.multiline) or (sumWidth > conf.maxWidth - ident):
-      #   let padding = " ".repeat(conf.seqPrefix.len())
-      #   for item in values:
-      #     result.add makeChunk(
-      #       content = @[conf.seqPrefix & item.content[0]] &
-      #         item.content[1..^1].mapIt(padding & it),
-      #       ident = ident
-      #     )
-      # else:
-      #   result = @[makeChunk(
-      #     ident = ident,
-      #     content = @[
-      #         conf.seqWrapper[0] &
-      #         values.join(conf.seqSeparator) &
-      #         conf.seqWrapper[1]
-      #   ])]
 
 proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string
-  for chunk in pstringRecursive(tree, conf):
-    for line in chunk.content:
-      echo line
+  pstringRecursive(tree, conf).mapIt(it.content.join("\n")).join("\n")
 
 type
   Obj1 = object
@@ -251,21 +263,109 @@ type
     f2: seq[int]
     f3: Table[int, string]
 
-let conf = PPrintConf(
+import unittest
+
+var conf = PPrintConf(
   maxWidth: 40,
   identStr: "  ",
   seqSeparator: ", ",
-  seqPrefix: "-",
+  seqPrefix: "- ",
   seqWrapper: ("[", "]"),
   objWrapper: ("(", ")"),
   kvSeparator: ": ",
   wrapLargerThan: 10
 )
 
-let tree = toSimpleTree(Obj1(
-  f1: 123123,
-  f2: @[12,23,3,4,222,5],
-  f3: {12 : "hello", 22 : "q32a"}.toTable()
-))
+template pstr(arg: untyped): untyped =
+  toSimpleTree(arg).prettyString(conf)
 
-echo tree.prettyString(conf)
+
+suite "Simple configuration":
+  test "integer":
+    assert pstr(12) == "12"
+
+  test "string":
+    assert pstr("112") == "\"112\""
+
+  test "Anonymous tuple":
+    assert pstr((12, "sdf")) == "(12, \"sdf\")"
+
+  test "Named tuple":
+    assert pstr((a: "12", b: "222")) == "(a: \"12\", b: \"222\")"
+
+  test "Narrow sequence":
+    conf.maxWidth = 6
+    assert @[1,2,3,4].pstr() == "- 1\n- 2\n- 3\n- 4"
+
+  test "Wide sequence":
+    conf.maxWidth = 80
+    assertEq @[1,2,3].pstr(), "[1, 2, 3]"
+
+  test "int-int table":
+    assertEq {2: 3, 4: 5}.toOrderedTable().pstr(), "{2: 3, 4: 5}"
+
+  test "Sequence of tuples":
+    assertEq @[(1, 3), (4, 5)].pstr(), "[(1, 3), (4, 5)]"
+
+  type
+    T = object
+      f1: int
+
+  test "Simple object":
+    assertEq T(f1: 12).pstr(), "T(f1: 12)"
+
+  test "Sequence of objects":
+    assertEq @[T(f1: 12), T(f1: -99)].pstr(), "[T(f1: 12), T(f1: -99)]"
+
+  type
+    C = object
+      case kind: bool
+      of true: f90: string
+      of false: f09: (float, string)
+
+  test "Case object":
+    assertEq C(kind: true, f90: "12").pstr(), "C(kind: true, f90: \"12\")"
+    assertEq C(kind: false, f09: (1.2, "12")).pstr(),
+         "C(kind: false, f09: (1.2, \"12\"))"
+
+suite "Deeply nested types":
+  test "8D sequence":
+    assertEq @[@[@[@[@[@[@[@[1]]]]]]]].pstr(),
+         "[[[[[[[[1]]]]]]]]"
+
+  test "4x4 seq":
+    assertEq @[
+      @[1, 2, 3, 4],
+      @[5, 6, 7, 8],
+      @[9, 1, 2, 3],
+      @[4, 5, 6, 7],
+    ].pstr(), "[[1, 2, 3, 4], [5, 6, 7, 8], [9, 1, 2, 3], [4, 5, 6, 7]]"
+
+
+  test "Narrow 4x4 seq":
+    conf.maxWidth = 20
+    assertEq @[
+      @[1, 2, 3, 4],
+      @[5, 6, 7, 8],
+      @[9, 1, 2, 3],
+      @[4, 5, 6, 7],
+    ].pstr(),  """
+- [1, 2, 3, 4]
+- [5, 6, 7, 8]
+- [9, 1, 2, 3]
+- [4, 5, 6, 7]"""
+    conf.maxWidth = 80
+
+
+  test "Super narrow 2x2 seq":
+    conf.maxWidth = 7
+    assertEq @[
+      @[1, 2],
+      @[5, 6],
+    ].pstr(), """
+- - 1
+  - 2
+- - 5
+  - 6"""
+
+    conf.maxWidth = 80

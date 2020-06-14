@@ -105,11 +105,8 @@ template runIndentedLog*(body: untyped): untyped =
 
 
 template getLogConf*(f: string): untyped =
-  if not defLogConfMap.hasKey(f):
-    raise newException(
-      AssertionError,
-      "Attempt to use logging without init configuration"
-    )
+  assert defLogConfMap.hasKey(f),
+         "Attempt to use logging without init configuration"
 
   defLogConfMap[f]
 
@@ -505,27 +502,29 @@ template pprintErr*(body: untyped): untyped =
   except:
     pprintStackTrace()
 
-proc e() = raise newException(AssertionError, """
-Ass SeRtIoN eRrOr with easf sadfas
-Ass SeRtIoN eRrOr with easf sadfas
-Ass SeRtIoN eRrOr with easf sadfas
-Ass SeRtIoN eRrOr with easf sadfas
-dfsdf as dfa sdf asdf asd fa sdf adsf as df
-as f sadf asdf w f dsvafgd aerfg a rgffd ga
-dfsdf as dfa sdf asdf asd fa sdf adsf as df
-as f sadf asdf w f dsvafgd aerfg a rgffd ga
-dfsdf as dfa sdf asdf asd fa sdf adsf as df
-as f sadf asdf w f dsvafgd aerfg a rgffd ga
-dfsdf as dfa sdf asdf asd fa sdf adsf as df
-as f sadf asdf w f dsvafgd aerfg a rgffd ga
-asd asdf asdfasdf sf sadf asdf werfdfasdf waf asd fasdf
-fa""")
-proc d() = e()
-proc c() = d()
-proc b() = c()
-proc a() = b()
 
 when isMainModule:
+  proc e() = raise newException(AssertionError, """
+  Ass SeRtIoN eRrOr with easf sadfas
+  Ass SeRtIoN eRrOr with easf sadfas
+  Ass SeRtIoN eRrOr with easf sadfas
+  Ass SeRtIoN eRrOr with easf sadfas
+  dfsdf as dfa sdf asdf asd fa sdf adsf as df
+  as f sadf asdf w f dsvafgd aerfg a rgffd ga
+  dfsdf as dfa sdf asdf asd fa sdf adsf as df
+  as f sadf asdf w f dsvafgd aerfg a rgffd ga
+  dfsdf as dfa sdf asdf asd fa sdf adsf as df
+  as f sadf asdf w f dsvafgd aerfg a rgffd ga
+  dfsdf as dfa sdf asdf asd fa sdf adsf as df
+  as f sadf asdf w f dsvafgd aerfg a rgffd ga
+  asd asdf asdfasdf sf sadf asdf werfdfasdf waf asd fasdf
+  fa""")
+  proc d() = e()
+  proc c() = d()
+  proc b() = c()
+  proc a() = b()
+
+
   setCurrentDir("/tmp")
   initDefense(prefix = "FFF: ")
   showWarn("hello", "world")
