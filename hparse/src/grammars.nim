@@ -70,36 +70,6 @@ type
 #   for item in s:
 #     yield item
 
-template mapPairs*(s: untyped, op: untyped): untyped =
-  const openarrPairs = (s is array) or (s is seq) or (s is openarray)
-  when openarrPairs:
-    type TLhs = type((s[0][0]))
-    type TRhs = type((s[0][1]))
-  else:
-    type TLhs = type((pairs(s).nthType1))
-    type TRhs = type((pairs(s).nthType2))
-
-  type TRes = type((
-    block:
-      var lhs {.inject.}: TLhs
-      var rhs {.inject.}: TRhs
-      op))
-
-  var res: seq[TRes]
-
-  when openarrPairs:
-    for (lhsTmp, rhsTmp) in s:
-      let lhs {.inject.} = lhsTmp
-      let rhs {.inject.} = rhsTmp
-      res.add op
-  else:
-    for lhsTmp, rhsTmp in s:
-      let lhs {.inject.} = lhsTmp
-      let rhs {.inject.} = rhsTmp
-      res.add op
-
-  res
-
 proc toGrammar*[TKind](
   table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
   result.rules = table.mapPairs(Rule[TKind](nterm: lhs, patts: rhs))

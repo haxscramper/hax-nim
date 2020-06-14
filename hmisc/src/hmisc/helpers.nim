@@ -436,3 +436,51 @@ proc nthType2*[T1, T2](a: (T1, T2)): T2 =
   ## Helper proc to get second type from tuple. Used as workaround for
   ## `pairs` iterator
   discard
+
+
+template mapPairs*(s: untyped, op: untyped): untyped =
+  ## `mapIt` for object with `pairs`. `lhs` and `rhs` are injected
+  ## into scope
+  # TODO add support for objects without `pairs` - use index
+  # REVIEW implement `mapEnumerated` instead
+  # REVIEW inject different variables to distinguish between?
+  const openarrPairs = (s is array) or (s is seq) or (s is openarray)
+  when openarrPairs:
+    type TLhs = type((s[0][0]))
+    type TRhs = type((s[0][1]))
+  else:
+    type TLhs = type((pairs(s).nthType1))
+    type TRhs = type((pairs(s).nthType2))
+
+  type TRes = type((
+    block:
+      var lhs {.inject.}: TLhs
+      var rhs {.inject.}: TRhs
+      op))
+
+  var res: seq[TRes]
+
+  when openarrPairs:
+    for (lhsTmp, rhsTmp) in s:
+      let lhs {.inject.} = lhsTmp
+      let rhs {.inject.} = rhsTmp
+      res.add op
+  else:
+    for lhsTmp, rhsTmp in s:
+      let lhs {.inject.} = lhsTmp
+      let rhs {.inject.} = rhsTmp
+      res.add op
+
+  res
+
+
+
+proc dedent*(multiline: string): string =
+  ## Uniformly deindent multiline string
+  let seplines = multiline.split('\n')
+  var indent = 0
+  for c in seplines[0]:
+    if c == ' ': inc indent
+    else: break
+
+  seplines.mapIt(if it.len == 0: it else: it[indent..^1]).join("\n")

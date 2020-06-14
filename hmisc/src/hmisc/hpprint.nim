@@ -42,6 +42,8 @@ type
             # sectioning on different blocks depending on `kind`
             # fields: everything is put into single key-value
             # sequence.
+
+            # TODO Add field type
             fldPairs: seq[tuple[name: string, value: ObjTree]]
           of true:
             # Most of the case objects have one `kind` field named
@@ -50,8 +52,50 @@ type
             kindBlocks: seq[Field]
 
 
+import json
+
+proc dedicatedConvertMatcher[Obj](
+  val: Obj, conv: proc(obj: Obj): ObjTree): ObjTree =
+  return conv(val)
+
+proc prettyPrintConverter(val: JsonNode): ObjTree =
+  case val.kind:
+    of JNull:
+      return ObjTree(
+        constType: "nil", kind: okConstant, strLit: "null")
+    of JBool:
+      return ObjTree(
+        constType: "bool", kind: okConstant, strLit: $val.getBool())
+    of JInt:
+      return ObjTree(
+        constType: "int", kind: okConstant, strLit: $val.getInt())
+    of JFloat:
+      return ObjTree(
+        constType: "string", kind: okConstant, strLit: $val.getFloat())
+    of JString:
+      return ObjTree(
+        constType: "string", kind: okConstant, strLit: &"\"{val.getStr()}\"")
+    of JArray:
+      return ObjTree(
+        kind: okSequence,
+        valItems: val.getElems().map(prettyPrintConverter)
+      )
+    of JObject:
+      return ObjTree(
+        kind: okComposed,
+        namedFields: true,
+        namedObject: false,
+        sectioned: false,
+        fldPairs: val.getFields().mapPairs((
+          name: lhs,
+          value: prettyPrintConverter(rhs)
+        )))
+
+
 proc toSimpleTree[Obj](entry: Obj): ObjTree =
-  when not (
+  when compiles(dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)):
+    return dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
+  elif not (
       (entry is seq) or
       (entry is array) or
       (entry is openarray) or
@@ -373,10 +417,10 @@ suite "Deeply nested types":
       @[9, 1, 2, 3],
       @[4, 5, 6, 7],
     ].pstr(),  """
-- [1, 2, 3, 4]
-- [5, 6, 7, 8]
-- [9, 1, 2, 3]
-- [4, 5, 6, 7]"""
+      - [1, 2, 3, 4]
+      - [5, 6, 7, 8]
+      - [9, 1, 2, 3]
+      - [4, 5, 6, 7]""".dedent
     conf.maxWidth = 80
 
 
@@ -386,9 +430,16 @@ suite "Deeply nested types":
       @[1, 2],
       @[5, 6],
     ].pstr(), """
-- - 1
-  - 2
-- - 5
-  - 6"""
+      - - 1
+        - 2
+      - - 5
+        - 6""".dedent
 
     conf.maxWidth = 80
+
+import json
+
+suite "Printout json as object":
+  test "Json named tuple":
+    let jsonNode = parseJson("""{"key": 3.14}""")
+    assertEq jsonNode.pstr(), "(key: 3.14)"
