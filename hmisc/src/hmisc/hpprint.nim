@@ -4,7 +4,7 @@ import hmisc/helpers
 import tables, sequtils, math, strutils, strformat
 import typetraits
 
-import gara
+import gara, with
 
 type
   ObjKind = enum
@@ -200,6 +200,28 @@ type
     content: seq[string]
     maxWidth: int
 
+
+
+type
+  RelPos = enum
+    rpBottomRight
+    # [|||||||]
+    # [|||||||] <label>
+    rpTopLeftAbove
+    # <label>
+    #   [|||||||]
+    #   [|||||||]
+    rpTopLeftLeft
+    # <label> [|||||||]
+    #         [|||||||]
+    rpBottomLeft
+    #   [|||||||]
+    #   [|||||||]
+    # <label>
+
+proc lineCount(c: Chunk): int = c.content.len()
+proc `$`(c: Chunk): string = c.content.join("\n")
+
 func multiline(chunk: Chunk): bool = chunk.content.len > 1
 func empty(conf: Delim): bool = conf.content.len == 0
 func makeDelim(str: string): Delim =
@@ -215,12 +237,73 @@ proc makeChunk(content: seq[string]): Chunk =
     maxWidth: content.mapIt(it.len()).max()
   )
 
+proc makeChunk(content: string): Chunk =
+  Chunk(content: @[content], maxWidth: content.len)
+
 proc makeChunk(other: seq[Chunk]): Chunk =
   result = Chunk(
     content: other.mapIt(it.content).concat()
   )
 
   result.maxWidth = result.content.mapIt(it.len()).max()
+
+type
+  ChunkLabels = Table[RelPos, tuple[text: string, offset: int]]
+
+proc relativePosition(
+  chunk: Chunk,
+  labelsIn:
+    ChunkLabels |
+    seq[(RelPos, tuple[text: string, offset: int])]): Chunk =
+
+  let labels: ChunkLabels =
+    when labelsIn is Table:
+      labelsIn
+    else:
+      labelsIn.toTable()
+
+  var
+    leftPad = 0
+    rightPad = 0
+    topPad = 0
+    bottomPad = 0
+
+  for pos, label in labels:
+    with label:
+      match(pos):
+        rpBottomRight:
+          rightPad = text.len
+        rpTopLeftAbove:
+          topPad = 1
+          leftPad = max(offset, leftPad)
+        rpTopLeftLeft:
+          leftPad = max(leftPad, text.len + offset)
+        rpBottomLeft:
+          bottomPad = 1
+          leftPad = max(leftPad, offset)
+
+  let resWidth = chunk.maxWidth + leftPad + rightPad
+  let resHeight = chunk.lineCount + topPad + bottomPad
+
+  var resLines: seq[string]
+  if rpTopLeftAbove in labels:
+    resLines.add labels[rpTopLeftAbove].text
+
+  let pref = " ".repeat(leftPad)
+  for idx, line in chunk.content:
+    if idx == 0 and (rpTopLeftLeft in labels):
+      resLines.add(labels[rpTopLeftLeft].text & line)
+    else:
+      resLines.add(pref & line)
+
+  if rpBottomRight in labels:
+    resLines[^1] &= labels[rpBottomRight].text
+
+  if rpBottomLeft in labels:
+    resLines.add labels[rpBottomLeft].text
+
+  return makeChunk(resLines)
+
 
 template echov(variable: untyped, other: varargs[string, `$`]): untyped =
   let pref = "  ".repeat(getStackTraceEntries().len)
@@ -266,6 +349,7 @@ proc arrangeKVPairs(
   conf: PPrintConf, current: ObjTree, ident: int): Chunk =
   ## Layout sequence of key-value pairs. `name` field in tuple items
   ## might be empty if `current.kind` is `okSequence`.
+
   let (wrapBeg, wrapEnd) = # Delimiters at the start/end of the block
     case current.kind:
       of okComposed:
@@ -311,6 +395,9 @@ proc arrangeKVPairs(
 
   var subIdent = 0 # Required right margin for field values
   var maxWidth = 0 # Max allowed withd
+  var labels: Table[RelPos, tuple[text: string, offset: int]]
+  let offset = conf.identStr.len # Internal offset between prefix
+                                 # delimiter and chunk body
   match (wrapBeg.preferMultiline, wrapEnd.preferMultiline):
     (true, true):
       # (prefix delimiter)
@@ -319,12 +406,16 @@ proc arrangeKVPairs(
       # (suffix delimiter)
       subIdent = ident + fldsWidth
       maxWidth = conf.maxWidth
+      labels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
+      labels[rpBottomLeft] = (text: wrapEnd.content, offset: offset)
     (true, false):
       # (prefix delimiter)
       # <field> [ block block
       #           block block ] (suffix delimiter)
       subIdent = ident + fldsWidth
       maxWidth = conf.maxWidth - wrapEnd.content.len()
+      labels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
+      labels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
     (false, true):
       # (prefix delimiter) <field> [ block block
       #                              block block ]
@@ -332,12 +423,28 @@ proc arrangeKVPairs(
       subIdent = ident + wrapBeg.content.len() + fldsWidth
       # IMPLEMENT account for sequence prefix, kvSeparator etc.
       maxWidth = conf.maxWidth
+      labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
+      labels[rpBottomLeft] = (text: wrapEnd.content, offset: 0)
     (false, false):
       # (prefix delimiter) <field> [ block block
       #                              block block ] (suffix delimiter)
+
       subIdent = ident + wrapBeg.content.len() + fldsWidth
       maxWidth = conf.maxWidth - wrapEnd.content.len()
+      labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
+      labels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
 
+  let subChunks = input.mapIt(
+    arrangeKVPair(
+      name = it.name,
+      chunk = it.val,
+      nameWidth = fldsWidth,
+      kind = current.kind,
+      conf = conf
+    )
+  )
+
+  return relativePosition(chunk = makeChunk(subChunks), labels)
     # case current.kind:
     #   of okComposed:
     #     result = @[
@@ -435,168 +542,181 @@ var conf = PPrintConf(
 template pstr(arg: untyped): untyped =
   toSimpleTree(arg).prettyString(conf)
 
+suite "Library parts unit tests":
+  template test(labels: untyped): untyped =
+    relativePosition(
+      chunk = makeChunk("[|||]"), labels)
 
-suite "Simple configuration":
-  test "integer":
-    assertEq pstr(12), "12"
+  test "Chunk label on left":
+    assertEq $(test(
+      @{ rpTopLeftLeft : (text: "<>", offset: 0) })), "<>[|||]"
 
-  test "string":
-    assertEq pstr("112"), "\"112\""
-
-  test "Anonymous tuple":
-    assertEq pstr((12, "sdf")), "(12, \"sdf\")"
-
-  test "Named tuple":
-    assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
-
-  test "Narrow sequence":
-    conf.maxWidth = 6
-    assertEq @[1,2,3,4].pstr(), "- 1\n- 2\n- 3\n- 4"
-
-  test "Wide sequence":
-    conf.maxWidth = 80
-    assertEq @[1,2,3].pstr(), "[1, 2, 3]"
-
-  test "int-int table":
-    assertEq {2: 3, 4: 5}.toOrderedTable().pstr(), "{2: 3, 4: 5}"
-
-  test "Sequence of tuples":
-    assertEq @[(1, 3), (4, 5)].pstr(), "[(1, 3), (4, 5)]"
-
-  type
-    T = object
-      f1: int
-
-  test "Simple object":
-    assertEq T(f1: 12).pstr(), "T(f1: 12)"
-
-  test "Sequence of objects":
-    assertEq @[T(f1: 12), T(f1: -99)].pstr(), "[T(f1: 12), T(f1: -99)]"
-
-  type
-    C = object
-      case kind: bool
-      of true: f90: string
-      of false: f09: (float, string)
-
-  test "Case object":
-    assertEq C(kind: true, f90: "12").pstr(), "C(kind: true, f90: \"12\")"
-    assertEq C(kind: false, f09: (1.2, "12")).pstr(),
-         "C(kind: false, f09: (1.2, \"12\"))"
-
-suite "Deeply nested types":
-  test "8D sequence":
-    assertEq @[@[@[@[@[@[@[@[1]]]]]]]].pstr(),
-         "[[[[[[[[1]]]]]]]]"
-
-  test "4x4 seq":
-    assertEq @[
-      @[1, 2, 3, 4],
-      @[5, 6, 7, 8],
-      @[9, 1, 2, 3],
-      @[4, 5, 6, 7],
-    ].pstr(), "[[1, 2, 3, 4], [5, 6, 7, 8], [9, 1, 2, 3], [4, 5, 6, 7]]"
+  test "Chunk label on top left":
+    assertEq $(test(
+      @{ rpTopLeftLeft : (text: "<>", offset: 2) })), "<>\n  [|||]"
 
 
-  test "Narrow 4x4 seq":
-    conf.maxWidth = 20
-    assertEq @[
-      @[1, 2, 3, 4],
-      @[5, 6, 7, 8],
-      @[9, 1, 2, 3],
-      @[4, 5, 6, 7],
-    ].pstr(),  """
-      - [1, 2, 3, 4]
-      - [5, 6, 7, 8]
-      - [9, 1, 2, 3]
-      - [4, 5, 6, 7]""".dedent
-    conf.maxWidth = 80
+# suite "Simple configuration":
+#   test "integer":
+#     assertEq pstr(12), "12"
+
+#   test "string":
+#     assertEq pstr("112"), "\"112\""
+
+#   test "Anonymous tuple":
+#     assertEq pstr((12, "sdf")), "(12, \"sdf\")"
+
+#   test "Named tuple":
+#     assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
+
+#   test "Narrow sequence":
+#     conf.maxWidth = 6
+#     assertEq @[1,2,3,4].pstr(), "- 1\n- 2\n- 3\n- 4"
+
+#   test "Wide sequence":
+#     conf.maxWidth = 80
+#     assertEq @[1,2,3].pstr(), "[1, 2, 3]"
+
+#   test "int-int table":
+#     assertEq {2: 3, 4: 5}.toOrderedTable().pstr(), "{2: 3, 4: 5}"
+
+#   test "Sequence of tuples":
+#     assertEq @[(1, 3), (4, 5)].pstr(), "[(1, 3), (4, 5)]"
+
+#   type
+#     T = object
+#       f1: int
+
+#   test "Simple object":
+#     assertEq T(f1: 12).pstr(), "T(f1: 12)"
+
+#   test "Sequence of objects":
+#     assertEq @[T(f1: 12), T(f1: -99)].pstr(), "[T(f1: 12), T(f1: -99)]"
+
+#   type
+#     C = object
+#       case kind: bool
+#       of true: f90: string
+#       of false: f09: (float, string)
+
+#   test "Case object":
+#     assertEq C(kind: true, f90: "12").pstr(), "C(kind: true, f90: \"12\")"
+#     assertEq C(kind: false, f09: (1.2, "12")).pstr(),
+#          "C(kind: false, f09: (1.2, \"12\"))"
+
+# suite "Deeply nested types":
+#   test "8D sequence":
+#     assertEq @[@[@[@[@[@[@[@[1]]]]]]]].pstr(),
+#          "[[[[[[[[1]]]]]]]]"
+
+#   test "4x4 seq":
+#     assertEq @[
+#       @[1, 2, 3, 4],
+#       @[5, 6, 7, 8],
+#       @[9, 1, 2, 3],
+#       @[4, 5, 6, 7],
+#     ].pstr(), "[[1, 2, 3, 4], [5, 6, 7, 8], [9, 1, 2, 3], [4, 5, 6, 7]]"
 
 
-  test "Super narrow 2x2 seq":
-    conf.maxWidth = 7
-    assertEq @[
-      @[1, 2],
-      @[5, 6],
-    ].pstr(), """
-      - - 1
-        - 2
-      - - 5
-        - 6""".dedent
-
-    conf.maxWidth = 80
-
-import json
-
-suite "Printout json as object":
-  test "Json named tuple":
-    let jsonNode = parseJson("""{"key": 3.14}""")
-    assertEq jsonNode.pstr(), "(key: 3.14)"
-
-  test "Json array":
-    assertEq parseJson("""{"key": [1, 2, 3]}""").pstr(),
-        "(key: [1, 2, 3])"
-
-  test "Json nested array":
-    assertEq parseJson("""{"key": [[1, 2, 3], [1, 2, 3]]}""").pstr(),
-        "(key: [[1, 2, 3], [1, 2, 3]])"
+#   test "Narrow 4x4 seq":
+#     conf.maxWidth = 20
+#     assertEq @[
+#       @[1, 2, 3, 4],
+#       @[5, 6, 7, 8],
+#       @[9, 1, 2, 3],
+#       @[4, 5, 6, 7],
+#     ].pstr(),  """
+#       - [1, 2, 3, 4]
+#       - [5, 6, 7, 8]
+#       - [9, 1, 2, 3]
+#       - [4, 5, 6, 7]""".dedent
+#     conf.maxWidth = 80
 
 
-var jsonConf = PPrintConf(
-  maxWidth: 80,
-  identStr: "  ",
-  seqSeparator: ", ",
-  seqPrefix: "",
-  seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("{"), makeDelim("}")),
-  fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
-  kvSeparator: ": ",
-  wrapLargerThan: 10
-)
+#   test "Super narrow 2x2 seq":
+#     conf.maxWidth = 7
+#     assertEq @[
+#       @[1, 2],
+#       @[5, 6],
+#     ].pstr(), """
+#       - - 1
+#         - 2
+#       - - 5
+#         - 6""".dedent
 
-template pjson(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(jsonConf)
+#     conf.maxWidth = 80
 
-suite "Json pretty printing":
-  test "Reparse int":
-    let jsonNode = parseJson("""{"key": 3.14}""")
-    let pretty = jsonNode.pjson()
-    let reparsed = pretty.parseJson()
-    assertEq jsonNode, reparsed
+# import json
 
-  test "Nested JSON":
-    let jsonNode = parseJson """
-       {
-        "name":"John",
-        "age":30,
-        "cars": {
-          "car1":"Ford",
-          "car2":"BMW",
-          "car3":"Fiat"
-        }
-       }""".dedent()
+# suite "Printout json as object":
+#   test "Json named tuple":
+#     let jsonNode = parseJson("""{"key": 3.14}""")
+#     assertEq jsonNode.pstr(), "(key: 3.14)"
 
-    let formatted = jsonNode.pjson()
-    assertEq formatted, """
-        {
-          "name": "John"
-           "age": 30
-          "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
-        }""".dedent()
+#   test "Json array":
+#     assertEq parseJson("""{"key": [1, 2, 3]}""").pstr(),
+#         "(key: [1, 2, 3])"
 
-  test "Large JSON reparse":
-      let jsonNode = parseJson """
-{"menu": {
-  "id": "file",
-  "value": "File",
-  "popup": {
-    "menuitem": [
-      {"value": "New", "onclick": "CreateNewDoc()"},
-      {"value": "Open", "onclick": "OpenDoc()"},
-      {"value": "Close", "onclick": "CloseDoc()"}
-    ]
-  }
-}}        """
+#   test "Json nested array":
+#     assertEq parseJson("""{"key": [[1, 2, 3], [1, 2, 3]]}""").pstr(),
+#         "(key: [[1, 2, 3], [1, 2, 3]])"
 
-      echo jsonNode.pjson()
-      # assertEq jsonNode, jsonNode.pjson().parseJson()
+
+# var jsonConf = PPrintConf(
+#   maxWidth: 80,
+#   identStr: "  ",
+#   seqSeparator: ", ",
+#   seqPrefix: "",
+#   seqWrapper: (makeDelim("["), makeDelim("]")),
+#   objWrapper: (makeDelim("{"), makeDelim("}")),
+#   fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
+#   kvSeparator: ": ",
+#   wrapLargerThan: 10
+# )
+
+# template pjson(arg: untyped): untyped =
+#   toSimpleTree(arg).prettyString(jsonConf)
+
+# suite "Json pretty printing":
+#   test "Reparse int":
+#     let jsonNode = parseJson("""{"key": 3.14}""")
+#     let pretty = jsonNode.pjson()
+#     let reparsed = pretty.parseJson()
+#     assertEq jsonNode, reparsed
+
+#   test "Nested JSON":
+#     let jsonNode = parseJson """
+#        {
+#         "name":"John",
+#         "age":30,
+#         "cars": {
+#           "car1":"Ford",
+#           "car2":"BMW",
+#           "car3":"Fiat"
+#         }
+#        }""".dedent()
+
+#     let formatted = jsonNode.pjson()
+#     assertEq formatted, """
+#         {
+#           "name": "John"
+#            "age": 30
+#           "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
+#         }""".dedent()
+
+#   test "Large JSON reparse":
+#       let jsonNode = parseJson """
+# {"menu": {
+#   "id": "file",
+#   "value": "File",
+#   "popup": {
+#     "menuitem": [
+#       {"value": "New", "onclick": "CreateNewDoc()"},
+#       {"value": "Open", "onclick": "OpenDoc()"},
+#       {"value": "Close", "onclick": "CloseDoc()"}
+#     ]
+#   }
+# }}        """
+
+#       echo jsonNode.pjson()
+#       # assertEq jsonNode, jsonNode.pjson().parseJson()

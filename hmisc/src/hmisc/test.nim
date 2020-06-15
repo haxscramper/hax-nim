@@ -47,3 +47,22 @@ when compiles(matcher(0, toPStr)):
   echo "result: ", str
 
 let foo = f
+
+import gara
+
+type
+  ETest = enum
+    enFirst
+    enSecond
+
+
+match((enFirst, enSecond)):
+  (enFirst, enSecond):
+    echo "Dddd"
+
+match((1, 2)):
+  (1, 2):
+    echo "Hello"
+
+proc t(args: varargs[string, `$`]) = discard
+# proc t(arg: [string, `$`]) = discard
