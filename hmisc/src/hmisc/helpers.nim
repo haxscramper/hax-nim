@@ -180,7 +180,8 @@ template assertEq*(lhs, rhs: untyped): untyped =
   let lhsVal = lhs
   let rhsVal = rhs
   testEq(lhsVal, rhsVal)
-  assert lhsVal == rhsVal
+  if not (lhsVal == rhsVal):
+    raise newException(AssertionDefect, "Comparison failed")
 
 # TODO use static hashtable instead of searching whole list each time.
 proc matchWith*[K, V](

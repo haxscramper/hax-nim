@@ -264,9 +264,7 @@ proc arrangeKVPair(
 proc arrangeKVPairs(
   input: seq[tuple[name: string, val: Chunk]],
   conf: PPrintConf, current: ObjTree, ident: int): seq[Chunk] =
-  let maxFld = input.mapIt(it.name.len()).max()
-
-  let (wrapBeg, wrapEnd) =
+  let (wrapBeg, wrapEnd) = # Delimiters at the start/end of the block
     case current.kind:
       of okComposed:
         if current.namedObject:
@@ -288,7 +286,6 @@ proc arrangeKVPairs(
     (not input.anyOfIt(it.val.multiline()))
 
   if tryMultiline:
-    # No multiline chunks present, can theoretically fit on a single line
     var singleLine =
       if current.kind == okSequence or (
         current.kind == okComposed and (not current.namedFields)):
@@ -301,6 +298,43 @@ proc arrangeKVPairs(
 
     if singleLine.len < (conf.maxWidth - ident):
       return @[makeChunk(content = @[singleLine])]
+
+  # Try positioning on multiple lines
+  let fldsWidth =
+    # Width of the larges field
+    if current.kind in {okComposed, okTable}:
+      input.mapIt(it.name.len()).max() + conf.kvSeparator.len()
+    else:
+      0
+
+  var subIdent = 0 # Required right margin for field values
+  var maxWidth = 0 # Max allowed withd
+  match (wrapBeg.preferMultiline, wrapEnd.preferMultiline):
+    (true, true):
+      # (prefix delimiter)
+      # <field> [ block block
+      #           block block ]
+      # (suffix delimiter)
+      subIdent = ident + fldsWidth
+      maxWidth = conf.maxWidth
+    (true, false):
+      # (prefix delimiter)
+      # <field> [ block block
+      #           block block ] (suffix delimiter)
+      subIdent = ident + fldsWidth
+      maxWidth = conf.maxWidth - wrapEnd.content.len()
+    (false, true):
+      # (prefix delimiter) <field> [ block block
+      #                              block block ]
+      # (suffix delimiter)
+      subIdent = ident + wrapBeg.content.len() + fldsWidth
+      # IMPLEMENT account for sequence prefix, kvSeparator etc.
+      maxWidth = conf.maxWidth
+    (false, false):
+      # (prefix delimiter) <field> [ block block
+      #                              block block ] (suffix delimiter)
+      subIdent = ident + wrapBeg.content.len() + fldsWidth
+      maxWidth = conf.maxWidth - wrapEnd.content.len()
 
     # case current.kind:
     #   of okComposed:
@@ -402,20 +436,20 @@ template pstr(arg: untyped): untyped =
 
 suite "Simple configuration":
   test "integer":
-    assert pstr(12) == "12"
+    assertEq pstr(12), "12"
 
   test "string":
-    assert pstr("112") == "\"112\""
+    assertEq pstr("112"), "\"112\""
 
   test "Anonymous tuple":
-    assert pstr((12, "sdf")) == "(12, \"sdf\")"
+    assertEq pstr((12, "sdf")), "(12, \"sdf\")"
 
   test "Named tuple":
-    assert pstr((a: "12", b: "222")) == "(a: \"12\", b: \"222\")"
+    assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
 
   test "Narrow sequence":
     conf.maxWidth = 6
-    assert @[1,2,3,4].pstr() == "- 1\n- 2\n- 3\n- 4"
+    assertEq @[1,2,3,4].pstr(), "- 1\n- 2\n- 3\n- 4"
 
   test "Wide sequence":
     conf.maxWidth = 80
