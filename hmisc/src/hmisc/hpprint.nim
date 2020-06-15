@@ -553,7 +553,24 @@ suite "Library parts unit tests":
 
   test "Chunk label on top left":
     assertEq $(test(
-      @{ rpTopLeftLeft : (text: "<>", offset: 2) })), "<>\n  [|||]"
+      @{ rpTopLeftAbove : (text: "<>", offset: 2) })), "<>\n  [|||]"
+
+  test "Chunk label on bottom right":
+    assertEq $(test(
+      @{ rpBottomRight : (text: "<>", offset: 2) })), "[|||]<>"
+
+  test "Chunk label on bottom left":
+    assertEq $(test(
+      @{ rpBottomLeft : (text: "<>", offset: 2) })), "  [|||]\n<>"
+
+  test "Top-above & bottom left":
+    assertEq $(test(
+      @{ rpTopLeftAbove : (text: "{{", offset: 2),
+         rpBottomLeft : (text: "}}", offset: 2)})),
+         """
+         {{
+           [|||]
+         }}""".dedent
 
 
 # suite "Simple configuration":
