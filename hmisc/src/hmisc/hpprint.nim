@@ -231,7 +231,7 @@ template echov(variable: untyped, other: varargs[string, `$`]): untyped =
     echo pref, astToStr(variable), ": ", variable, " ", other.join(" ")
 
 proc pstringRecursive(
-  current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk]
+  current: ObjTree, conf: PPrintCOnf, ident: int = 0): Chunk
 
 proc arrangeKVPair(
   name: string, chunk: Chunk, conf: PPrintConf,
@@ -263,7 +263,9 @@ proc arrangeKVPair(
 
 proc arrangeKVPairs(
   input: seq[tuple[name: string, val: Chunk]],
-  conf: PPrintConf, current: ObjTree, ident: int): seq[Chunk] =
+  conf: PPrintConf, current: ObjTree, ident: int): Chunk =
+  ## Layout sequence of key-value pairs. `name` field in tuple items
+  ## might be empty if `current.kind` is `okSequence`.
   let (wrapBeg, wrapEnd) = # Delimiters at the start/end of the block
     case current.kind:
       of okComposed:
@@ -297,7 +299,7 @@ proc arrangeKVPairs(
     singleLine = wrapBeg.content & singleLine & wrapEnd.content
 
     if singleLine.len < (conf.maxWidth - ident):
-      return @[makeChunk(content = @[singleLine])]
+      return makeChunk(content = @[singleLine])
 
   # Try positioning on multiple lines
   let fldsWidth =
@@ -379,10 +381,10 @@ proc arrangeKVPairs(
 
 
 proc pstringRecursive(
-  current: ObjTree, conf: PPrintCOnf, ident: int = 0): seq[Chunk] =
+  current: ObjTree, conf: PPrintCOnf, ident: int = 0): Chunk =
   case current.kind:
     of okConstant:
-      return @[makeChunk(content = @[ current.strLit ])]
+      return makeChunk(content = @[ current.strLit ])
     of okComposed:
       if not current.sectioned:
         let maxFld = current.fldPairs.mapIt(
@@ -394,22 +396,22 @@ proc pstringRecursive(
           (
             conf.fldNameWrapper.start.content & it.name &
               conf.fldNameWrapper.final.content,
-            pstringRecursive(it.value, conf, maxFld + ident).makeChunk()
+            pstringRecursive(it.value, conf, maxFld + ident)
           )
         ).arrangeKVPairs(conf, current, ident + maxFld)
     of okTable:
       let maxFld = current.valPairs.mapIt(it.key.len()).max()
       return current.valPairs.mapIt(
-        (it.key, pstringRecursive(it.val, conf, maxFld + ident).makeChunk())
+        (it.key, pstringRecursive(it.val, conf, maxFld + ident))
       ).arrangeKVPairs(conf, current, ident + maxFld)
     of okSequence:
       result = current.valItems.mapIt(
-        ("", pstringRecursive(it, conf, ident + conf.seqPrefix.len()).makeChunk())
+        ("", pstringRecursive(it, conf, ident + conf.seqPrefix.len()))
       ).arrangeKVPairs(conf, current, ident)
 
 proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string
-  pstringRecursive(tree, conf).mapIt(it.content.join("\n")).join("\n")
+  pstringRecursive(tree, conf).content.join("\n")
 
 type
   Obj1 = object
