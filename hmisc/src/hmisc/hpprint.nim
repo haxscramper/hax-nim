@@ -170,6 +170,7 @@ type
 
     kvSeparator: string
     objWrapper: (string, string)
+    fldNameWrapper: (string, string)
 
     seqSeparator: string
     seqPrefix: string
@@ -208,7 +209,6 @@ proc pstringRecursive(
 proc arrangeKVPair(
   name: string, chunk: Chunk, conf: PPrintConf,
   nameWidth: int, header: string = "", kind: ObjKind = okComposed): Chunk =
-
   let prefWidth =
     case kind:
       of okComposed: nameWidth + conf.kvSeparator.len()
@@ -222,7 +222,9 @@ proc arrangeKVPair(
   if nameWidth > conf.wrapLargerThan or
      (chunk.maxWidth + prefWidth) > conf.maxWidth:
     # Put chunk and name on separate lines
-    assert false
+    return makeChunk(@[pref] &
+      chunk.content.mapIt(" ".repeat(prefWidth) & it)
+    )
   else:
     # Put chunk on the same line as name
     return makeChunk(@[
@@ -237,24 +239,24 @@ proc arrangeKVPairs(
   conf: PPrintConf, current: ObjTree, ident: int): seq[Chunk] =
   let maxFld = input.mapIt(it.name.len()).max()
 
+  let (wrapBeg, wrapEnd) =
+    case current.kind:
+      of okComposed:
+        if current.namedObject:
+          (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+        else:
+          (&"{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+      of okSequence:
+        (conf.seqWrapper[0], conf.seqWrapper[1])
+      of okTable:
+        # TODO use configurable wrapper begin/end
+        ("{", "}")
+      else:
+        assert false, "Cannot arrange kv pair in constant"
+        (".", ".")
+
   if not input.anyOfIt(it.val.multiline()):
     # No multiline chunks present, can theoretically fit on a single line
-    let (wrapBeg, wrapEnd) =
-      case current.kind:
-        of okComposed:
-          if current.namedObject:
-            (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
-          else:
-            (&"{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
-        of okSequence:
-          (conf.seqWrapper[0], conf.seqWrapper[1])
-        of okTable:
-          # TODO use configurable wrapper begin/end
-          ("{", "}")
-        else:
-          assert false, "Cannot arrange kv pair in constant"
-          (".", ".")
-
 
     var singleLine =
       if current.kind == okSequence or (
@@ -272,13 +274,20 @@ proc arrangeKVPairs(
 
     case current.kind:
       of okComposed:
-        return
-          makeChunk(@[current.name]) &
-          input.mapIt(
+        result = @[
+          makeChunk(input.mapIt(
             arrangeKVPair(
               it.name, it.val, conf, maxFld + 2,
               header = current.name, kind = current.kind)
-          )
+          ))
+        ]
+
+        if wrapBeg.len != 0:
+          result = @[makeChunk(@[wrapBeg])] & result
+
+        if wrapEnd.len != 0:
+          result = result & @[makeChunk(@[wrapEnd])]
+
       else:
         result = input.mapIt(arrangeKVPair(
           it.name, it.val, conf, maxFld, kind = current.kind))
@@ -295,7 +304,14 @@ proc arrangeKVPairs(
         ))
 
       else:
-        discard
+        result = input.mapIt(arrangeKVPair(
+          name = it.name,
+          chunk = it.val,
+          conf = conf,
+          nameWidth = maxFld,
+          kind = okSequence
+        ))
+
 
 
 proc pstringRecursive(
@@ -305,10 +321,15 @@ proc pstringRecursive(
       return @[makeChunk(content = @[ current.strLit ])]
     of okComposed:
       if not current.sectioned:
-        let maxFld = current.fldPairs.mapIt(it.name.len()).max()
+        let maxFld = current.fldPairs.mapIt(
+          it.name.len() + conf.fldNameWrapper[0].len() + conf.fldNameWrapper[1].len()
+        ).max()
+
         result = current.fldPairs.mapIt(
-          (it.name, pstringRecursive(
-            it.value, conf, maxFld + ident).makeChunk())
+          (
+            conf.fldNameWrapper[0] & it.name & conf.fldNameWrapper[1],
+            pstringRecursive(it.value, conf, maxFld + ident).makeChunk()
+          )
         ).arrangeKVPairs(conf, current, ident + maxFld)
     of okTable:
       let maxFld = current.valPairs.mapIt(it.key.len()).max()
@@ -443,3 +464,54 @@ suite "Printout json as object":
   test "Json named tuple":
     let jsonNode = parseJson("""{"key": 3.14}""")
     assertEq jsonNode.pstr(), "(key: 3.14)"
+
+  test "Json array":
+    assertEq parseJson("""{"key": [1, 2, 3]}""").pstr(),
+        "(key: [1, 2, 3])"
+
+  test "Json nested array":
+    assertEq parseJson("""{"key": [[1, 2, 3], [1, 2, 3]]}""").pstr(),
+        "(key: [[1, 2, 3], [1, 2, 3]])"
+
+
+var jsonConf = PPrintConf(
+  maxWidth: 80,
+  identStr: "  ",
+  seqSeparator: ", ",
+  seqPrefix: "",
+  seqWrapper: ("[", "]"),
+  objWrapper: ("{", "}"),
+  fldNameWrapper: ("\"", "\""),
+  kvSeparator: ": ",
+  wrapLargerThan: 10
+)
+
+template pjson(arg: untyped): untyped =
+  toSimpleTree(arg).prettyString(jsonConf)
+
+suite "Json pretty printing":
+  test "Reparse int":
+    let jsonNode = parseJson("""{"key": 3.14}""")
+    let pretty = jsonNode.pjson()
+    let reparsed = pretty.parseJson()
+    assertEq jsonNode, reparsed
+
+  test "Nested JSON":
+      let jsonNode = parseJson """
+         {
+          "name":"John",
+          "age":30,
+          "cars": {
+            "car1":"Ford",
+            "car2":"BMW",
+            "car3":"Fiat"
+          }
+         }""".dedent()
+
+      let formatted = jsonNode.pjson()
+      assertEq formatted, """
+          {
+            "name": "John"
+             "age": 30
+            "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
+          }""".dedent()

@@ -126,6 +126,28 @@ macro quoteDoInterpolStmt*(body: untyped): untyped =
   result = resBlock
 
 
+proc mismatchStart(str1, str2: string): int =
+  ## Find position where two strings mismatch first
+  # TODO implement mismatch with support for multiple
+  # matching/mismatching sections - use larges common subsequence to
+  # determine differences
+
+  # NOTE can use annotation highlighter from code error reporting
+  # `hmisc/defensive`
+
+  # TODO support multiline strings (as sequence of strigns and as
+  # single multiline strings)
+  for i in 0 ..< min(str1.len(), str2.len()):
+    if str1[i] != str2[i]:
+      return i
+
+  if str1.len() != str2.len():
+    # Have common prefix but second one is longer
+    return min(str1.len(), str2.len()) + 1
+  else:
+    # No mismatch found
+    return -1
+
 
 proc testEq*[A, B](lhs: A, rhs: B) =
   if lhs != rhs:
@@ -137,6 +159,7 @@ proc testEq*[A, B](lhs: A, rhs: B) =
       TestResult(testName: "Equality comparison", status: FAILED)
     )
 
+    let diffPos = mismatchStart(lhsStr, rhsStr)
     if '\n' in lhsStr:
       echo "LHS: "
       echo lhsStr
@@ -148,6 +171,8 @@ proc testEq*[A, B](lhs: A, rhs: B) =
       echo rhsStr
     else:
       echo "RHS: ", rhsStr
+      echo "    ", " ".repeat(diffPos), "^".repeat(rhsStr.len() - diffPos + 1)
+
 
     echo ""
 
