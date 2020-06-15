@@ -46,5 +46,4 @@ when compiles(matcher(0, toPStr)):
   let str = matcher(0, toPStr)
   echo "result: ", str
 
-farg(f)
 let foo = f

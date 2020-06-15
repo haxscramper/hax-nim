@@ -4,6 +4,8 @@ import hmisc/helpers
 import tables, sequtils, math, strutils, strformat
 import typetraits
 
+import gara
+
 type
   ObjKind = enum
     okConstant
@@ -163,24 +165,49 @@ proc toSimpleTree[Obj](entry: Obj): ObjTree =
 
 
 type
+  Delim = object
+    content: string ## String for delimiter
+    appendNew: bool ## Append delimiter as new chunk after or suffix
+    ## to existing one?
+
+    prependNew: bool ## Prepend delimiter as new chunk before or
+    ## prefix to existing one?
+
+    preferMultiline: bool ## Don't try to put delimiter on the same
+    ## line with content - always prefer new chunks
+
+  DelimPair = tuple[
+    start: Delim,
+    final: Delim
+  ]
+
   PPrintConf = object
     maxWidth: int
     identStr: string
     wrapLargerThan: int
 
     kvSeparator: string
-    objWrapper: (string, string)
-    fldNameWrapper: (string, string)
+    tblWrapper: DelimPair
+
+    objWrapper: DelimPair
+    fldNameWrapper: DelimPair
 
     seqSeparator: string
     seqPrefix: string
-    seqWrapper: (string, string)
+    seqWrapper: DelimPair
 
   Chunk = object
     content: seq[string]
     maxWidth: int
 
-proc multiline(chunk: Chunk): bool = chunk.content.len > 1
+func multiline(chunk: Chunk): bool = chunk.content.len > 1
+func empty(conf: Delim): bool = conf.content.len == 0
+func makeDelim(str: string): Delim =
+  Delim(
+    appendNew: str.startsWith('\n'),
+    prependNew: str.endsWith('\n'),
+    content: str.strip(chars = {'\n'})
+  )
 
 proc makeChunk(content: seq[string]): Chunk =
   Chunk(
@@ -243,21 +270,25 @@ proc arrangeKVPairs(
     case current.kind:
       of okComposed:
         if current.namedObject:
-          (&"{current.name}{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+          var objWrap = conf.objWrapper
+          objWrap.start.content = "{current.name}{objWrap.start.content}"
+          objWrap
         else:
-          (&"{conf.objWrapper[0]}", &"{conf.objWrapper[1]}")
+          conf.objWrapper
       of okSequence:
-        (conf.seqWrapper[0], conf.seqWrapper[1])
+        conf.seqWrapper
       of okTable:
         # TODO use configurable wrapper begin/end
-        ("{", "}")
+        conf.tblWrapper
       else:
         assert false, "Cannot arrange kv pair in constant"
-        (".", ".")
+        (makeDelim("."), makeDelim("."))
 
-  if not input.anyOfIt(it.val.multiline()):
+  let tryMultiline = (not wrapBeg.preferMultiline) and (wrapEnd.preferMultiline) and
+    (not input.anyOfIt(it.val.multiline()))
+
+  if tryMultiline:
     # No multiline chunks present, can theoretically fit on a single line
-
     var singleLine =
       if current.kind == okSequence or (
         current.kind == okComposed and (not current.namedFields)):
@@ -266,51 +297,50 @@ proc arrangeKVPairs(
         input.mapIt(&"{it.name}{conf.kvSeparator}{it.val.content[0]}").join(
           conf.seqSeparator)
 
-    singleLine = wrapBeg & singleLine & wrapEnd
-
+    singleLine = wrapBeg.content & singleLine & wrapEnd.content
 
     if singleLine.len < (conf.maxWidth - ident):
       return @[makeChunk(content = @[singleLine])]
 
-    case current.kind:
-      of okComposed:
-        result = @[
-          makeChunk(input.mapIt(
-            arrangeKVPair(
-              it.name, it.val, conf, maxFld + 2,
-              header = current.name, kind = current.kind)
-          ))
-        ]
+    # case current.kind:
+    #   of okComposed:
+    #     result = @[
+    #       makeChunk(input.mapIt(
+    #         arrangeKVPair(
+    #           it.name, it.val, conf, maxFld + 2,
+    #           header = current.name, kind = current.kind)
+    #       ))
+    #     ]
 
-        if wrapBeg.len != 0:
-          result = @[makeChunk(@[wrapBeg])] & result
+    #     if wrapBeg.content.len != 0:
+    #       result = @[makeChunk(@[wrapBeg])] & result
 
-        if wrapEnd.len != 0:
-          result = result & @[makeChunk(@[wrapEnd])]
+    #     if wrapEnd.content.len != 0:
+    #       result = result & @[makeChunk(@[wrapEnd])]
 
-      else:
-        result = input.mapIt(arrangeKVPair(
-          it.name, it.val, conf, maxFld, kind = current.kind))
+    #   else:
+    #     result = input.mapIt(arrangeKVPair(
+    #       it.name, it.val, conf, maxFld, kind = current.kind))
 
-  else:
-    case current.kind:
-      of okSequence:
-        result = input.mapIt(arrangeKVPair(
-          name = "",
-          chunk = it.val,
-          conf = conf,
-          nameWidth = 0,
-          kind = okSequence
-        ))
+  # else:
+  #   case current.kind:
+  #     of okSequence:
+  #       result = input.mapIt(arrangeKVPair(
+  #         name = "",
+  #         chunk = it.val,
+  #         conf = conf,
+  #         nameWidth = 0,
+  #         kind = okSequence
+  #       ))
 
-      else:
-        result = input.mapIt(arrangeKVPair(
-          name = it.name,
-          chunk = it.val,
-          conf = conf,
-          nameWidth = maxFld,
-          kind = okSequence
-        ))
+  #     else:
+  #       result = input.mapIt(arrangeKVPair(
+  #         name = it.name,
+  #         chunk = it.val,
+  #         conf = conf,
+  #         nameWidth = maxFld,
+  #         kind = okSequence
+  #       ))
 
 
 
@@ -322,12 +352,14 @@ proc pstringRecursive(
     of okComposed:
       if not current.sectioned:
         let maxFld = current.fldPairs.mapIt(
-          it.name.len() + conf.fldNameWrapper[0].len() + conf.fldNameWrapper[1].len()
+          it.name.len() + conf.fldNameWrapper.start.content.len() +
+          conf.fldNameWrapper.start.content.len()
         ).max()
 
         result = current.fldPairs.mapIt(
           (
-            conf.fldNameWrapper[0] & it.name & conf.fldNameWrapper[1],
+            conf.fldNameWrapper.start.content & it.name &
+              conf.fldNameWrapper.final.content,
             pstringRecursive(it.value, conf, maxFld + ident).makeChunk()
           )
         ).arrangeKVPairs(conf, current, ident + maxFld)
@@ -358,8 +390,8 @@ var conf = PPrintConf(
   identStr: "  ",
   seqSeparator: ", ",
   seqPrefix: "- ",
-  seqWrapper: ("[", "]"),
-  objWrapper: ("(", ")"),
+  seqWrapper: (makeDelim("["), makeDelim("]")),
+  objWrapper: (makeDelim("("), makeDelim(")")),
   kvSeparator: ": ",
   wrapLargerThan: 10
 )
@@ -479,9 +511,9 @@ var jsonConf = PPrintConf(
   identStr: "  ",
   seqSeparator: ", ",
   seqPrefix: "",
-  seqWrapper: ("[", "]"),
-  objWrapper: ("{", "}"),
-  fldNameWrapper: ("\"", "\""),
+  seqWrapper: (makeDelim("["), makeDelim("]")),
+  objWrapper: (makeDelim("{"), makeDelim("}")),
+  fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
   kvSeparator: ": ",
   wrapLargerThan: 10
 )
@@ -497,21 +529,38 @@ suite "Json pretty printing":
     assertEq jsonNode, reparsed
 
   test "Nested JSON":
-      let jsonNode = parseJson """
-         {
-          "name":"John",
-          "age":30,
-          "cars": {
-            "car1":"Ford",
-            "car2":"BMW",
-            "car3":"Fiat"
-          }
-         }""".dedent()
+    let jsonNode = parseJson """
+       {
+        "name":"John",
+        "age":30,
+        "cars": {
+          "car1":"Ford",
+          "car2":"BMW",
+          "car3":"Fiat"
+        }
+       }""".dedent()
 
-      let formatted = jsonNode.pjson()
-      assertEq formatted, """
-          {
-            "name": "John"
-             "age": 30
-            "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
-          }""".dedent()
+    let formatted = jsonNode.pjson()
+    assertEq formatted, """
+        {
+          "name": "John"
+           "age": 30
+          "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
+        }""".dedent()
+
+  test "Large JSON reparse":
+      let jsonNode = parseJson """
+{"menu": {
+  "id": "file",
+  "value": "File",
+  "popup": {
+    "menuitem": [
+      {"value": "New", "onclick": "CreateNewDoc()"},
+      {"value": "Open", "onclick": "OpenDoc()"},
+      {"value": "Close", "onclick": "CloseDoc()"}
+    ]
+  }
+}}        """
+
+      echo jsonNode.pjson()
+      # assertEq jsonNode, jsonNode.pjson().parseJson()
