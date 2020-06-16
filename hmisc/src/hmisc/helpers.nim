@@ -148,7 +148,6 @@ proc mismatchStart(str1, str2: string): int =
     # No mismatch found
     return -1
 
-
 proc testEq*[A, B](lhs: A, rhs: B) =
   if lhs != rhs:
     let lhsStr = $lhs
@@ -160,19 +159,23 @@ proc testEq*[A, B](lhs: A, rhs: B) =
     )
 
     let diffPos = mismatchStart(lhsStr, rhsStr)
-    if '\n' in lhsStr:
-      echo "LHS: "
-      echo lhsStr
+    if '\n' in lhsStr or '\n' in rhsStr:
+      let
+        linesA = lhsStr.split('\n')
+        linesB = rhsStr.split('\n')
+
+      for idx, line in zip(linesA, linesB):
+        if line[0] != line[1]:
+          echo &"LHS #{idx}: '{line[0]}'"
+          echo &"RHS #{idx}: '{line[1]}'"
+          break
+        else:
+          echo &"#{idx}: '{line[0]}' == '{line[1]}'"
+
     else:
       echo "LHS: ", lhsStr
-
-    if '\n' in rhsStr:
-      echo "RHS: "
-      echo rhsStr
-    else:
       echo "RHS: ", rhsStr
       echo "    ", " ".repeat(diffPos), "^".repeat(rhsStr.len() - diffPos + 1)
-
 
     echo ""
 
