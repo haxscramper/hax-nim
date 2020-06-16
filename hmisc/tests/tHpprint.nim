@@ -113,12 +113,15 @@ var conf = PPrintConf(
   # wrapLargerThan: 10
 )
 
-template pstr(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(conf)
+template pstr(arg: untyped, ident: int = 0): untyped =
+  toSimpleTree(arg).prettyString(conf, ident)
 
 suite "Simple configuration":
   test "integer":
     assertEq pstr(12), "12"
+
+  test "indentation":
+    assertEq pstr(12, 3), "   12"
 
   test "string":
     assertEq pstr("112"), "\"112\""

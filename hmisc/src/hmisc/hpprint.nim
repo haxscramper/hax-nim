@@ -508,7 +508,6 @@ proc arrangeKVPairs(
       of okConstant:
         raiseAssert("Invalid current kind: constant")
 
-
     return (pos, (text, conf.identStr.len()))
 
   let (itemLabels, blockLabels, widthConf) =
@@ -558,4 +557,7 @@ proc pstringRecursive(
 
 proc prettyString*(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string using configuration `conf`
-  pstringRecursive(tree, conf).content.join("\n")
+  var newConf = conf
+  newConf.maxWidth = conf.maxWidth - ident
+  pstringRecursive(tree, newConf, ident = ident).content.mapIt(
+    " ".repeat(ident) & it).join("\n")
