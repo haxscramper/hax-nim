@@ -169,11 +169,11 @@ proc toSimpleTree[Obj](entry: Obj): ObjTree =
 type
   Delim = object
     content: string ## String for delimiter
-    appendNew: bool ## Append delimiter as new chunk after or suffix
-    ## to existing one?
+    # appendNew: bool ## Append delimiter as new chunk after or suffix
+    # ## to existing one?
 
-    prependNew: bool ## Prepend delimiter as new chunk before or
-    ## prefix to existing one?
+    # prependNew: bool ## Prepend delimiter as new chunk before or
+    # ## prefix to existing one?
 
     preferMultiline: bool ## Don't try to put delimiter on the same
     ## line with content - always prefer new chunks
@@ -193,6 +193,7 @@ type
 
     objWrapper: DelimPair
     fldNameWrapper: DelimPair
+    fldSeparator: string
 
     seqSeparator: string
     seqPrefix: string
@@ -231,8 +232,8 @@ func multiline(chunk: Chunk): bool = chunk.content.len > 1
 func empty(conf: Delim): bool = conf.content.len == 0
 func makeDelim(str: string): Delim =
   Delim(
-    appendNew: str.startsWith('\n'),
-    prependNew: str.endsWith('\n'),
+    # appendNew: str.startsWith('\n'),
+    # prependNew: str.endsWith('\n'),
     content: str.strip(chars = {'\n'})
   )
 
@@ -259,7 +260,8 @@ proc relativePosition(
   chunk: Chunk,
   labelsIn:
     ChunkLabels |
-    seq[(RelPos, tuple[text: string, offset: int])]): Chunk =
+    seq[(RelPos, tuple[text: string, offset: int])],
+  ignored: set[RelPos] = {}): Chunk =
 
   let labels: ChunkLabels =
     when labelsIn is Table:
@@ -313,7 +315,7 @@ proc relativePosition(
     else:
       resLines.add(pref & line)
 
-  if rpBottomRight in labels:
+  if rpBottomRight in labels and (rpBottomRight notin ignored):
     resLines[^1] &= labels[rpBottomRight].text
 
   if rpBottomLeft in labels:
@@ -334,8 +336,12 @@ proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): Chunk
 
 proc arrangeKVPair(
-  name: string, chunk: Chunk, conf: PPrintConf,
-  nameWidth: int, header: string = "", kind: ObjKind = okComposed,
+  name: string,
+  chunk: Chunk,
+  conf: PPrintConf,
+  nameWidth: int,
+  header: string = "",
+  kind: ObjKind = okComposed,
   isKVpair: bool = true): Chunk =
   let prefWidth =
     if isKVPair:
@@ -368,18 +374,7 @@ proc arrangeKVPair(
     )
 
 
-proc arrangeKVPairs(
-  input: seq[tuple[name: string, val: Chunk]],
-  conf: PPrintConf, current: ObjTree, ident: int): Chunk =
-  ## Layout sequence of key-value pairs. `name` field in tuple items
-  ## might be empty if `current.kind` is `okSequence`.
-
-  # echo "arranging sequence of items"
-  # echov input
-  # echov current.kind
-  # defer:
-  #   echov result
-
+proc getWrapperConf(current: ObjTree, conf: PPrintConf): tuple[start, final: Delim] =
   let (wrapBeg, wrapEnd) = # Delimiters at the start/end of the block
     case current.kind:
       of okComposed:
@@ -397,6 +392,94 @@ proc arrangeKVPairs(
       else:
         assert false, "Cannot arrange kv pair in constant"
         (makeDelim("."), makeDelim("."))
+
+  return (wrapBeg, wrapEnd)
+
+
+proc getLabelConfiguration(
+  conf: PPrintConf, current: ObjTree, ident: int): tuple[
+  item, blocks: ChunkLabels,
+  widthconf: (int, int)] =
+  ## Get label configuration
+
+  let (wrapBeg, wrapEnd) = getWrapperConf(current, conf)
+  var subIdent = 0 # Required right margin for field values
+  var maxWidth = 0 # Max allowed withd
+  var itemLabels: ChunkLabels
+  var blockLabels: ChunkLabels
+  let offset = conf.identStr.len # Internal offset between prefix
+                                 # delimiter and chunk body
+  let prefixOverride = (current.kind == okSequence) and (conf.seqPrefix.len > 0)
+  match((prefixOverride, wrapBeg.preferMultiline, wrapEnd.preferMultiline)):
+    (true, _, _):
+      subIdent = conf.seqPrefix.len
+      maxWidth = conf.maxWidth
+      itemLabels[rpTopLeftLeft] = (text: conf.seqPrefix, offset: 0)
+    (_, true, true):
+      # (prefix delimiter)
+      # <field> [ block block
+      #           block block ]
+      # (suffix delimiter)
+      subIdent = ident
+      maxWidth = conf.maxWidth
+      itemLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
+      itemLabels[rpBottomLeft] = (text: wrapEnd.content, offset: offset)
+    (_, true, false):
+      # (prefix delimiter)
+      # <field> [ block block
+      #           block block ] (suffix delimiter)
+      subIdent = ident
+      maxWidth = conf.maxWidth - wrapEnd.content.len()
+      itemLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
+      itemLabels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
+    (_, false, true):
+      # (prefix delimiter) <field> [ block block
+      #                              block block ]
+      # (suffix delimiter)
+      subIdent = ident + wrapBeg.content.len()
+      # IMPLEMENT account for sequence prefix, kvSeparator etc.
+      maxWidth = conf.maxWidth
+      itemLabels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
+      itemLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 0)
+    (_, false, false):
+      # (prefix delimiter) <field> [ block block
+      #                              block block ] (suffix delimiter)
+      subIdent = ident + wrapBeg.content.len()
+      maxWidth = conf.maxWidth - wrapEnd.content.len()
+      case current.kind:
+        of okSequence:
+          itemLabels[rpBottomRight] = (text: conf.seqSeparator, offset: 0)
+          blockLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: 2)
+          blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 2)
+        of {okTable, okComposed}:
+          itemLabels[rpBottomRight] = (text: conf.fldSeparator, offset: 0)
+          blockLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: 0)
+          blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 0)
+        else:
+          discard
+
+
+  return (
+    item: itemLabels,
+    blocks: blockLabels,
+    widthconf: (subIdent, offset)
+  )
+
+
+
+proc arrangeKVPairs(
+  input: seq[tuple[name: string, val: Chunk]],
+  conf: PPrintConf, current: ObjTree, ident: int): Chunk =
+  ## Layout sequence of key-value pairs. `name` field in tuple items
+  ## might be empty if `current.kind` is `okSequence`.
+
+  # echo "arranging sequence of items"
+  # echov input
+  # echov current.kind
+  # defer:
+  #   echov result
+
+  let (wrapBeg, wrapEnd) = getWrapperConf(current, conf)
 
   let trySingleLine = (
     not wrapBeg.preferMultiline) and (not wrapEnd.preferMultiline) and
@@ -424,63 +507,27 @@ proc arrangeKVPairs(
     else:
       0
 
-  var subIdent = 0 # Required right margin for field values
-  var maxWidth = 0 # Max allowed withd
-  var labels: Table[RelPos, tuple[text: string, offset: int]]
-  let offset = conf.identStr.len # Internal offset between prefix
-                                 # delimiter and chunk body
-  let prefixOverride = (current.kind == okSequence) and (conf.seqPrefix.len > 0)
-  match((prefixOverride, wrapBeg.preferMultiline, wrapEnd.preferMultiline)):
-    (true, _, _):
-      subIdent = conf.seqPrefix.len
-      maxWidth = conf.maxWidth
-      labels[rpTopLeftLeft] = (text: conf.seqPrefix, offset: 0)
-    (_, true, true):
-      # (prefix delimiter)
-      # <field> [ block block
-      #           block block ]
-      # (suffix delimiter)
-      subIdent = ident + fldsWidth
-      maxWidth = conf.maxWidth
-      labels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
-      labels[rpBottomLeft] = (text: wrapEnd.content, offset: offset)
-    (_, true, false):
-      # (prefix delimiter)
-      # <field> [ block block
-      #           block block ] (suffix delimiter)
-      subIdent = ident + fldsWidth
-      maxWidth = conf.maxWidth - wrapEnd.content.len()
-      labels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
-      labels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
-    (_, false, true):
-      # (prefix delimiter) <field> [ block block
-      #                              block block ]
-      # (suffix delimiter)
-      subIdent = ident + wrapBeg.content.len() + fldsWidth
-      # IMPLEMENT account for sequence prefix, kvSeparator etc.
-      maxWidth = conf.maxWidth
-      labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
-      labels[rpBottomLeft] = (text: wrapEnd.content, offset: 0)
-    (_, false, false):
-      # (prefix delimiter) <field> [ block block
-      #                              block block ] (suffix delimiter)
-      subIdent = ident + wrapBeg.content.len() + fldsWidth
-      maxWidth = conf.maxWidth - wrapEnd.content.len()
-      labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
-      labels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
+  let (itemLabels, blockLabels, widthConf) =
+    getLabelConfiguration(conf = conf, current = current, ident = ident)
 
-  return input.mapIt(
+  return input.enumerate().mapIt(
     arrangeKVPair(
-      name = it.name,
-      chunk = it.val,
+      name = it[1].name,
+      chunk = it[1].val,
       nameWidth = fldsWidth,
       kind = current.kind,
       conf = conf,
-      isKVpair = current.isKVpairs()
+      isKVpair = current.isKVpairs(),
     ).relativePosition(
-      labels
+      itemLabels,
+      ignored = (it[0] == input.len() - 1).tern(
+        {rpBottomRight},
+        {}
+      )
     )
-  ).makeChunk()
+  )
+  .makeChunk()
+  .relativePosition(blockLabels)
 
 
 
@@ -744,8 +791,9 @@ var jsonConf = PPrintConf(
   seqSeparator: ", ",
   seqPrefix: "",
   seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("{"), makeDelim("}")),
+  objWrapper: (makeDelim("{\n"), makeDelim("\n}")),
   fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
+  fldSeparator: ",",
   kvSeparator: ": ",
   wrapLargerThan: 10
 )
@@ -775,24 +823,24 @@ suite "Json pretty printing":
     let formatted = jsonNode.pjson()
     assertEq formatted, """
         {
-          "name": "John"
-           "age": 30
+          "name": "John",
+           "age": 30,
           "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
         }""".dedent()
 
-#   test "Large JSON reparse":
-#       let jsonNode = parseJson """
-# {"menu": {
-#   "id": "file",
-#   "value": "File",
-#   "popup": {
-#     "menuitem": [
-#       {"value": "New", "onclick": "CreateNewDoc()"},
-#       {"value": "Open", "onclick": "OpenDoc()"},
-#       {"value": "Close", "onclick": "CloseDoc()"}
-#     ]
-#   }
-# }}        """
+  test "Large JSON reparse":
+      let jsonNode = parseJson """
+{"menu": {
+  "id": "file",
+  "value": "File",
+  "popup": {
+    "menuitem": [
+      {"value": "New", "onclick": "CreateNewDoc()"},
+      {"value": "Open", "onclick": "OpenDoc()"},
+      {"value": "Close", "onclick": "CloseDoc()"}
+    ]
+  }
+}}        """
 
-#       echo jsonNode.pjson()
-      # assertEq jsonNode, jsonNode.pjson().parseJson()
+      echo jsonNode.pstr()
+      assertEq jsonNode, jsonNode.pjson().parseJson()
