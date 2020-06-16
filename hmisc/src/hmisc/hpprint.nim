@@ -11,36 +11,46 @@ export tables
 
 type
   ObjKind* = enum
-    okConstant
-    okSequence
-    okTable
-    okComposed
+    okConstant ## Literal value
+    okSequence ## Sequence of items
+    okTable ## List of key-value pairs with single types for keys and
+    ## values
+    okComposed ## Named list of field-value pairs with possilby
+    ## different types for fields (and values). List name is optional
+    ## (unnamed object), field name is optional (unnamed fields)
 
   Field* = object
-    fldType: string
-    case isKind: bool
+    ## More complex representation of object's field - supports
+    ## recursive fields with case objects. IMPLEMENT - not currently
+    ## supported.
+    fldType*: string ## Type of field value
+    case isKind*: bool
       of true:
-        subfields: seq[tuple[name: string, fld: Field]]
+        subfields: seq[tuple[name: string, fld: Field]] ## Key-value
+        ## list of subfields
       of false:
-        name: string
-        value: ObjTree
+        name: string ## Name of the field
+        value: ObjTree ## Tree representation for field value
 
   ObjTree* = object
     case kind*: ObjKind
       of okConstant:
-        constType*: string
-        strlit*: string
+        constType*: string ## Type of the value
+        strlit*: string ## Value representation in string form
       of okSequence:
-        itemType*: string
-        valItems*: seq[ObjTree]
+        itemType*: string ## Type of the sequence item
+        valItems*: seq[ObjTree] ## List of values
       of okTable:
-        keyType*: string
-        valType*: string
-        valPairs*: seq[tuple[key: string, val: ObjTree]]
+        keyType*: string ## Type of table key
+        valType*: string ## TYpe of value key
+        valPairs*: seq[tuple[key: string, val: ObjTree]] ## List of
+        ## key-value pairs for table
       of okComposed:
-        namedObject*: bool
-        namedFields*: bool
-        name*: string
+        namedObject*: bool ## This object's type has a name? (tuples
+        ## does not have name for a tyep)
+        namedFields*: bool ## Fields have dedicated names? (anonymous
+        ## tuple does not have a name for fields)
+        name*: string ## Name for an object
         case sectioned*: bool
           of false:
             # Simpler representation for object tree without
@@ -49,23 +59,29 @@ type
             # sequence.
 
             # TODO Add field type
-            fldPairs*: seq[tuple[name: string, value: ObjTree]]
+            fldPairs*: seq[tuple[name: string, value: ObjTree]] ## Sequence
+            ## of field-value pairs for object representation
           of true:
             # Most of the case objects have one `kind` field named
             # 'kind' but this should account for cases with multiple
             # case fields as well as nested ones
-            kindBlocks*: seq[Field]
+            kindBlocks*: seq[Field] ## Object field tree. TODO -
+            ## currently not implemented
 
 func isKVpairs(obj: ObjTree): bool =
+  ## Check if entry should be printed as list of key-value pairs
   obj.kind == okTable or (obj.kind == okComposed and obj.namedFields)
 
 import json
 
 proc dedicatedConvertMatcher[Obj](
   val: Obj, conv: proc(obj: Obj): ObjTree): ObjTree =
+  ## Helper proc to correctly resolve overloading for pretty print
+  ## converters
   return conv(val)
 
 proc prettyPrintConverter(val: JsonNode): ObjTree =
+  ## Dedicated pretty-print converter implementation for `JsonNode`
   case val.kind:
     of JNull:
       return ObjTree(
@@ -100,7 +116,10 @@ proc prettyPrintConverter(val: JsonNode): ObjTree =
 
 
 proc toSimpleTree*[Obj](entry: Obj): ObjTree =
+  ## Generic implementation for pretty-print conveter for types not
+  ## implementing dedicated `prettyPrintConverter`
   when compiles(dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)):
+    # If dedicated implementation exists, use it
     return dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
   elif not (
       (entry is seq) or
@@ -171,13 +190,8 @@ proc toSimpleTree*[Obj](entry: Obj): ObjTree =
 
 type
   Delim* = object
+    ## Block delimiters
     content: string ## String for delimiter
-    # appendNew: bool ## Append delimiter as new chunk after or suffix
-    # ## to existing one?
-
-    # prependNew: bool ## Prepend delimiter as new chunk before or
-    # ## prefix to existing one?
-
     preferMultiline: bool ## Don't try to put delimiter on the same
     ## line with content - always prefer new chunks
 
@@ -187,31 +201,36 @@ type
   ]
 
   PPrintConf* = object
-    maxWidth*: int
-    identStr*: string
-    wrapLargerThan*: int
+    ## Pretty print configuration
+    maxWidth*: int ## Max allowed width
+    identStr*: string ## String to use for indentaion
+    # wrapLargerThan*: int ##
 
-    kvSeparator*: string
-    tblWrapper*: DelimPair
+    kvSeparator*: string ## String to use when separating key-value
+    ## pairs.
+    tblWrapper*: DelimPair ## Pair of delimiter around table instance
 
-    objWrapper*: DelimPair
-    fldNameWrapper*: DelimPair
-    fldSeparator*: string
-    nowrapMultiline*: bool
-    alignFieldsRight*: bool
+    objWrapper*: DelimPair ## Pair of delimiters around object instance
+    fldNameWrapper*: DelimPair ## Pair of delimiter around table key
+    fldSeparator*: string ## String to place between key-value pairs in list
+    nowrapMultiline*: bool ## Do not wrap mutliline objects in delimiters
+    alignFieldsRight*: bool ## Use right align on fields (default - left)
 
-    seqSeparator*: string
-    seqPrefix*: string
-    seqWrapper*: DelimPair
+    seqSeparator*: string ## String to place between items in sequence
+    seqPrefix*: string ## Prefix to use for multiline sequece
+    ## instance. If empty multiline string will be wrapped in regular
+    ## delimiters
+    seqWrapper*: DelimPair ## Delimiters for sequence instance
 
   Chunk* = object
-    content: seq[string]
-    maxWidth: int
+    content: seq[string] ## Lines for chunk
+    maxWidth: int ## Max line lenght in chunk
 
 
 
 type
   RelPos* = enum
+    ## Relative position of label to chunk
     rpBottomRight
     # [|||||||]
     # [|||||||] <label>
@@ -244,15 +263,18 @@ func makeDelim*(str: string, multiline: bool = false): Delim =
   )
 
 proc makeChunk*(content: seq[string]): Chunk =
+  ## Create chunk from list of lines
   Chunk(
     content: content,
     maxWidth: content.mapIt(it.len()).max()
   )
 
 proc makeChunk*(content: string): Chunk =
+  ## Create chunk from string
   Chunk(content: @[content], maxWidth: content.len)
 
 proc makeChunk*(other: seq[Chunk]): Chunk =
+  ## Create chunk from lines in other chunks
   result = Chunk(
     content: other.mapIt(it.content).concat()
   )
@@ -269,6 +291,8 @@ proc relativePosition*(
     ChunkLabels |
     seq[(RelPos, tuple[text: string, offset: int])],
   ignored: set[RelPos] = {}): Chunk =
+  ## Position mutliple labels arounc chunk. Labels on `ignored`
+  ## positions will be ingored
 
   let labels: ChunkLabels =
     when labelsIn is Table:
@@ -533,5 +557,5 @@ proc pstringRecursive(
       result = tmp.arrangeKVPairs(conf, current, ident)
 
 proc prettyString*(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
-  ## Convert object tree to pretty-printed string
+  ## Convert object tree to pretty-printed string using configuration `conf`
   pstringRecursive(tree, conf).content.join("\n")

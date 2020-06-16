@@ -109,8 +109,8 @@ var conf = PPrintConf(
   objWrapper: (makeDelim("(", multiline = true),
                makeDelim(")", multiline = false)),
   tblWrapper: (makeDelim("{"), makeDelim("}")),
-  kvSeparator: ": ",
-  wrapLargerThan: 10
+  kvSeparator: ": "
+  # wrapLargerThan: 10
 )
 
 template pstr(arg: untyped): untyped =
@@ -234,7 +234,7 @@ var jsonConf = PPrintConf(
   fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
   fldSeparator: ",",
   kvSeparator: ": ",
-  wrapLargerThan: 10,
+  # wrapLargerThan: 10,
   alignFieldsRight: true
 )
 
@@ -294,7 +294,7 @@ var treeConf = PPrintConf(
   objWrapper: (makeDelim("("), makeDelim(")")),
   tblWrapper: (makeDelim("{"), makeDelim("}")),
   kvSeparator: ": ",
-  wrapLargerThan: 10,
+  # wrapLargerThan: 10,
   nowrapMultiline: true
 )
 
