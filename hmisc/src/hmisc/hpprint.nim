@@ -194,6 +194,8 @@ type
     objWrapper: DelimPair
     fldNameWrapper: DelimPair
     fldSeparator: string
+    nowrapMultiline: bool
+    alignFieldsRight: bool
 
     seqSeparator: string
     seqPrefix: string
@@ -415,11 +417,11 @@ proc getLabelConfiguration(
           blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 2)
         of {okTable, okComposed}:
           itemLabels[rpBottomRight] = (text: conf.fldSeparator, offset: 0)
-          blockLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: 0)
-          blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 0)
+          if not conf.nowrapMultiline:
+            blockLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: 2)
+            blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 2)
         else:
           discard
-
 
   return (
     item: itemLabels,
@@ -467,33 +469,35 @@ proc arrangeKVPairs(
     else:
       0
 
-  proc makeFldName(name: string): string =
-    case current.kind:
+  proc makeFldName(it: tuple[name: string, val: Chunk]): (RelPos, (string, int)) =
+    let pos = case current.kind:
+      of okSequence: rpTopLeftLeft
+      of okTable, okComposed: (it.val.multiline()).tern(rpTopLeftAbove, rpTopLeftLeft)
+      of okConstant: rpPrefix
+
+    let text = case current.kind:
       of okComposed, okTable:
-        align(name & conf.kvSeparator, fldsWidth)
+        if conf.alignFieldsRight:
+          align(it.name & conf.kvSeparator, fldsWidth)
+        else:
+          alignLeft(it.name & conf.kvSeparator, fldsWidth)
       of okSequence:
         ""
       of okConstant:
         raiseAssert("Invalid current kind: constant")
 
+    return (pos, (text, conf.identStr.len()))
+
   let (itemLabels, blockLabels, widthConf) =
     getLabelConfiguration(conf = conf, current = current, ident = ident)
 
   return input.enumerate().mapIt(
-    relativePosition(
-      it[1].val,
-      (@{
-        rpTopLeftLeft : (text: makeFldName(it[1].name), offset: 0)
-      })
-    ).
+    relativePosition(it[1].val, (@[makeFldName(it[1])])).
     relativePosition(
       itemLabels,
       ignored = (it[0] == input.len() - 1).tern(
         {rpBottomRight},
-        {}
-      )
-    )
-  )
+        {})))
   .makeChunk()
   .relativePosition(blockLabels)
 
@@ -553,7 +557,7 @@ suite "Library parts unit tests":
 
   test "Chunk label on top left":
     assertEq $(test(
-      @{ rpTopLeftAbove : (text: "<>", offset: 2) })), "<>\n  [|||]"
+      @{ rpTopLeftAbove : (text: "<-->", offset: 2) })), "<-->\n  [|||]"
 
   test "Chunk label on bottom right":
     assertEq $(test(
@@ -565,12 +569,12 @@ suite "Library parts unit tests":
 
   test "Top-above & bottom left":
     assertEq $(test(
-      @{ rpTopLeftAbove : (text: "{{", offset: 2),
-         rpBottomLeft : (text: "}}", offset: 2)})),
+      @{ rpTopLeftAbove : (text: "{{{", offset: 2),
+         rpBottomLeft : (text: "}}}", offset: 2)})),
          """
-         {{
+         {{{
            [|||]
-         }}""".dedent
+         }}}""".dedent
 
 
   test "Multiline block compact":
@@ -760,11 +764,12 @@ var jsonConf = PPrintConf(
   seqSeparator: ", ",
   seqPrefix: "",
   seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("{\n"), makeDelim("\n}")),
+  objWrapper: (makeDelim("{"), makeDelim("}")),
   fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
   fldSeparator: ",",
   kvSeparator: ": ",
-  wrapLargerThan: 10
+  wrapLargerThan: 10,
+  alignFieldsRight: true
 )
 
 template pjson(arg: untyped): untyped =
@@ -823,7 +828,8 @@ var treeConf = PPrintConf(
   objWrapper: (makeDelim("("), makeDelim(")")),
   tblWrapper: (makeDelim("{"), makeDelim("}")),
   kvSeparator: ": ",
-  wrapLargerThan: 10
+  wrapLargerThan: 10,
+  nowrapMultiline: true
 )
 
 template treeStr(arg: untyped): untyped =
@@ -858,5 +864,3 @@ suite "Large object printout":
               "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
           }
       }}"""
-
-    echo treeStr(jsonNode)
