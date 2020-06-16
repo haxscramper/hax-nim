@@ -230,11 +230,12 @@ proc `$`(c: Chunk): string = c.content.join("\n")
 
 func multiline(chunk: Chunk): bool = chunk.content.len > 1
 func empty(conf: Delim): bool = conf.content.len == 0
-func makeDelim(str: string): Delim =
+func makeDelim(str: string, multiline: bool = false): Delim =
   Delim(
     # appendNew: str.startsWith('\n'),
     # prependNew: str.endsWith('\n'),
-    content: str.strip(chars = {'\n'})
+    content: str.strip(chars = {'\n'}),
+    preferMultiline: multiline
   )
 
 proc makeChunk(content: seq[string]): Chunk =
@@ -334,45 +335,6 @@ template echov(variable: untyped, other: varargs[string, `$`]): untyped =
 
 proc pstringRecursive(
   current: ObjTree, conf: PPrintCOnf, ident: int = 0): Chunk
-
-proc arrangeKVPair(
-  name: string,
-  chunk: Chunk,
-  conf: PPrintConf,
-  nameWidth: int,
-  header: string = "",
-  kind: ObjKind = okComposed,
-  isKVpair: bool = true): Chunk =
-  let prefWidth =
-    if isKVPair:
-      case kind:
-        of okComposed: nameWidth + conf.kvSeparator.len()
-        else: nameWidth + conf.seqPrefix.len()
-    else:
-      0
-
-  let pref =
-    if isKVPair:
-      case kind:
-        of okComposed: name & conf.kvSeparator
-        else: conf.seqPrefix
-    else:
-      ""
-
-  if nameWidth > conf.wrapLargerThan or
-     (chunk.maxWidth + prefWidth) > conf.maxWidth:
-    # Put chunk and name on separate lines
-    return makeChunk(@[pref] &
-      chunk.content.mapIt(" ".repeat(prefWidth) & it)
-    )
-  else:
-    # Put chunk on the same line as name
-    return makeChunk(@[
-      (" ".repeat(prefWidth - pref.len())) & pref & chunk.content[0]
-    ] &
-      chunk.content[1..^1].mapIt(" ".repeat(prefWidth) & it)
-    )
-
 
 proc getWrapperConf(current: ObjTree, conf: PPrintConf): tuple[start, final: Delim] =
   let (wrapBeg, wrapEnd) = # Delimiters at the start/end of the block
@@ -481,9 +443,7 @@ proc arrangeKVPairs(
 
   let (wrapBeg, wrapEnd) = getWrapperConf(current, conf)
 
-  let trySingleLine = (
-    not wrapBeg.preferMultiline) and (not wrapEnd.preferMultiline) and
-    (not input.anyOfIt(it.val.multiline()))
+  let trySingleLine = (not input.anyOfIt(it.val.multiline()))
 
   if trySingleLine:
     var singleLine =
@@ -507,18 +467,26 @@ proc arrangeKVPairs(
     else:
       0
 
+  proc makeFldName(name: string): string =
+    case current.kind:
+      of okComposed, okTable:
+        align(name & conf.kvSeparator, fldsWidth)
+      of okSequence:
+        ""
+      of okConstant:
+        raiseAssert("Invalid current kind: constant")
+
   let (itemLabels, blockLabels, widthConf) =
     getLabelConfiguration(conf = conf, current = current, ident = ident)
 
   return input.enumerate().mapIt(
-    arrangeKVPair(
-      name = it[1].name,
-      chunk = it[1].val,
-      nameWidth = fldsWidth,
-      kind = current.kind,
-      conf = conf,
-      isKVpair = current.isKVpairs(),
-    ).relativePosition(
+    relativePosition(
+      it[1].val,
+      (@{
+        rpTopLeftLeft : (text: makeFldName(it[1].name), offset: 0)
+      })
+    ).
+    relativePosition(
       itemLabels,
       ignored = (it[0] == input.len() - 1).tern(
         {rpBottomRight},
@@ -668,7 +636,8 @@ var conf = PPrintConf(
   seqSeparator: ", ",
   seqPrefix: "- ",
   seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("("), makeDelim(")")),
+  objWrapper: (makeDelim("(", multiline = true),
+               makeDelim(")", multiline = false)),
   tblWrapper: (makeDelim("{"), makeDelim("}")),
   kvSeparator: ": ",
   wrapLargerThan: 10
@@ -842,5 +811,52 @@ suite "Json pretty printing":
   }
 }}        """
 
-      echo jsonNode.pstr()
       assertEq jsonNode, jsonNode.pjson().parseJson()
+
+
+var treeConf = PPrintConf(
+  maxWidth: 40,
+  identStr: "  ",
+  seqSeparator: ", ",
+  seqPrefix: "- ",
+  seqWrapper: (makeDelim("["), makeDelim("]")),
+  objWrapper: (makeDelim("("), makeDelim(")")),
+  tblWrapper: (makeDelim("{"), makeDelim("}")),
+  kvSeparator: ": ",
+  wrapLargerThan: 10
+)
+
+template treeStr(arg: untyped): untyped =
+  toSimpleTree(arg).prettyString(treeConf)
+
+suite "Large object printout":
+  test "Large JSON as treeRepr":
+    let jsonNode = parseJson """
+      {"widget": {
+          "debug": "on",
+          "window": {
+              "title": "Sample Konfabulator Widget",
+              "name": "main_window",
+              "width": 500,
+              "height": 500
+          },
+          "image": {
+              "src": "Images/Sun.png",
+              "name": "sun1",
+              "hOffset": 250,
+              "vOffset": 250,
+              "alignment": "center"
+          },
+          "text": {
+              "data": "Click Here",
+              "size": 36,
+              "style": "bold",
+              "name": "text1",
+              "hOffset": 250,
+              "vOffset": 100,
+              "alignment": "center",
+              "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
+          }
+      }}"""
+
+    echo treeStr(jsonNode)
