@@ -1,6 +1,6 @@
 # TODO account for control codes in stings
 
-import hmisc/helpers
+import hmisc/[helpers, defensive]
 import tables, sequtils, math, strutils, strformat
 import typetraits
 
@@ -53,6 +53,8 @@ type
             # case fields as well as nested ones
             kindBlocks: seq[Field]
 
+func isKVpairs(obj: ObjTree): bool =
+  obj.kind == okTable or (obj.kind == okComposed and obj.namedFields)
 
 import json
 
@@ -218,6 +220,9 @@ type
     #   [|||||||]
     #   [|||||||]
     # <label>
+    rpPrefix
+    # <label>[|||||||]
+    # <label>[|||||||]
 
 proc lineCount(c: Chunk): int = c.content.len()
 proc `$`(c: Chunk): string = c.content.join("\n")
@@ -268,6 +273,11 @@ proc relativePosition(
     topPad = 0
     bottomPad = 0
 
+  let prefixOverride = (rpPrefix in labels)
+
+  if prefixOverride and (rpTopLeftLeft in labels or rpBottomRight in labels):
+    raiseAssert("Incompatible chunk labels - prefix&top-left-left or prefix&bottom-right")
+
   for pos, label in labels:
     with label:
       match(pos):
@@ -281,6 +291,8 @@ proc relativePosition(
         rpBottomLeft:
           bottomPad = 1
           leftPad = max(leftPad, offset)
+        rpPrefix:
+          leftPad = text.len
 
   let resWidth = chunk.maxWidth + leftPad + rightPad
   let resHeight = chunk.lineCount + topPad + bottomPad
@@ -289,7 +301,12 @@ proc relativePosition(
   if rpTopLeftAbove in labels:
     resLines.add labels[rpTopLeftAbove].text
 
-  let pref = " ".repeat(leftPad)
+  let pref =
+    if prefixOverride:
+      labels[rpPrefix].text
+    else:
+      " ".repeat(leftPad)
+
   for idx, line in chunk.content:
     if idx == 0 and (rpTopLeftLeft in labels):
       resLines.add(labels[rpTopLeftLeft].text & line)
@@ -318,16 +335,23 @@ proc pstringRecursive(
 
 proc arrangeKVPair(
   name: string, chunk: Chunk, conf: PPrintConf,
-  nameWidth: int, header: string = "", kind: ObjKind = okComposed): Chunk =
+  nameWidth: int, header: string = "", kind: ObjKind = okComposed,
+  isKVpair: bool = true): Chunk =
   let prefWidth =
-    case kind:
-      of okComposed: nameWidth + conf.kvSeparator.len()
-      else: nameWidth + conf.seqPrefix.len()
+    if isKVPair:
+      case kind:
+        of okComposed: nameWidth + conf.kvSeparator.len()
+        else: nameWidth + conf.seqPrefix.len()
+    else:
+      0
 
   let pref =
-    case kind:
-      of okComposed: name & conf.kvSeparator
-      else: conf.seqPrefix
+    if isKVPair:
+      case kind:
+        of okComposed: name & conf.kvSeparator
+        else: conf.seqPrefix
+    else:
+      ""
 
   if nameWidth > conf.wrapLargerThan or
      (chunk.maxWidth + prefWidth) > conf.maxWidth:
@@ -350,12 +374,18 @@ proc arrangeKVPairs(
   ## Layout sequence of key-value pairs. `name` field in tuple items
   ## might be empty if `current.kind` is `okSequence`.
 
+  # echo "arranging sequence of items"
+  # echov input
+  # echov current.kind
+  # defer:
+  #   echov result
+
   let (wrapBeg, wrapEnd) = # Delimiters at the start/end of the block
     case current.kind:
       of okComposed:
         if current.namedObject:
           var objWrap = conf.objWrapper
-          objWrap.start.content = "{current.name}{objWrap.start.content}"
+          objWrap.start.content = &"{current.name}{objWrap.start.content}"
           objWrap
         else:
           conf.objWrapper
@@ -368,10 +398,11 @@ proc arrangeKVPairs(
         assert false, "Cannot arrange kv pair in constant"
         (makeDelim("."), makeDelim("."))
 
-  let tryMultiline = (not wrapBeg.preferMultiline) and (wrapEnd.preferMultiline) and
+  let trySingleLine = (
+    not wrapBeg.preferMultiline) and (not wrapEnd.preferMultiline) and
     (not input.anyOfIt(it.val.multiline()))
 
-  if tryMultiline:
+  if trySingleLine:
     var singleLine =
       if current.kind == okSequence or (
         current.kind == okComposed and (not current.namedFields)):
@@ -388,7 +419,7 @@ proc arrangeKVPairs(
   # Try positioning on multiple lines
   let fldsWidth =
     # Width of the larges field
-    if current.kind in {okComposed, okTable}:
+    if current.isKVPairs():
       input.mapIt(it.name.len()).max() + conf.kvSeparator.len()
     else:
       0
@@ -398,8 +429,13 @@ proc arrangeKVPairs(
   var labels: Table[RelPos, tuple[text: string, offset: int]]
   let offset = conf.identStr.len # Internal offset between prefix
                                  # delimiter and chunk body
-  match (wrapBeg.preferMultiline, wrapEnd.preferMultiline):
-    (true, true):
+  let prefixOverride = (current.kind == okSequence) and (conf.seqPrefix.len > 0)
+  match((prefixOverride, wrapBeg.preferMultiline, wrapEnd.preferMultiline)):
+    (true, _, _):
+      subIdent = conf.seqPrefix.len
+      maxWidth = conf.maxWidth
+      labels[rpTopLeftLeft] = (text: conf.seqPrefix, offset: 0)
+    (_, true, true):
       # (prefix delimiter)
       # <field> [ block block
       #           block block ]
@@ -408,7 +444,7 @@ proc arrangeKVPairs(
       maxWidth = conf.maxWidth
       labels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
       labels[rpBottomLeft] = (text: wrapEnd.content, offset: offset)
-    (true, false):
+    (_, true, false):
       # (prefix delimiter)
       # <field> [ block block
       #           block block ] (suffix delimiter)
@@ -416,7 +452,7 @@ proc arrangeKVPairs(
       maxWidth = conf.maxWidth - wrapEnd.content.len()
       labels[rpTopLeftAbove] = (text: wrapBeg.content, offset: offset)
       labels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
-    (false, true):
+    (_, false, true):
       # (prefix delimiter) <field> [ block block
       #                              block block ]
       # (suffix delimiter)
@@ -425,7 +461,7 @@ proc arrangeKVPairs(
       maxWidth = conf.maxWidth
       labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
       labels[rpBottomLeft] = (text: wrapEnd.content, offset: 0)
-    (false, false):
+    (_, false, false):
       # (prefix delimiter) <field> [ block block
       #                              block block ] (suffix delimiter)
       subIdent = ident + wrapBeg.content.len() + fldsWidth
@@ -433,56 +469,18 @@ proc arrangeKVPairs(
       labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
       labels[rpBottomRight] = (text: wrapEnd.content, offset: 0)
 
-  let subChunks = input.mapIt(
+  return input.mapIt(
     arrangeKVPair(
       name = it.name,
       chunk = it.val,
       nameWidth = fldsWidth,
       kind = current.kind,
-      conf = conf
+      conf = conf,
+      isKVpair = current.isKVpairs()
+    ).relativePosition(
+      labels
     )
-  )
-
-  return relativePosition(chunk = makeChunk(subChunks), labels)
-    # case current.kind:
-    #   of okComposed:
-    #     result = @[
-    #       makeChunk(input.mapIt(
-    #         arrangeKVPair(
-    #           it.name, it.val, conf, maxFld + 2,
-    #           header = current.name, kind = current.kind)
-    #       ))
-    #     ]
-
-    #     if wrapBeg.content.len != 0:
-    #       result = @[makeChunk(@[wrapBeg])] & result
-
-    #     if wrapEnd.content.len != 0:
-    #       result = result & @[makeChunk(@[wrapEnd])]
-
-    #   else:
-    #     result = input.mapIt(arrangeKVPair(
-    #       it.name, it.val, conf, maxFld, kind = current.kind))
-
-  # else:
-  #   case current.kind:
-  #     of okSequence:
-  #       result = input.mapIt(arrangeKVPair(
-  #         name = "",
-  #         chunk = it.val,
-  #         conf = conf,
-  #         nameWidth = 0,
-  #         kind = okSequence
-  #       ))
-
-  #     else:
-  #       result = input.mapIt(arrangeKVPair(
-  #         name = it.name,
-  #         chunk = it.val,
-  #         conf = conf,
-  #         nameWidth = maxFld,
-  #         kind = okSequence
-  #       ))
+  ).makeChunk()
 
 
 
@@ -511,9 +509,10 @@ proc pstringRecursive(
         (it.key, pstringRecursive(it.val, conf, maxFld + ident))
       ).arrangeKVPairs(conf, current, ident + maxFld)
     of okSequence:
-      result = current.valItems.mapIt(
+      let tmp = current.valItems.mapIt(
         ("", pstringRecursive(it, conf, ident + conf.seqPrefix.len()))
-      ).arrangeKVPairs(conf, current, ident)
+      )
+      result = tmp.arrangeKVPairs(conf, current, ident)
 
 proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string
@@ -526,20 +525,6 @@ type
     f3: Table[int, string]
 
 import unittest
-
-var conf = PPrintConf(
-  maxWidth: 40,
-  identStr: "  ",
-  seqSeparator: ", ",
-  seqPrefix: "- ",
-  seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("("), makeDelim(")")),
-  kvSeparator: ": ",
-  wrapLargerThan: 10
-)
-
-template pstr(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(conf)
 
 suite "Library parts unit tests":
   template test(
@@ -600,6 +585,51 @@ suite "Library parts unit tests":
            [||||]
          }}""".dedent
 
+
+  test "Multiline block expanded with prefix":
+    assertEq $(test(
+      @{ rpBottomLeft: (text: "}}", offset: 2),
+         rpTopLeftAbove: (text: "{{", offset: 2),
+         rpPrefix: (text: "- ", offset: 2)
+         # Top left left offset should be ignored
+       },
+      chunkLines = @["[||||]", "[||||]"]
+    )),
+         """
+         {{
+         - [||||]
+         - [||||]
+         }}""".dedent
+
+
+  test "Invalid prefix assertion":
+    try:
+      discard test(@{
+        rpTopLeftLeft: (text: "==", offset: 2),
+        rpPrefix: (text: "--", offset: 2)
+      })
+
+      fail("Unreachable code")
+    except AssertionError:
+      assert getCurrentExceptionMsg().startsWith("Incompatible chunk labels")
+    except:
+      fail("Wrong exception")
+
+var conf = PPrintConf(
+  maxWidth: 40,
+  identStr: "  ",
+  seqSeparator: ", ",
+  seqPrefix: "- ",
+  seqWrapper: (makeDelim("["), makeDelim("]")),
+  objWrapper: (makeDelim("("), makeDelim(")")),
+  tblWrapper: (makeDelim("{"), makeDelim("}")),
+  kvSeparator: ": ",
+  wrapLargerThan: 10
+)
+
+template pstr(arg: untyped): untyped =
+  toSimpleTree(arg).prettyString(conf)
+
 suite "Simple configuration":
   test "integer":
     assertEq pstr(12), "12"
@@ -610,143 +640,145 @@ suite "Simple configuration":
   test "Anonymous tuple":
     assertEq pstr((12, "sdf")), "(12, \"sdf\")"
 
-#   test "Named tuple":
-#     assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
+  test "Named tuple":
+    assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
 
-#   test "Narrow sequence":
-#     conf.maxWidth = 6
-#     assertEq @[1,2,3,4].pstr(), "- 1\n- 2\n- 3\n- 4"
+  test "Narrow sequence":
+    conf.maxWidth = 6
+    assertEq @[1,2,3,4].pstr(), "- 1\n- 2\n- 3\n- 4"
 
-#   test "Wide sequence":
-#     conf.maxWidth = 80
-#     assertEq @[1,2,3].pstr(), "[1, 2, 3]"
+  test "Wide sequence":
+    conf.maxWidth = 80
+    assertEq @[1,2,3].pstr(), "[1, 2, 3]"
 
-#   test "int-int table":
-#     assertEq {2: 3, 4: 5}.toOrderedTable().pstr(), "{2: 3, 4: 5}"
+  test "int-int table":
+    assertEq {2: 3, 4: 5}.toOrderedTable().pstr(), "{2: 3, 4: 5}"
 
-#   test "Sequence of tuples":
-#     assertEq @[(1, 3), (4, 5)].pstr(), "[(1, 3), (4, 5)]"
+  test "Sequence of tuples":
+    assertEq @[(1, 3), (4, 5)].pstr(), "[(1, 3), (4, 5)]"
 
-#   type
-#     T = object
-#       f1: int
+  type
+    T = object
+      f1: int
 
-#   test "Simple object":
-#     assertEq T(f1: 12).pstr(), "T(f1: 12)"
+  test "Simple object":
+    assertEq T(f1: 12).pstr(), "T(f1: 12)"
 
-#   test "Sequence of objects":
-#     assertEq @[T(f1: 12), T(f1: -99)].pstr(), "[T(f1: 12), T(f1: -99)]"
+  test "Sequence of objects":
+    assertEq @[T(f1: 12), T(f1: -99)].pstr(), "[T(f1: 12), T(f1: -99)]"
 
-#   type
-#     C = object
-#       case kind: bool
-#       of true: f90: string
-#       of false: f09: (float, string)
+  type
+    C = object
+      case kind: bool
+      of true: f90: string
+      of false: f09: (float, string)
 
-#   test "Case object":
-#     assertEq C(kind: true, f90: "12").pstr(), "C(kind: true, f90: \"12\")"
-#     assertEq C(kind: false, f09: (1.2, "12")).pstr(),
-#          "C(kind: false, f09: (1.2, \"12\"))"
+  test "Case object":
+    assertEq C(kind: true, f90: "12").pstr(), "C(kind: true, f90: \"12\")"
+    assertEq C(kind: false, f09: (1.2, "12")).pstr(),
+         "C(kind: false, f09: (1.2, \"12\"))"
 
-# suite "Deeply nested types":
-#   test "8D sequence":
-#     assertEq @[@[@[@[@[@[@[@[1]]]]]]]].pstr(),
-#          "[[[[[[[[1]]]]]]]]"
+suite "Deeply nested types":
+  test "8D sequence":
+    assertEq @[@[@[@[@[@[@[@[1]]]]]]]].pstr(),
+         "[[[[[[[[1]]]]]]]]"
 
-#   test "4x4 seq":
-#     assertEq @[
-#       @[1, 2, 3, 4],
-#       @[5, 6, 7, 8],
-#       @[9, 1, 2, 3],
-#       @[4, 5, 6, 7],
-#     ].pstr(), "[[1, 2, 3, 4], [5, 6, 7, 8], [9, 1, 2, 3], [4, 5, 6, 7]]"
-
-
-#   test "Narrow 4x4 seq":
-#     conf.maxWidth = 20
-#     assertEq @[
-#       @[1, 2, 3, 4],
-#       @[5, 6, 7, 8],
-#       @[9, 1, 2, 3],
-#       @[4, 5, 6, 7],
-#     ].pstr(),  """
-#       - [1, 2, 3, 4]
-#       - [5, 6, 7, 8]
-#       - [9, 1, 2, 3]
-#       - [4, 5, 6, 7]""".dedent
-#     conf.maxWidth = 80
+  test "4x4 seq":
+    assertEq @[
+      @[1, 2, 3, 4],
+      @[5, 6, 7, 8],
+      @[9, 1, 2, 3],
+      @[4, 5, 6, 7],
+    ].pstr(), "[[1, 2, 3, 4], [5, 6, 7, 8], [9, 1, 2, 3], [4, 5, 6, 7]]"
 
 
-#   test "Super narrow 2x2 seq":
-#     conf.maxWidth = 7
-#     assertEq @[
-#       @[1, 2],
-#       @[5, 6],
-#     ].pstr(), """
-#       - - 1
-#         - 2
-#       - - 5
-#         - 6""".dedent
-
-#     conf.maxWidth = 80
-
-# import json
-
-# suite "Printout json as object":
-#   test "Json named tuple":
-#     let jsonNode = parseJson("""{"key": 3.14}""")
-#     assertEq jsonNode.pstr(), "(key: 3.14)"
-
-#   test "Json array":
-#     assertEq parseJson("""{"key": [1, 2, 3]}""").pstr(),
-#         "(key: [1, 2, 3])"
-
-#   test "Json nested array":
-#     assertEq parseJson("""{"key": [[1, 2, 3], [1, 2, 3]]}""").pstr(),
-#         "(key: [[1, 2, 3], [1, 2, 3]])"
+  test "Narrow 4x4 seq":
+    conf.maxWidth = 20
+    assertEq @[
+      @[1, 2, 3, 4],
+      @[5, 6, 7, 8],
+      @[9, 1, 2, 3],
+      @[4, 5, 6, 7],
+    ].pstr(),  """
+      - [1, 2, 3, 4]
+      - [5, 6, 7, 8]
+      - [9, 1, 2, 3]
+      - [4, 5, 6, 7]""".dedent
+    conf.maxWidth = 80
 
 
-# var jsonConf = PPrintConf(
-#   maxWidth: 80,
-#   identStr: "  ",
-#   seqSeparator: ", ",
-#   seqPrefix: "",
-#   seqWrapper: (makeDelim("["), makeDelim("]")),
-#   objWrapper: (makeDelim("{"), makeDelim("}")),
-#   fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
-#   kvSeparator: ": ",
-#   wrapLargerThan: 10
-# )
+  test "Super narrow 2x2 seq":
+    conf.maxWidth = 7
+    assertEq @[
+      @[1, 2, 4],
+      @[5, 6, 8],
+    ].pstr(), """
+      - - 1
+        - 2
+        - 4
+      - - 5
+        - 6
+        - 8""".dedent
 
-# template pjson(arg: untyped): untyped =
-#   toSimpleTree(arg).prettyString(jsonConf)
+    conf.maxWidth = 80
 
-# suite "Json pretty printing":
-#   test "Reparse int":
-#     let jsonNode = parseJson("""{"key": 3.14}""")
-#     let pretty = jsonNode.pjson()
-#     let reparsed = pretty.parseJson()
-#     assertEq jsonNode, reparsed
+import json
 
-#   test "Nested JSON":
-#     let jsonNode = parseJson """
-#        {
-#         "name":"John",
-#         "age":30,
-#         "cars": {
-#           "car1":"Ford",
-#           "car2":"BMW",
-#           "car3":"Fiat"
-#         }
-#        }""".dedent()
+suite "Printout json as object":
+  test "Json named tuple":
+    let jsonNode = parseJson("""{"key": 3.14}""")
+    assertEq jsonNode.pstr(), "(key: 3.14)"
 
-#     let formatted = jsonNode.pjson()
-#     assertEq formatted, """
-#         {
-#           "name": "John"
-#            "age": 30
-#           "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
-#         }""".dedent()
+  test "Json array":
+    assertEq parseJson("""{"key": [1, 2, 3]}""").pstr(),
+        "(key: [1, 2, 3])"
+
+  test "Json nested array":
+    assertEq parseJson("""{"key": [[1, 2, 3], [1, 2, 3]]}""").pstr(),
+        "(key: [[1, 2, 3], [1, 2, 3]])"
+
+
+var jsonConf = PPrintConf(
+  maxWidth: 80,
+  identStr: "  ",
+  seqSeparator: ", ",
+  seqPrefix: "",
+  seqWrapper: (makeDelim("["), makeDelim("]")),
+  objWrapper: (makeDelim("{"), makeDelim("}")),
+  fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
+  kvSeparator: ": ",
+  wrapLargerThan: 10
+)
+
+template pjson(arg: untyped): untyped =
+  toSimpleTree(arg).prettyString(jsonConf)
+
+suite "Json pretty printing":
+  test "Reparse int":
+    let jsonNode = parseJson("""{"key": 3.14}""")
+    let pretty = jsonNode.pjson()
+    let reparsed = pretty.parseJson()
+    assertEq jsonNode, reparsed
+
+  test "Nested JSON":
+    let jsonNode = parseJson """
+       {
+        "name":"John",
+        "age":30,
+        "cars": {
+          "car1":"Ford",
+          "car2":"BMW",
+          "car3":"Fiat"
+        }
+       }""".dedent()
+
+    let formatted = jsonNode.pjson()
+    assertEq formatted, """
+        {
+          "name": "John"
+           "age": 30
+          "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
+        }""".dedent()
 
 #   test "Large JSON reparse":
 #       let jsonNode = parseJson """
@@ -763,4 +795,4 @@ suite "Simple configuration":
 # }}        """
 
 #       echo jsonNode.pjson()
-#       # assertEq jsonNode, jsonNode.pjson().parseJson()
+      # assertEq jsonNode, jsonNode.pjson().parseJson()

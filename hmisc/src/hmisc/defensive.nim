@@ -46,6 +46,8 @@ proc die*() {.discardable, noreturn.} =
   ceUserInfo2("Terminating program", defLogIndentation)
   quit 1
 
+template fail*(msg: string): untyped =
+  raiseAssert(msg)
 
 proc findFirstFile*(
   pattern: string, filePurpose: string, debug = true): string =

@@ -66,3 +66,10 @@ match((1, 2)):
 
 proc t(args: varargs[string, `$`]) = discard
 # proc t(arg: [string, `$`]) = discard
+
+proc t1(arg: string, offset: int = arg.len()): void =
+  echo arg
+  echo offset
+
+t1("sdf")
+t1("sdfsdf", 22)
