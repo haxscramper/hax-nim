@@ -277,7 +277,7 @@ proc relativePosition(
           topPad = 1
           leftPad = max(offset, leftPad)
         rpTopLeftLeft:
-          leftPad = max(leftPad, text.len + offset)
+          leftPad = max(leftPad, text.len)
         rpBottomLeft:
           bottomPad = 1
           leftPad = max(leftPad, offset)
@@ -428,7 +428,6 @@ proc arrangeKVPairs(
     (false, false):
       # (prefix delimiter) <field> [ block block
       #                              block block ] (suffix delimiter)
-
       subIdent = ident + wrapBeg.content.len() + fldsWidth
       maxWidth = conf.maxWidth - wrapEnd.content.len()
       labels[rpTopLeftLeft] = (text: wrapBeg.content, offset: 0)
@@ -543,9 +542,10 @@ template pstr(arg: untyped): untyped =
   toSimpleTree(arg).prettyString(conf)
 
 suite "Library parts unit tests":
-  template test(labels: untyped): untyped =
+  template test(
+    labels: untyped, chunkLines: seq[string] = @["[|||]"]): untyped =
     relativePosition(
-      chunk = makeChunk("[|||]"), labels)
+      chunk = makeChunk(chunkLines), labels)
 
   test "Chunk label on left":
     assertEq $(test(
@@ -573,15 +573,42 @@ suite "Library parts unit tests":
          }}""".dedent
 
 
-# suite "Simple configuration":
-#   test "integer":
-#     assertEq pstr(12), "12"
+  test "Multiline block compact":
+    assertEq $(test(
+      @{ rpBottomRight: (text: "}}", offset: 2),
+         rpTopLeftLeft: (text: "{{", offset: 2)
+         # Top left left offset should be ignored
+       },
+      chunkLines = @["[||||]", "[||||]"]
+    )),
+         """
+         {{[||||]
+           [||||]}}""".dedent
 
-#   test "string":
-#     assertEq pstr("112"), "\"112\""
 
-#   test "Anonymous tuple":
-#     assertEq pstr((12, "sdf")), "(12, \"sdf\")"
+  test "Multiline block expanded":
+    assertEq $(test(
+      @{ rpBottomLeft: (text: "}}", offset: 2),
+         rpTopLeftAbove: (text: "{{", offset: 2)
+         # Top left left offset should be ignored
+       },
+      chunkLines = @["[||||]", "[||||]"]
+    )),
+         """
+         {{
+           [||||]
+           [||||]
+         }}""".dedent
+
+suite "Simple configuration":
+  test "integer":
+    assertEq pstr(12), "12"
+
+  test "string":
+    assertEq pstr("112"), "\"112\""
+
+  test "Anonymous tuple":
+    assertEq pstr((12, "sdf")), "(12, \"sdf\")"
 
 #   test "Named tuple":
 #     assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
