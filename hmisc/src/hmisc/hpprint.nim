@@ -6,14 +6,17 @@ import typetraits
 
 import gara, with
 
+export tables
+
+
 type
-  ObjKind = enum
+  ObjKind* = enum
     okConstant
     okSequence
     okTable
     okComposed
 
-  Field = object
+  Field* = object
     fldType: string
     case isKind: bool
       of true:
@@ -22,23 +25,23 @@ type
         name: string
         value: ObjTree
 
-  ObjTree = object
-    case kind: ObjKind
+  ObjTree* = object
+    case kind*: ObjKind
       of okConstant:
-        constType: string
-        strlit: string
+        constType*: string
+        strlit*: string
       of okSequence:
-        itemType: string
-        valItems: seq[ObjTree]
+        itemType*: string
+        valItems*: seq[ObjTree]
       of okTable:
-        keyType: string
-        valType: string
-        valPairs: seq[tuple[key: string, val: ObjTree]]
+        keyType*: string
+        valType*: string
+        valPairs*: seq[tuple[key: string, val: ObjTree]]
       of okComposed:
-        namedObject: bool
-        namedFields: bool
-        name: string
-        case sectioned: bool
+        namedObject*: bool
+        namedFields*: bool
+        name*: string
+        case sectioned*: bool
           of false:
             # Simpler representation for object tree without
             # sectioning on different blocks depending on `kind`
@@ -46,12 +49,12 @@ type
             # sequence.
 
             # TODO Add field type
-            fldPairs: seq[tuple[name: string, value: ObjTree]]
+            fldPairs*: seq[tuple[name: string, value: ObjTree]]
           of true:
             # Most of the case objects have one `kind` field named
             # 'kind' but this should account for cases with multiple
             # case fields as well as nested ones
-            kindBlocks: seq[Field]
+            kindBlocks*: seq[Field]
 
 func isKVpairs(obj: ObjTree): bool =
   obj.kind == okTable or (obj.kind == okComposed and obj.namedFields)
@@ -96,7 +99,7 @@ proc prettyPrintConverter(val: JsonNode): ObjTree =
         )))
 
 
-proc toSimpleTree[Obj](entry: Obj): ObjTree =
+proc toSimpleTree*[Obj](entry: Obj): ObjTree =
   when compiles(dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)):
     return dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
   elif not (
@@ -167,7 +170,7 @@ proc toSimpleTree[Obj](entry: Obj): ObjTree =
 
 
 type
-  Delim = object
+  Delim* = object
     content: string ## String for delimiter
     # appendNew: bool ## Append delimiter as new chunk after or suffix
     # ## to existing one?
@@ -178,37 +181,37 @@ type
     preferMultiline: bool ## Don't try to put delimiter on the same
     ## line with content - always prefer new chunks
 
-  DelimPair = tuple[
+  DelimPair* = tuple[
     start: Delim,
     final: Delim
   ]
 
-  PPrintConf = object
-    maxWidth: int
-    identStr: string
-    wrapLargerThan: int
+  PPrintConf* = object
+    maxWidth*: int
+    identStr*: string
+    wrapLargerThan*: int
 
-    kvSeparator: string
-    tblWrapper: DelimPair
+    kvSeparator*: string
+    tblWrapper*: DelimPair
 
-    objWrapper: DelimPair
-    fldNameWrapper: DelimPair
-    fldSeparator: string
-    nowrapMultiline: bool
-    alignFieldsRight: bool
+    objWrapper*: DelimPair
+    fldNameWrapper*: DelimPair
+    fldSeparator*: string
+    nowrapMultiline*: bool
+    alignFieldsRight*: bool
 
-    seqSeparator: string
-    seqPrefix: string
-    seqWrapper: DelimPair
+    seqSeparator*: string
+    seqPrefix*: string
+    seqWrapper*: DelimPair
 
-  Chunk = object
+  Chunk* = object
     content: seq[string]
     maxWidth: int
 
 
 
 type
-  RelPos = enum
+  RelPos* = enum
     rpBottomRight
     # [|||||||]
     # [|||||||] <label>
@@ -228,11 +231,11 @@ type
     # <label>[|||||||]
 
 proc lineCount(c: Chunk): int = c.content.len()
-proc `$`(c: Chunk): string = c.content.join("\n")
+proc `$`*(c: Chunk): string = c.content.join("\n")
 
 func multiline(chunk: Chunk): bool = chunk.content.len > 1
 func empty(conf: Delim): bool = conf.content.len == 0
-func makeDelim(str: string, multiline: bool = false): Delim =
+func makeDelim*(str: string, multiline: bool = false): Delim =
   Delim(
     # appendNew: str.startsWith('\n'),
     # prependNew: str.endsWith('\n'),
@@ -240,16 +243,16 @@ func makeDelim(str: string, multiline: bool = false): Delim =
     preferMultiline: multiline
   )
 
-proc makeChunk(content: seq[string]): Chunk =
+proc makeChunk*(content: seq[string]): Chunk =
   Chunk(
     content: content,
     maxWidth: content.mapIt(it.len()).max()
   )
 
-proc makeChunk(content: string): Chunk =
+proc makeChunk*(content: string): Chunk =
   Chunk(content: @[content], maxWidth: content.len)
 
-proc makeChunk(other: seq[Chunk]): Chunk =
+proc makeChunk*(other: seq[Chunk]): Chunk =
   result = Chunk(
     content: other.mapIt(it.content).concat()
   )
@@ -257,9 +260,10 @@ proc makeChunk(other: seq[Chunk]): Chunk =
   result.maxWidth = result.content.mapIt(it.len()).max()
 
 type
-  ChunkLabels = Table[RelPos, tuple[text: string, offset: int]]
+  ChunkLabels* = Table[RelPos, tuple[text: string, offset: int]]
 
-proc relativePosition(
+
+proc relativePosition*(
   chunk: Chunk,
   labelsIn:
     ChunkLabels |
@@ -437,12 +441,6 @@ proc arrangeKVPairs(
   ## Layout sequence of key-value pairs. `name` field in tuple items
   ## might be empty if `current.kind` is `okSequence`.
 
-  # echo "arranging sequence of items"
-  # echov input
-  # echov current.kind
-  # defer:
-  #   echov result
-
   let (wrapBeg, wrapEnd) = getWrapperConf(current, conf)
 
   let trySingleLine = (not input.anyOfIt(it.val.multiline()))
@@ -534,358 +532,6 @@ proc pstringRecursive(
       )
       result = tmp.arrangeKVPairs(conf, current, ident)
 
-proc prettyString(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
+proc prettyString*(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   ## Convert object tree to pretty-printed string
   pstringRecursive(tree, conf).content.join("\n")
-
-type
-  Obj1 = object
-    f1: int
-    f2: seq[int]
-    f3: Table[int, string]
-
-import unittest
-
-suite "Library parts unit tests":
-  template test(
-    labels: untyped, chunkLines: seq[string] = @["[|||]"]): untyped =
-    relativePosition(
-      chunk = makeChunk(chunkLines), labels)
-
-  test "Chunk label on left":
-    assertEq $(test(
-      @{ rpTopLeftLeft : (text: "<>", offset: 0) })), "<>[|||]"
-
-  test "Chunk label on top left":
-    assertEq $(test(
-      @{ rpTopLeftAbove : (text: "<-->", offset: 2) })), "<-->\n  [|||]"
-
-  test "Chunk label on bottom right":
-    assertEq $(test(
-      @{ rpBottomRight : (text: "<>", offset: 2) })), "[|||]<>"
-
-  test "Chunk label on bottom left":
-    assertEq $(test(
-      @{ rpBottomLeft : (text: "<>", offset: 2) })), "  [|||]\n<>"
-
-  test "Top-above & bottom left":
-    assertEq $(test(
-      @{ rpTopLeftAbove : (text: "{{{", offset: 2),
-         rpBottomLeft : (text: "}}}", offset: 2)})),
-         """
-         {{{
-           [|||]
-         }}}""".dedent
-
-
-  test "Multiline block compact":
-    assertEq $(test(
-      @{ rpBottomRight: (text: "}}", offset: 2),
-         rpTopLeftLeft: (text: "{{", offset: 2)
-         # Top left left offset should be ignored
-       },
-      chunkLines = @["[||||]", "[||||]"]
-    )),
-         """
-         {{[||||]
-           [||||]}}""".dedent
-
-
-  test "Multiline block expanded":
-    assertEq $(test(
-      @{ rpBottomLeft: (text: "}}", offset: 2),
-         rpTopLeftAbove: (text: "{{", offset: 2)
-         # Top left left offset should be ignored
-       },
-      chunkLines = @["[||||]", "[||||]"]
-    )),
-         """
-         {{
-           [||||]
-           [||||]
-         }}""".dedent
-
-
-  test "Multiline block expanded with prefix":
-    assertEq $(test(
-      @{ rpBottomLeft: (text: "}}", offset: 2),
-         rpTopLeftAbove: (text: "{{", offset: 2),
-         rpPrefix: (text: "- ", offset: 2)
-         # Top left left offset should be ignored
-       },
-      chunkLines = @["[||||]", "[||||]"]
-    )),
-         """
-         {{
-         - [||||]
-         - [||||]
-         }}""".dedent
-
-
-  test "Invalid prefix assertion":
-    try:
-      discard test(@{
-        rpTopLeftLeft: (text: "==", offset: 2),
-        rpPrefix: (text: "--", offset: 2)
-      })
-
-      fail("Unreachable code")
-    except AssertionError:
-      assert getCurrentExceptionMsg().startsWith("Incompatible chunk labels")
-    except:
-      fail("Wrong exception")
-
-var conf = PPrintConf(
-  maxWidth: 40,
-  identStr: "  ",
-  seqSeparator: ", ",
-  seqPrefix: "- ",
-  seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("(", multiline = true),
-               makeDelim(")", multiline = false)),
-  tblWrapper: (makeDelim("{"), makeDelim("}")),
-  kvSeparator: ": ",
-  wrapLargerThan: 10
-)
-
-template pstr(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(conf)
-
-suite "Simple configuration":
-  test "integer":
-    assertEq pstr(12), "12"
-
-  test "string":
-    assertEq pstr("112"), "\"112\""
-
-  test "Anonymous tuple":
-    assertEq pstr((12, "sdf")), "(12, \"sdf\")"
-
-  test "Named tuple":
-    assertEq pstr((a: "12", b: "222")), "(a: \"12\", b: \"222\")"
-
-  test "Narrow sequence":
-    conf.maxWidth = 6
-    assertEq @[1,2,3,4].pstr(), "- 1\n- 2\n- 3\n- 4"
-
-  test "Wide sequence":
-    conf.maxWidth = 80
-    assertEq @[1,2,3].pstr(), "[1, 2, 3]"
-
-  test "int-int table":
-    assertEq {2: 3, 4: 5}.toOrderedTable().pstr(), "{2: 3, 4: 5}"
-
-  test "Sequence of tuples":
-    assertEq @[(1, 3), (4, 5)].pstr(), "[(1, 3), (4, 5)]"
-
-  type
-    T = object
-      f1: int
-
-  test "Simple object":
-    assertEq T(f1: 12).pstr(), "T(f1: 12)"
-
-  test "Sequence of objects":
-    assertEq @[T(f1: 12), T(f1: -99)].pstr(), "[T(f1: 12), T(f1: -99)]"
-
-  type
-    C = object
-      case kind: bool
-      of true: f90: string
-      of false: f09: (float, string)
-
-  test "Case object":
-    assertEq C(kind: true, f90: "12").pstr(), "C(kind: true, f90: \"12\")"
-    assertEq C(kind: false, f09: (1.2, "12")).pstr(),
-         "C(kind: false, f09: (1.2, \"12\"))"
-
-suite "Deeply nested types":
-  test "8D sequence":
-    assertEq @[@[@[@[@[@[@[@[1]]]]]]]].pstr(),
-         "[[[[[[[[1]]]]]]]]"
-
-  test "4x4 seq":
-    assertEq @[
-      @[1, 2, 3, 4],
-      @[5, 6, 7, 8],
-      @[9, 1, 2, 3],
-      @[4, 5, 6, 7],
-    ].pstr(), "[[1, 2, 3, 4], [5, 6, 7, 8], [9, 1, 2, 3], [4, 5, 6, 7]]"
-
-
-  test "Narrow 4x4 seq":
-    conf.maxWidth = 20
-    assertEq @[
-      @[1, 2, 3, 4],
-      @[5, 6, 7, 8],
-      @[9, 1, 2, 3],
-      @[4, 5, 6, 7],
-    ].pstr(),  """
-      - [1, 2, 3, 4]
-      - [5, 6, 7, 8]
-      - [9, 1, 2, 3]
-      - [4, 5, 6, 7]""".dedent
-    conf.maxWidth = 80
-
-
-  test "Super narrow 2x2 seq":
-    conf.maxWidth = 7
-    assertEq @[
-      @[1, 2, 4],
-      @[5, 6, 8],
-    ].pstr(), """
-      - - 1
-        - 2
-        - 4
-      - - 5
-        - 6
-        - 8""".dedent
-
-    conf.maxWidth = 80
-
-import json
-
-suite "Printout json as object":
-  test "Json named tuple":
-    let jsonNode = parseJson("""{"key": 3.14}""")
-    assertEq jsonNode.pstr(), "(key: 3.14)"
-
-  test "Json array":
-    assertEq parseJson("""{"key": [1, 2, 3]}""").pstr(),
-        "(key: [1, 2, 3])"
-
-  test "Json nested array":
-    assertEq parseJson("""{"key": [[1, 2, 3], [1, 2, 3]]}""").pstr(),
-        "(key: [[1, 2, 3], [1, 2, 3]])"
-
-
-var jsonConf = PPrintConf(
-  maxWidth: 80,
-  identStr: "  ",
-  seqSeparator: ", ",
-  seqPrefix: "",
-  seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("{"), makeDelim("}")),
-  fldNameWrapper: (makeDelim("\""), makeDelim("\"")),
-  fldSeparator: ",",
-  kvSeparator: ": ",
-  wrapLargerThan: 10,
-  alignFieldsRight: true
-)
-
-template pjson(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(jsonConf)
-
-suite "Json pretty printing":
-  test "Reparse int":
-    let jsonNode = parseJson("""{"key": 3.14}""")
-    let pretty = jsonNode.pjson()
-    let reparsed = pretty.parseJson()
-    assertEq jsonNode, reparsed
-
-  test "Nested JSON":
-    let jsonNode = parseJson """
-       {
-        "name":"John",
-        "age":30,
-        "cars": {
-          "car1":"Ford",
-          "car2":"BMW",
-          "car3":"Fiat"
-        }
-       }""".dedent()
-
-    let formatted = jsonNode.pjson()
-    assertEq formatted, """
-        {
-          "name": "John",
-           "age": 30,
-          "cars": {"car1": "Ford", "car2": "BMW", "car3": "Fiat"}
-        }""".dedent()
-
-  test "Large JSON reparse":
-      let jsonNode = parseJson """
-{"menu": {
-  "id": "file",
-  "value": "File",
-  "popup": {
-    "menuitem": [
-      {"value": "New", "onclick": "CreateNewDoc()"},
-      {"value": "Open", "onclick": "OpenDoc()"},
-      {"value": "Close", "onclick": "CloseDoc()"}
-    ]
-  }
-}}        """
-
-      assertEq jsonNode, jsonNode.pjson().parseJson()
-
-
-var treeConf = PPrintConf(
-  maxWidth: 40,
-  identStr: "  ",
-  seqSeparator: ", ",
-  seqPrefix: "- ",
-  seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("("), makeDelim(")")),
-  tblWrapper: (makeDelim("{"), makeDelim("}")),
-  kvSeparator: ": ",
-  wrapLargerThan: 10,
-  nowrapMultiline: true
-)
-
-template treeStr(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(treeConf)
-
-suite "Large object printout":
-  test "Large JSON as treeRepr":
-    let jsonNode = parseJson """
-      {"widget": {
-          "debug": "on",
-          "window": {
-              "title": "Sample Konfabulator Widget",
-              "name": "main_window",
-              "width": 500,
-              "height": 500
-          },
-          "image": {
-              "src": "Images/Sun.png",
-              "name": "sun1",
-              "hOffset": 250,
-              "vOffset": 250,
-              "alignment": "center"
-          },
-          "text": {
-              "data": "Click Here",
-              "size": 36,
-              "style": "bold",
-              "name": "text1",
-              "hOffset": 250,
-              "vOffset": 100,
-              "alignment": "center",
-              "onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"
-          }
-      }}"""
-
-    assertEq jsonNode.treeStr(), """
-      widget:
-        debug:  "on"
-        window:
-          title:  "Sample Konfabulator Widget"
-          name:   "main_window"
-          width:  500
-          height: 500
-        image:
-          src:       "Images/Sun.png"
-          name:      "sun1"
-          hOffset:   250
-          vOffset:   250
-          alignment: "center"
-        text:
-          data:      "Click Here"
-          size:      36
-          style:     "bold"
-          name:      "text1"
-          hOffset:   250
-          vOffset:   100
-          alignment: "center"
-          onMouseUp: "sun1.opacity = (sun1.opacity / 100) * 90;"""".dedent()

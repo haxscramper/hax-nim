@@ -11,6 +11,9 @@ import os
 
 export options
 
+import strformat
+export strformat
+
 #~#=== Optional type
 type Opt*[T] = Option[T]
 
