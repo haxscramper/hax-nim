@@ -175,6 +175,12 @@ proc toSimpleTree*[Obj](entry: Obj): ObjTree =
 
     for name, value in entry.fieldPairs():
       result.fldPairs.add((name, toSimpleTree(value)))
+  elif (entry is proc):
+    result = ObjTree(
+      kind: okConstant,
+      constType: $(typeof(Obj)),
+      strLit: $(typeof(Obj))
+    )
   else:
     when entry is string:
       let val = "\"" & entry & "\""
@@ -569,8 +575,7 @@ const objectPPrintConf = PPrintConf(
   seqSeparator: ", ",
   seqPrefix: "- ",
   seqWrapper: (makeDelim("["), makeDelim("]")),
-  objWrapper: (makeDelim("(", multiline = true),
-               makeDelim(")", multiline = false)),
+  objWrapper: (makeDelim("("), makeDelim(")")),
   tblWrapper: (makeDelim("{"), makeDelim("}")),
   kvSeparator: ": "
 )
