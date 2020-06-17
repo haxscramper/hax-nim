@@ -149,8 +149,10 @@ proc toSimpleTree*[Obj](entry: Obj): ObjTree =
     for it in items(entry):
       result.valItems.add(toSimpleTree(it))
 
-  elif (entry is object) or (entry is tuple):
-    when entry is object:
+  elif (entry is object) or
+       (entry is ref object) or
+       (entry is tuple):
+    when (entry is object) or (entry is ref object):
       result = ObjTree(
         kind: okComposed,
         name: $typeof(Obj),
@@ -174,8 +176,20 @@ proc toSimpleTree*[Obj](entry: Obj): ObjTree =
         namedObject: false
       )
 
-    for name, value in entry.fieldPairs():
-      result.fldPairs.add((name, toSimpleTree(value)))
+    when entry is ref object:
+      if entry == nil:
+        result = ObjTree(
+          kind: okConstant,
+          constType: $(typeof(Obj)),
+          strLit: "nil")
+      else:
+        for name, value in entry[].fieldPairs():
+          result.fldPairs.add((name, toSimpleTree(value)))
+    else:
+      for name, value in entry.fieldPairs():
+        result.fldPairs.add((name, toSimpleTree(value)))
+
+
   elif (entry is proc):
     result = ObjTree(
       kind: okConstant,
