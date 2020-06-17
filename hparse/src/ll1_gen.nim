@@ -158,10 +158,14 @@ proc makeNtoMTimesBlock[TKind](
   let
     toksIdent = ident(conf.toksIdent)
     laLiteral = makeSetLiteral(nterm.first(sets))
-    bodyParse = makeParseBlock(nterm.opt[0], conf, sets)
+    bodyParse = makeParseBlock(nterm.opt[0], conf, sets, "itemRes")
     minLit = newLit(mintimes)
     maxLit = newLit(maxtimes)
     cnt = ident("cnt")
+    tokType = ident("Tok")
+    itemIdent = ident("itemRes")
+    kindLiteral = ident($nterm.kind)
+    subItems = ident "subItems"
 
   let countConstraints =
     if maxtimes > 0:
@@ -182,16 +186,30 @@ proc makeNtoMTimesBlock[TKind](
     else:
       newEmptyNode()
 
+  let finalValue =
+    if nterm.kind == pkOptional:
+      quote do:
+        if subItems.len == 1:
+          ParseTree[`tokType`](kind: pkOptional, optValue: some(`subItems`[0]))
+        else:
+          ParseTree[`tokType`](kind: pkOptional)
+    else:
+      quote do:
+        ParseTree[`tokType`](kind: `kindLiteral`, values: `subItems`)
+
 
   return quote do:
     # TEST WARNING possible variable shadowing if parsing rule
     # contains nested `{N,M}` rules.
     var `cnt` = 0
+    var `subItems`: seq[ParseTree[`tokType`]]
     while `countConstraints` and `toksIdent`.peek().kind in `laLiteral`:
       `bodyParse`
       inc `cnt`
+      `subItems`.add `itemIdent`
 
     `minNumAssert`
+    `finalValue`
 
 
 
@@ -217,12 +235,16 @@ proc makeParseBlock[TKind](
     of pkOneOrMore:
       makeNtoMTimesBlock(patt, conf, sets, 1, -1)
 
-  let resIdent = ident resName
+  let
+    resIdent = ident resName
+    argTree = ident "tree"
   return newStmtList(
     newCommentStmtNode($patt & " " & $patt.kind),
     quote do:
       let `resIdent` = block:
         `result`
+
+      `argTree` = `resIdent`
     )
 
 proc makeRuleParser[TKind](

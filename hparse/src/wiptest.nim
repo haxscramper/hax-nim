@@ -80,3 +80,7 @@ var testStream = makeStream(@[
 
 var root = ParseTree[Token](kind: pkNTerm)
 parseList(testStream, root)
+
+import terminal
+
+pprint root, maxWidth = terminalWidth()
