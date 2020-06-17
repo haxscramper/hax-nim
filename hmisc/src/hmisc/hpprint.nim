@@ -561,3 +561,21 @@ proc prettyString*(tree: ObjTree, conf: PPrintConf, ident: int = 0): string =
   newConf.maxWidth = conf.maxWidth - ident
   pstringRecursive(tree, newConf, ident = ident).content.mapIt(
     " ".repeat(ident) & it).join("\n")
+
+
+const objectPPrintConf = PPrintConf(
+  maxWidth: 80,
+  identStr: "  ",
+  seqSeparator: ", ",
+  seqPrefix: "- ",
+  seqWrapper: (makeDelim("["), makeDelim("]")),
+  objWrapper: (makeDelim("(", multiline = true),
+               makeDelim(")", multiline = false)),
+  tblWrapper: (makeDelim("{"), makeDelim("}")),
+  kvSeparator: ": "
+)
+
+proc pprint*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): void =
+  var conf = objectPPrintConf
+  conf.maxWidth = maxWidth
+  echo prettyString(toSimpleTree(obj), conf, ident)
