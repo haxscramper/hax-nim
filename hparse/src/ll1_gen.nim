@@ -75,7 +75,8 @@ type
 proc makeParseBlock[TKind](
   patt: CompPatt[TKind],
   conf: CodeGenConf,
-  sets: NTermSets[TKind]): NimNode
+  sets: NTermSets[TKind],
+  resName: string = "res"): NimNode
 
 proc makeAltBlock[TKind](
   alt: CompPatt[TKind],
@@ -85,10 +86,16 @@ proc makeAltBlock[TKind](
   assert alt.kind == pkAlternative
   let toksIdent = ident conf.toksIdent
   result = nnkCaseStmt.newTree(quote do: `toksIdent`.peek().kind)
-  for patt in alt.patts:
+
+  for idx, patt in alt.patts:
+    let resName = &"patt{idx}res"
+    let resIdent = ident resName
+    let parseBlock = makeParseBlock(patt, conf, sets, resName)
     result.add nnkOfBranch.newTree(
       makeSetLiteral(patt.first(sets)),
-      makeParseBlock(patt, conf, sets)
+      quote do:
+        `parseBlock`
+        `resIdent`
     )
 
   let elseBody = quote do:
@@ -104,16 +111,21 @@ proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
   assert term.kind == pkTerm
   let toksIdent = ident(conf.toksIdent)
   let tokIdent = ident($term.tok)
+  let tokType = ident "Tok"
   return quote do:
-    let tok = `toksIdent`.next().kind
-    assert tok == `tokIdent`
+    let tok = `toksIdent`.next()
+    assert tok.kind == `tokIdent`
+    ParseTree[`tokType`](kind: pkTerm, tok: tok)
 
 proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   assert nterm.kind == pkNTerm
   let ntermIdent = ident(makeParserName(nterm.sym))
   let lexerIdent = ident(conf.toksIdent)
+  let tree = ident "tree"
   quote do:
-    `ntermIdent`(`lexerIdent`)
+    var ntermTree: typeof(`tree`)
+    `ntermIdent`(`lexerIdent`, ntermTree)
+    ntermTree
 
 proc makeConcatBlock[TKind](
   nterm: CompPatt[TKind],
@@ -121,10 +133,23 @@ proc makeConcatBlock[TKind](
   sets: NTermSets[TKind]): NimNode =
   assert nterm.kind == pkConcat
   let parseStmts = collect(newSeq):
-    for patt in nterm.patts:
-      makeParseBlock(patt, conf, sets)
+    for idx, patt in nterm.patts:
+      makeParseBlock(patt, conf, sets, &"patt{idx}res")
 
-  return parseStmts.newStmtList()
+  let valueVars = nnkBracket.newTree(
+    nterm.patts
+      .enumerate()
+      .mapIt(ident &"patt{it[0]}res")
+  )
+
+  let tokIdent = ident "Tok"
+  return (parseStmts & @[
+    quote do:
+      ParseTree[`tokIdent`](
+        kind: pkConcat,
+        values: @`valueVars`
+      )
+  ]).newStmtList()
 
 proc makeNtoMTimesBlock[TKind](
   nterm: CompPatt[TKind], conf: CodeGenConf, sets: NtermSets[TKind],
@@ -173,7 +198,8 @@ proc makeNtoMTimesBlock[TKind](
 proc makeParseBlock[TKind](
   patt: CompPatt[TKind],
   conf: CodeGenConf,
-  sets: NTermSets[TKind]): NimNode =
+  sets: NTermSets[TKind],
+  resName: string = "res"): NimNode =
   ## Generate code block to parse pattern `patt`.
   result = case patt.kind:
     of pkTerm:
@@ -191,10 +217,11 @@ proc makeParseBlock[TKind](
     of pkOneOrMore:
       makeNtoMTimesBlock(patt, conf, sets, 1, -1)
 
+  let resIdent = ident resName
   return newStmtList(
     newCommentStmtNode($patt & " " & $patt.kind),
     quote do:
-      block:
+      let `resIdent` = block:
         `result`
     )
 
@@ -206,15 +233,16 @@ proc makeRuleParser[TKind](
   let procName = ident(rule.nterm.makeParserName())
   let toks = ident(conf.toksIdent)
   let parser = ident(conf.parsIdent)
+  let tree = ident "tree"
 
   let decl = quote do:
     # Declare procedure to parse `rule`. `toks` is instance of token
     # stream used to get lookahead.
-    proc `procName`[Tok](`toks`: var TokStream[Tok])
+    proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok])
 
   let parseBody = rule.patts.makeParseBlock(conf, sets)
   let impl = quote do:
-    proc `procName`[Tok](`toks`: var TokStream[Tok]) =
+    proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
       `parseBody`
 
   return (decl: decl, impl: impl)

@@ -169,3 +169,6 @@ static:
       block:
         "Nice weather?"
   )
+
+dumpTree:
+  @[a1, a2, a3]

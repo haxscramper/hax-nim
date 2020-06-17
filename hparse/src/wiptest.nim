@@ -64,6 +64,7 @@ macro grammarTest(): untyped =
   let impl = makeGrammarParser(compGrammar)
 
   result = impl
+  colorPrint(result)
 
 grammarTest()
 
@@ -77,4 +78,5 @@ var testStream = makeStream(@[
   Token(kind: tkCloseBrace)
 ])
 
-parseList(testStream)
+var root = ParseTree[Token](kind: pkNTerm)
+parseList(testStream, root)

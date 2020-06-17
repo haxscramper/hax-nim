@@ -66,6 +66,22 @@ type
     sets*: NTermSets[TKind]
     rules*: seq[CompRule[TKind]]
 
+type
+  ParseTree*[Tok] = ref object
+    case kind*: PattKind
+      of pkAlternative:
+        altIdx*: int
+        altValue*: ParseTree[Tok]
+      of pkOptional:
+        optValue*: Option[ParseTree[Tok]]
+      of pkZeroOrMore, pkOneOrMore, pkConcat:
+        values*: seq[ParseTree[Tok]]
+      of pkTerm:
+        tok*: Tok
+      of pkNTerm:
+        name*: NTermSym
+        nterm*: ParseTree[Tok]
+
 
 # iterator pairs*[T1, T2](s: openarray[(T1, T2)]): (T1, T2) =
 #   for item in s:

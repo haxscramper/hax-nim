@@ -516,3 +516,11 @@ proc dedent*(multiline: string): string =
     else: break
 
   seplines.mapIt(if it.len == 0: it else: it[indent..^1]).join("\n")
+
+proc colorPrint*(node: NimNode): void =
+  # TODO convert nim ast into adequately readable form without using
+  # `pygmentize`. Maybe even color macros/templates/procs differently.
+  let file = "/tmp/nimast.tmp.nim"
+  file.writeFile($node.toStrLit())
+  discard staticExec("nimpretty " & file)
+  echo staticExec("pygmentize -f terminal " & file)

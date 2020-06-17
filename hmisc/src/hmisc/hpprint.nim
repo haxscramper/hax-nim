@@ -1,5 +1,7 @@
 # TODO account for control codes in stings
 
+## Universal pretty-printer
+
 import hmisc/[helpers, defensive]
 import tables, sequtils, math, strutils, strformat
 import typetraits
@@ -7,7 +9,6 @@ import typetraits
 import gara, with
 
 export tables
-
 
 type
   ObjKind* = enum
@@ -451,9 +452,13 @@ proc getLabelConfiguration(
           blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 2)
         of {okTable, okComposed}:
           itemLabels[rpBottomRight] = (text: conf.fldSeparator, offset: 0)
+          # TODO more fine-grained configuration for different
+          # wrapping settings.
           if not conf.nowrapMultiline:
             blockLabels[rpTopLeftAbove] = (text: wrapBeg.content, offset: 2)
             blockLabels[rpBottomLeft] = (text: wrapEnd.content, offset: 2)
+          elif current.kind == okComposed and current.namedObject:
+            blockLabels[rpTopLeftAbove] = (text: current.name, offset: 2)
         else:
           discard
 
@@ -577,7 +582,8 @@ const objectPPrintConf = PPrintConf(
   seqWrapper: (makeDelim("["), makeDelim("]")),
   objWrapper: (makeDelim("("), makeDelim(")")),
   tblWrapper: (makeDelim("{"), makeDelim("}")),
-  kvSeparator: ": "
+  kvSeparator: ": ",
+  nowrapMultiline: true
 )
 
 proc pprint*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): void =
