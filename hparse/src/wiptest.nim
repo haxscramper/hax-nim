@@ -1,4 +1,4 @@
-import ll1_gen, grammars
+import ll1_gen, grammars, macros
 
 type
   TokenKind = enum
@@ -13,7 +13,30 @@ type
   TPatt = Patt[TokenKind]
 
 
-macro grammarTest() =
+
+import unittest, sequtils
+
+import hmisc/hpprint
+
+suite "Token streams":
+  template newtoks(): untyped =
+    var ts {.inject.} = makeStream(@[
+      Token(kind: tkOpBrace),
+      Token(kind: tkIdent),
+      Token(kind: tkComma),
+      Token(kind: tkIdent),
+      Token(kind: tkCloseBrace)
+    ])
+
+
+  test "Get all tokens":
+    newtoks()
+    assertEq toSeq(ts).mapIt(it.kind), @[
+      tkOpBrace, tkIdent, tkComma, tkIdent, tkCloseBrace
+    ]
+
+
+macro grammarTest(): untyped =
   let grammar = {
     # list ::= '[' <elements> ']'
     "list" : TPatt(kind: pkConcat, patts: @[
@@ -37,6 +60,21 @@ macro grammarTest() =
   }.toGrammar()
 
   let compGrammar = computeGrammar(grammar)
+  # pprint compGrammar
   let impl = makeGrammarParser(compGrammar)
 
+  result = impl
+
 grammarTest()
+
+var testStream = makeStream(@[
+  Token(kind: tkOpBrace),
+  Token(kind: tkIdent),
+  Token(kind: tkComma),
+  Token(kind: tkIdent),
+  Token(kind: tkComma),
+  Token(kind: tkIdent),
+  Token(kind: tkCloseBrace)
+])
+
+parseList(testStream)

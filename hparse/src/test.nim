@@ -149,6 +149,23 @@ iterator testIter(test: seq[int]): int {.closure.} =
   for item in test:
     yield item
 
+
+#==================  generate comments from macro code  ==================#
+dumpTree:
+  block: ## Comment
+    discard
+
 static:
-  for i in testIter(@[1,2,3,]):
-    echo i
+  let t = quote do:
+    block: ## Comment string
+      discard
+
+  echo t.toStrLit()
+  echo t.astGenRepr()
+
+  echo toStrLit newStmtList(
+    newCommentStmtNode("Hello world"),
+    quote do:
+      block:
+        "Nice weather?"
+  )

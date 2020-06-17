@@ -35,7 +35,7 @@ type
     ## tokens. To indicate final token return `stop = true`
     atEnd: bool
 
-proc next[Tok](ts: var TokStream): Tok =
+proc next*[Tok](ts: var TokStream[Tok]): Tok =
   ## Create single token by either parsing new data or returning from
   ## buffer
   if ts.curPos < ts.buffer.len - 1:
@@ -43,8 +43,8 @@ proc next[Tok](ts: var TokStream): Tok =
     return ts.buffer[ts.curPos]
   else:
     if ts.atEnd:
-      raise newException(AssertionError,
-        "Cannot read from finished token stream")
+      raiseAssert("Cannot read from finished token stream. " &
+      & "Current position: {ts.curPos}, buffer size: {ts.buffer.len}")
 
     else:
       # Assuming _if_ token stream not atEnd _then_ it can read at
@@ -56,23 +56,34 @@ proc next[Tok](ts: var TokStream): Tok =
       ts.buffer.add tok
       inc ts.curPos
 
-proc move[Tok](ts: var TokStream[Tok], shift: int = -1): void =
+func makeStream*[Tok](tokens: seq[Tok]): TokStream[Tok] =
+  TokStream[Tok](
+    buffer: tokens,
+    newTok: proc(): auto = (stop: true, tok: Tok()),
+    atEnd: true,
+    curPos: -1
+  )
+
+func finished*[Tok](toks: TokStream[Tok]): bool =
+  toks.atEnd and toks.curPos == toks.buffer.len - 1
+
+proc move*[Tok](ts: var TokStream[Tok], shift: int = -1): void =
   ts.curPos = ts.curPos + shift
 
-proc peek[Tok](ts: var TokStream): Tok =
+proc peek*[Tok](ts: var TokStream[Tok]): Tok =
   ## Get next token from token stream without changing position
   let next = ts.next()
   ts.move(-1)
   return next
 
 
-iterator items[Tok](ts: var TokStream[Tok]): Tok =
+iterator items*[Tok](ts: var TokStream[Tok]): Tok =
   ## Iterate over tokems in tokens stream. New parsing is done only
   ## when buffer is reached.
-  while not ts.atEnd:
+  while not ts.finished():
     yield ts.next()
 
-proc reset[Tok](ts: var TokStream[Tok]): Tok =
+proc reset*[Tok](ts: var TokStream[Tok]): Tok =
   ## Reset token stream internal state - clear buffer, set position to
   ## 0 etc.
   ts.buffer = @[]
