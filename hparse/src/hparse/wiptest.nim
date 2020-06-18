@@ -12,29 +12,9 @@ type
 
   TPatt = Patt[TokenKind]
 
-
-
 import unittest, sequtils
 
 import hmisc/hpprint
-
-suite "Token streams":
-  template newtoks(): untyped =
-    var ts {.inject.} = makeStream(@[
-      Token(kind: tkOpBrace),
-      Token(kind: tkIdent),
-      Token(kind: tkComma),
-      Token(kind: tkIdent),
-      Token(kind: tkCloseBrace)
-    ])
-
-
-  test "Get all tokens":
-    newtoks()
-    assertEq toSeq(ts).mapIt(it.kind), @[
-      tkOpBrace, tkIdent, tkComma, tkIdent, tkCloseBrace
-    ]
-
 
 macro grammarTest(): untyped =
   let grammar = {
