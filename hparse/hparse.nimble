@@ -12,6 +12,7 @@ bin = @["wiptest"]
 requires "nim >= 1.2.0"
 requires "regex"
 requires "hmisc"
+requires "macroutils"
 
 after test:
   exec "./wiptest"

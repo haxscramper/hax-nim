@@ -26,27 +26,6 @@ template mapItBFStoSeq*(
     ## we are currenty in (might be useful for checking for root node
     ## or something like that). `lv` starts at 0 and is incremented
     ## each on each iteration.
-    runnableExamples:
-      type
-        Tree = ref object
-          name: string
-          subs: seq[Tree]
-
-      var tree =
-        Tree(
-          name: "test",
-          subs: @[
-            Tree(name: "test11"),
-            Tree(name: "test12")])
-
-      assert tree.mapItBFStoSeq(
-        subs,
-        it.name & " on level " & $lv) == @[
-          "test on level 0",
-          "test11 on level 1",
-          "test12 on level 1"]
-
-
     type OutType = type((
       block:
         var it {.inject.}: type(topNode)
@@ -65,7 +44,7 @@ template mapItBFStoSeq*(
       let lv {.inject.} = tmp[1]
 
       result.add(op)
-      for sub in it.subNode:
+      for sub in subNode:
         q.addLast((sub, lv + 1))
 
     result
@@ -143,23 +122,89 @@ template subnodesEq*(lhs, rhs, field: untyped): untyped =
   lhs.field.len() == rhs.field.len() and
   zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
 
+import options
+export options
 
-proc mapDFSpost*[InTree, OutTree](
+# proc mapDFSpost*[InTree, OutTree](
+#   tree: InTree,
+#   map: proc(n: InTree, path: seq[int], subn: seq[OutTree]): OutTree,
+#   getSubnodes: proc(tree: InTree): seq[InTree],
+#   hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
+#   path: seq[int] = @[0]): OutTree =
+#   ## Convert one tree type into another using post order DFS traversal
+#   let nodeRes: seq[OutTree] = collect(newSeq):
+#     for idx, node in getSubnodes(tree):
+#       mapDFSpost(node, map, getSubnodes, hasSubnodes, path & @[idx])
+
+#   return map(tree, path, nodeRes)
+
+proc mapDFSpost*[InTree, OutTree, CbRes](
   tree: InTree,
-  map: proc(n: InTree, path: seq[int], subn: seq[OutTree]): OutTree,
+  map: proc(n: InTree, path: seq[int], subn: seq[OutTree]): CbRes,
   getSubnodes: proc(tree: InTree): seq[InTree],
-  path: seq[int] = @[0]
-                               ): OutTree =
+  hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
+  path: seq[int] = @[0]): CbRes =
   ## Convert one tree type into another using post order DFS traversal
-  let nodeRes: seq[OutTree] = collect(newSeq):
-    for idx, node in getSubnodes(tree):
-      mapDFSpost(node, map, getSubnodes, path & @[idx])
+  # IDEA if `OutTree` is a sequence perform recursive concatenation of
+  # the items instead of joining them in tree.
+  static:
+    assert (CbRes is OutTree) or (CbRes is Option[OutTree])
+
+  let nodeRes: seq[OutTree] =
+    if hasSubnodes(tree):
+      var tmp: seq[OutTree]
+      for idx, node in getSubnodes(tree):
+        var res = mapDFSpost(node, map, getSubnodes, hasSubnodes,  path & @[idx])
+
+        when CbRes is Option[OutTree]:
+          if res.isSome():
+            tmp.add res.get()
+        else:
+          tmp.add res
+
+      tmp
+    else:
+      @[]
 
   return map(tree, path, nodeRes)
 
 
+proc mapDFSpost*[InTree, OutTree](
+  tree: InTree,
+  map: proc(n: InTree, subn: seq[OutTree]): OutTree,
+  getSubnodes: proc(tree: InTree): seq[InTree],
+  hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
+  path: seq[int] = @[0]): OutTree =
+  ## Overload without `path` for `map`
+  # TODO DOC
+  mapDFSpost(
+    tree,
+    proc(n: InTree, path: seq[int], subn: seq[OutTree]): OutTree = map(n, subn),
+    getSubnodes,
+    hasSubnodes,
+    path
+  )
+
+
+
+proc mapDFSpost*[InTree, OutTree](
+  tree: InTree,
+  map: proc(n: InTree, subn: seq[OutTree]): Option[OutTree],
+  getSubnodes: proc(tree: InTree): seq[InTree],
+  hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
+  path: seq[int] = @[0]): Option[OutTree] =
+  ## Overload without `path` for `map`
+  # TODO DOC
+  return mapDFSpost(
+    tree = tree,
+    map = proc(n: InTree, path: seq[int], subn: seq[OutTree]): Option[OutTree] = map(n, subn),
+    getSubnodes = getSubnodes,
+    hasSubnodes = hasSubnodes,
+    path = path
+  )
+
 macro mapItTreeDFS*(
-  inTree, subnodeCall, outType, op: untyped): untyped =
+  inTree, subnodeCall, outType, op: untyped, hasSubnodes: untyped = true): untyped =
   ## Convert one tree type into another. Conversion is perfomed in
   ## bottom-up manner - first child nodes are evaluated, then results are
   ## supplied to parent nodes and so on.

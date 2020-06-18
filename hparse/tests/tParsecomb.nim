@@ -1,4 +1,4 @@
-import ../src/parsecomb
+import hparse/parsecomb
 import macros
 import hmisc/helpers
 import sugar
