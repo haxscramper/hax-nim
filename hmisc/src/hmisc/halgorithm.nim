@@ -182,6 +182,8 @@ macro mapItTreeDFS*(
 
   # NOTE `subnodeCall` does not feel intuitive - injecting current
   # node into scope will be better.
+
+  # TODO predicate to check if item has subnodes or not.
   runnableExamples:
     type
       InTest = object
@@ -203,19 +205,28 @@ macro mapItTreeDFS*(
     pathIdent = ident "path"
     subnIdent = ident "subt"
 
-  quote do:
-    mapDFSpost(
-      `inTree`,
-      map =
-        proc(
-          `itIdent`: typeof(`inTree`), `pathIdent`: seq[int],
-          `subnIdent`: seq[`outType`]): `outType` =
-            `op`
-      ,
-      getSubnodes = proc(node: typeof(`inTree`)): seq[typeof(`inTree`)] =
-                      for subn in node.`subnodeCall`:
-                        result.add subn
-    )
+  result = quote do:
+    block:
+      type opType = typeof((
+        block:
+          var `itIdent`: typeof(`inTree`)
+          var `pathIdent`: seq[int]
+          var `subnIdent`: seq[`outType`]
+
+          `op`))
+
+      mapDFSpost(
+        `inTree`,
+        map =
+          proc(
+            `itIdent`: typeof(`inTree`), `pathIdent`: seq[int],
+            `subnIdent`: seq[`outType`]): `outType` =
+              `op`
+        ,
+        getSubnodes = proc(`itIdent`: typeof(`inTree`)): seq[typeof(`inTree`)] =
+                        for subn in `subnodeCall`:
+                          result.add subn
+      )
 
 
 
