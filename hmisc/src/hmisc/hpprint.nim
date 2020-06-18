@@ -11,6 +11,41 @@ import gara, with
 export tables
 
 type
+  Delim* = object
+    ## Block delimiters
+    content: string ## String for delimiter
+    preferMultiline: bool ## Don't try to put delimiter on the same
+    ## line with content - always prefer new chunks
+
+  DelimPair* = tuple[
+    start: Delim,
+    final: Delim
+  ]
+
+  PPrintConf* = object
+    ## Pretty print configuration
+    maxWidth*: int ## Max allowed width
+    identStr*: string ## String to use for indentaion
+    # wrapLargerThan*: int ##
+
+    kvSeparator*: string ## String to use when separating key-value
+    ## pairs.
+    tblWrapper*: DelimPair ## Pair of delimiter around table instance
+
+    objWrapper*: DelimPair ## Pair of delimiters around object instance
+    fldNameWrapper*: DelimPair ## Pair of delimiter around table key
+    fldSeparator*: string ## String to place between key-value pairs in list
+    nowrapMultiline*: bool ## Do not wrap mutliline objects in delimiters
+    alignFieldsRight*: bool ## Use right align on fields (default - left)
+
+    seqSeparator*: string ## String to place between items in sequence
+    seqPrefix*: string ## Prefix to use for multiline sequece
+    ## instance. If empty multiline string will be wrapped in regular
+    ## delimiters
+    seqWrapper*: DelimPair ## Delimiters for sequence instance
+    hideEmptyFields*: bool ## Hide empty fields (seq of zero length,
+    ## `nil` references etc.).
+
   ObjKind* = enum
     okConstant ## Literal value
     okSequence ## Sequence of items
@@ -116,7 +151,8 @@ proc prettyPrintConverter(val: JsonNode): ObjTree =
         )))
 
 
-proc toSimpleTree*[Obj](entry: Obj): ObjTree =
+proc toSimpleTree*[Obj](
+  entry: Obj, conf: PPrintConf = PPrintConf()): ObjTree =
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
   when compiles(dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)):
@@ -176,7 +212,7 @@ proc toSimpleTree*[Obj](entry: Obj): ObjTree =
         namedObject: false
       )
 
-    when entry is ref object:
+    when (entry is ref object):
       if entry == nil:
         result = ObjTree(
           kind: okConstant,
@@ -210,38 +246,6 @@ proc toSimpleTree*[Obj](entry: Obj): ObjTree =
 
 
 type
-  Delim* = object
-    ## Block delimiters
-    content: string ## String for delimiter
-    preferMultiline: bool ## Don't try to put delimiter on the same
-    ## line with content - always prefer new chunks
-
-  DelimPair* = tuple[
-    start: Delim,
-    final: Delim
-  ]
-
-  PPrintConf* = object
-    ## Pretty print configuration
-    maxWidth*: int ## Max allowed width
-    identStr*: string ## String to use for indentaion
-    # wrapLargerThan*: int ##
-
-    kvSeparator*: string ## String to use when separating key-value
-    ## pairs.
-    tblWrapper*: DelimPair ## Pair of delimiter around table instance
-
-    objWrapper*: DelimPair ## Pair of delimiters around object instance
-    fldNameWrapper*: DelimPair ## Pair of delimiter around table key
-    fldSeparator*: string ## String to place between key-value pairs in list
-    nowrapMultiline*: bool ## Do not wrap mutliline objects in delimiters
-    alignFieldsRight*: bool ## Use right align on fields (default - left)
-
-    seqSeparator*: string ## String to place between items in sequence
-    seqPrefix*: string ## Prefix to use for multiline sequece
-    ## instance. If empty multiline string will be wrapped in regular
-    ## delimiters
-    seqWrapper*: DelimPair ## Delimiters for sequence instance
 
   Chunk* = object
     content: seq[string] ## Lines for chunk

@@ -159,7 +159,7 @@ proc mapDFSpost*[InTree, OutTree](
 
 
 macro mapItTreeDFS*(
-  subnodeCall, outType, inTree, op: untyped): untyped =
+  inTree, subnodeCall, outType, op: untyped): untyped =
   ## Convert one tree type into another. Conversion is perfomed in
   ## bottom-up manner - first child nodes are evaluated, then results are
   ## supplied to parent nodes and so on.
@@ -175,6 +175,13 @@ macro mapItTreeDFS*(
   ##         converted subnodes.
   # TODO add proc for checking if futher recursion is not needed (trim
   # down arbitrary branches from tree)
+
+  # TODO return `Option[OutTree]` from map function. Support both
+  # versions: return-all and return-option (NOTE: can be determined
+  # using typeof `op`)
+
+  # NOTE `subnodeCall` does not feel intuitive - injecting current
+  # node into scope will be better.
   runnableExamples:
     type
       InTest = object
@@ -206,7 +213,8 @@ macro mapItTreeDFS*(
             `op`
       ,
       getSubnodes = proc(node: typeof(`inTree`)): seq[typeof(`inTree`)] =
-                      node.`subnodeCall`
+                      for subn in node.`subnodeCall`:
+                        result.add subn
     )
 
 

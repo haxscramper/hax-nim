@@ -106,7 +106,7 @@ proc newTree*[Tok](tok: Tok): ParseTree[Tok] =
 proc newTree*[Tok](name: NTermSym, subnodes: varargs[ParseTree[Tok]]): ParseTree[Tok] =
   ParseTree[Tok](name: name, subnodes: subnodes)
 
-iterator subnodes[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
+iterator subnodes*[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
   assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
   for item in tree.subnodes:
     yield item

@@ -63,4 +63,30 @@ parseList(testStream, root)
 
 import terminal
 
-pprint root, maxWidth = terminalWidth()
+# pprint root, maxWidth = terminalWidth()
+
+import hmisc/halgorithm
+
+type
+  Ast = object
+    case isList: bool
+      of true:
+        subnodes: seq[Ast]
+      else:
+        ident: string
+
+proc getSubnodes[Tok](node: ParseTree[Tok]): seq[ParseTree[Tok]] =
+  if node.kind == pkTerm:
+    return @[]
+  else:
+    return toSeq(node.subnodes())
+
+let res = mapItTreeDFS(
+  root, getSubnodes, Ast,
+  (it.kind == pkTerm).tern(
+    (Ast(isList: false, ident: "ze")),
+    (Ast(isList: true, subnodes: subt))
+  )
+)
+
+pprint res
