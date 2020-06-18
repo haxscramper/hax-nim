@@ -127,6 +127,7 @@ template twoPassSortByIt*(
   secondSorted
 
 template allOfIt*(s: untyped, op: untyped): bool =
+  ## True if for all items in `s` predicate `op` returns true.
   var res = true
   for it {.inject.} in s:
     if not op:
@@ -136,7 +137,10 @@ template allOfIt*(s: untyped, op: untyped): bool =
   res
 
 template subnodesEq*(lhs, rhs, field: untyped): untyped =
-  # TODO DOC
+  ## Check if two objects `lhs` and `rhs` has identical field `field`
+  ## by comparing all items in the field. Check if two object's fields
+  ## have identical lengths too.
+  lhs.field.len() == rhs.field.len() and
   zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
 
 
@@ -156,6 +160,19 @@ proc mapDFSpost*[InTree, OutTree](
 
 macro mapItTreeDFS*(
   subnodeCall, outType, inTree, op: untyped): untyped =
+  ## Convert one tree type into another. Conversion is perfomed in
+  ## bottom-up manner - first child nodes are evaluated, then results are
+  ## supplied to parent nodes and so on.
+  ##
+  ## :params:
+  ##    :subnodeCall: Field with child nodes or procedure to call for
+  ##                  geting child nodes.
+  ##    :outType: Result type
+  ##    :inTree: Tree to convert
+  ##    :op: Expression for converting objects. Several variables are
+  ##         injected into scope: `it` - current tree node, `path` - path
+  ##         of the current node in original tree, `subt` - already
+  ##         converted subnodes.
   # TODO add proc for checking if futher recursion is not needed (trim
   # down arbitrary branches from tree)
   runnableExamples:

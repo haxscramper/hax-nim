@@ -68,24 +68,48 @@ type
 
 type
   ParseTree*[Tok] = ref object
+    ## Parse tree object
+    subnodes: seq[ParseTree[Tok]]
     case kind*: PattKind
-      of pkAlternative:
-        altIdx*: int
-        altValue*: ParseTree[Tok]
-      of pkOptional:
-        optValue*: Option[ParseTree[Tok]]
-      of pkZeroOrMore, pkOneOrMore, pkConcat:
-        values*: seq[ParseTree[Tok]]
       of pkTerm:
-        tok*: Tok
+        tok: Tok
       of pkNTerm:
-        name*: NTermSym
-        nterm*: ParseTree[Tok]
+        name: NTermSym
+      else:
+        nil
 
+proc newTree*[Tok](kind: PattKind, subtree: varargs[ParseTree[Tok]]): ParseTree[Tok] =
+  ## Create new parse tree object
+  case kind:
+    of pkTerm:
+      raiseAssert("Cannot create new tree of kind `pkTerm`" &
+        "- use newTree overload")
+    of pkNTerm:
+      raiseAssert("Cannot create new tree of kind `pkNterm` without" &
+        "name - use newTree overload")
+    else:
+      case kind:
+        of pkOptional:
+          assert subtree.len < 2,
+           "Optional tree cannot have more than one subnode"
+        of pkOneOrMore:
+          assert subtree.len > 0,
+           "One or more tree cannot have zero elements"
+        else:
+          discard
 
-# iterator pairs*[T1, T2](s: openarray[(T1, T2)]): (T1, T2) =
-#   for item in s:
-#     yield item
+      ParseTree[Tok](kind: kind, subnodes: toSeq(subtree))
+
+proc newTree*[Tok](tok: Tok): ParseTree[Tok] =
+  ParseTree[Tok](kind: pkTerm, tok: tok)
+
+proc newTree*[Tok](name: NTermSym, subnodes: varargs[ParseTree[Tok]]): ParseTree[Tok] =
+  ParseTree[Tok](name: name, subnodes: subnodes)
+
+iterator subnodes[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
+  assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
+  for item in tree.subnodes:
+    yield item
 
 proc toGrammar*[TKind](
   table: openarray[(string, Patt[TKind])]): Grammar[TKind] =

@@ -115,7 +115,8 @@ proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
   return quote do:
     let tok = `toksIdent`.next()
     assert tok.kind == `tokIdent`
-    ParseTree[`tokType`](kind: pkTerm, tok: tok)
+    # ParseTree[`tokType`](kind: pkTerm, tok: tok)
+    newTree(tok)
 
 proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   assert nterm.kind == pkNTerm
@@ -145,10 +146,14 @@ proc makeConcatBlock[TKind](
   let tokIdent = ident "Tok"
   return (parseStmts & @[
     quote do:
-      ParseTree[`tokIdent`](
-        kind: pkConcat,
-        values: @`valueVars`
+      newTree[`tokIdent`](
+        kind = pkConcat,
+        @`valueVars`
       )
+      # ParseTree[`tokIdent`](
+      #   kind: pkConcat,
+      #   values: @`valueVars`
+      # )
   ]).newStmtList()
 
 proc makeNtoMTimesBlock[TKind](
@@ -195,7 +200,11 @@ proc makeNtoMTimesBlock[TKind](
           ParseTree[`tokType`](kind: pkOptional)
     else:
       quote do:
-        ParseTree[`tokType`](kind: `kindLiteral`, values: `subItems`)
+        newTree[`tokType`](
+          kind = `kindLiteral`,
+          `subItems`
+        )
+        # ParseTree[`tokType`](kind: `kindLiteral`, values: `subItems`)
 
 
   return quote do:
