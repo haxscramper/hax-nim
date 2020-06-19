@@ -389,12 +389,10 @@ macro ifLet*(head: untyped, bodies: varargs[untyped]): untyped =
 
 func splitList*[T](s: openarray[T]): (T, seq[T]) =
   ## Return head and tail of the list
-  assert s.len > 0
+  assert s.len > 0, "Cannot split empty list"
   (s[0], s[1..^1])
 
 when isMainModule:
-
-
   block:
     let (head, tail) = @[1].splitList()
     doAssert head == 1
@@ -415,95 +413,9 @@ when isMainModule:
     ("q", "=sd d fd fd =")
   ].printTwoColumns()
 
-template anyofIt*(sequence: typed, predicate: untyped): bool =
-  ## Return `true` if for any of the items in sequence `predicate`
-  ## evaluates as `true`. Otherwise return false.
-  var result = false
-  for it {.inject.} in sequence:
-    if predicate:
-      result = true
-
-  result
-
-proc max*[T](x: openArray[T], default: T): T =
-  ## The maximum value of `x`. ``T`` needs to have a ``<`` operator.
-  ## use `default` as starting value for comparison.
-  result = default
-  for i in x:
-    if result < i: result = i
-
-template findIt*(s: typed, op: untyped): int =
-  ##[ Find first element of the sequence for which `op` evaluates as
-  true and return it's index. If no such element is found return -1
-  ]##
-
-  var result = -1
-  for idx, it {.inject.} in s:
-    if op: result = idx; break
-
-  result
-
-template findItFirst*(s: typed, op: untyped): untyped =
-  var res: typeof(s[0])
-  var found: bool = false
-  runnableExamples:
-    assert @["A", "B", "D"].findItFirst(it == "A") == "A"
-
-  for it {.inject.} in s:
-    if op:
-      res = it
-      found = true
-      break
-
-  assert found, "item is missing from sequence"
-
-  res
-
-proc nthType1*[T1, T2](a: (T1, T2)): T1 =
-  ## Helper proc to get first type from tuple. Used as workaround for
-  ## `pairs` iterator
-  discard
-
-proc nthType2*[T1, T2](a: (T1, T2)): T2 =
-  ## Helper proc to get second type from tuple. Used as workaround for
-  ## `pairs` iterator
-  discard
 
 
-template mapPairs*(s: untyped, op: untyped): untyped =
-  ## `mapIt` for object with `pairs`. `lhs` and `rhs` are injected
-  ## into scope
-  # TODO add support for objects without `pairs` - use index
-  # REVIEW implement `mapEnumerated` instead
-  # REVIEW inject different variables to distinguish between?
-  const openarrPairs = (s is array) or (s is seq) or (s is openarray)
-  when openarrPairs:
-    type TLhs = type((s[0][0]))
-    type TRhs = type((s[0][1]))
-  else:
-    type TLhs = type((pairs(s).nthType1))
-    type TRhs = type((pairs(s).nthType2))
 
-  type TRes = type((
-    block:
-      var lhs {.inject.}: TLhs
-      var rhs {.inject.}: TRhs
-      op))
-
-  var res: seq[TRes]
-
-  when openarrPairs:
-    for (lhsTmp, rhsTmp) in s:
-      let lhs {.inject.} = lhsTmp
-      let rhs {.inject.} = rhsTmp
-      res.add op
-  else:
-    for lhsTmp, rhsTmp in s:
-      let lhs {.inject.} = lhsTmp
-      let rhs {.inject.} = rhsTmp
-      res.add op
-
-  res
 
 
 

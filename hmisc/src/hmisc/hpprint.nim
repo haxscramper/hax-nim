@@ -2,7 +2,7 @@
 
 ## Universal pretty-printer
 
-import hmisc/[helpers, defensive]
+import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat
 import typetraits
 

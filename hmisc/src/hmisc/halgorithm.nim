@@ -8,10 +8,16 @@ export algorithm
 import deques
 export deques
 
+# IDEA `itemsBFS` and `itemsDFS` to iterate over nodes in tree
+# IDEA `pairsBFS` and `pairsDFS` to iterate over paths 
+#      (similar to index?) + nodes in tree
+
 template mapItBFStoSeq*(
   topNode: typed,
   subNode: untyped,
-  op: untyped): untyped =
+  op: untyped,
+  hasSubnodes: untyped = true,
+  filterOptions: static[bool] = true): untyped =
     # IDEA maybe add better static type checking? Something like
     # boost's concepts: "the top node type must satisfy requirement
     # is-tree-on-$topNode". And I will check that `subNode` is indeed
@@ -26,15 +32,25 @@ template mapItBFStoSeq*(
     ## we are currenty in (might be useful for checking for root node
     ## or something like that). `lv` starts at 0 and is incremented
     ## each on each iteration.
+    # TODO assert correct types for `topNode...` and `subNodes...`
     type OutType = type((
       block:
         var it {.inject.}: type(topNode)
         var lv {.inject.}: int
         op))
 
-    type VertType = type((topNode))
+    const doFiltering = (OutType is Option) and filterOptions
+    when doFiltering:
+      type SeqType = type((
+        block:
+          var res: OutType
+          get(res)))
 
-    var result: seq[OutType] = @[]
+    else:
+      type SeqType = OutType
+
+    type VertType = type((topNode))
+    var result: seq[SeqType] = @[]
 
     var q = initDeque[(VertType, int)]()
     q.addLast((topNode, 0))
@@ -43,9 +59,21 @@ template mapItBFStoSeq*(
       let it {.inject.} = tmp[0]
       let lv {.inject.} = tmp[1]
 
-      result.add(op)
-      for sub in subNode:
-        q.addLast((sub, lv + 1))
+      when doFiltering:
+        let tmpRes: OutType = op
+        if tmpRes.isSome():
+          result.add tmpRes.get()
+      else:
+        result.add(op)
+
+      if hasSubnodes:
+        for sub in subNode:
+          static:
+            assert sub is VertType,
+              "Mismatch between type of the subnodes and root tree - `subNode` is " &
+              $typeof(subNode) & "while `topNode` is " & $typeof(topNode)
+
+          q.addLast((sub, lv + 1))
 
     result
 
@@ -105,12 +133,129 @@ template twoPassSortByIt*(
 
   secondSorted
 
+template anyOfIt*(sequence: typed, predicate: untyped): bool =
+  ## Return `true` if for any of the items in sequence `predicate`
+  ## evaluates as `true`. Otherwise return false.
+  var result = false
+  for it {.inject.} in sequence:
+    if predicate:
+      result = true
+      break
+
+  result
+
 template allOfIt*(s: untyped, op: untyped): bool =
   ## True if for all items in `s` predicate `op` returns true.
-  var res = true
+  not s.anyOfIt(not op)
+
+
+proc nthType1*[T1, T2](a: (T1, T2)): T1 =
+  ## Helper proc to get first type from tuple. Used as workaround for
+  ## `pairs` iterator
+  discard
+
+proc nthType2*[T1, T2](a: (T1, T2)): T2 =
+  ## Helper proc to get second type from tuple. Used as workaround for
+  ## `pairs` iterator
+  discard
+
+template mapPairs*(s: untyped, op: untyped): untyped =
+  ## `mapIt` for object with `pairs`. `lhs` and `rhs` are injected
+  ## into scope
+  const openarrPairs = ((s is array) or (s is seq) or (s is openarray))
+
+  when openarrPairs:
+    when s[0] is tuple:
+      type TLhs = type((s[0][0]))
+      type TRhs = type((s[0][1]))
+    else:
+      type TLhs = int
+      type TRhs = type((s[0]))
+  else:
+    when compiles(for k, v in pairs(s): discard):
+      type TLhs = type((pairs(s).nthType1))
+      type TRhs = type((pairs(s).nthType2))
+    else:
+      type TLhs = int
+      type TRhs = type((items(s)))
+
+  type TRes = type((
+    block:
+      var lhs {.inject.}: TLhs
+      var rhs {.inject.}: TRhs
+      op))
+
+  var res: seq[TRes]
+
+  when openarrPairs:
+    when s[0] is tuple:
+      for (lhsTmp, rhsTmp) in s:
+        let lhs {.inject.} = lhsTmp
+        let rhs {.inject.} = rhsTmp
+        res.add op
+
+    else:
+      for lhsTmp, rhsTmp in s:
+        let lhs {.inject.} = lhsTmp
+        let rhs {.inject.} = rhsTmp
+        res.add op
+
+  else:
+    when compiles(for k, v in pairs(s): discard):
+      for lhsTmp, rhsTmp in s:
+        let lhs {.inject.} = lhsTmp
+        let rhs {.inject.} = rhsTmp
+        res.add op
+    else:
+      var lhs {.inject.}: int = 0
+      for rhsTmp in s:
+        let rhs {.inject.} = rhsTmp
+        res.add op
+        inc lhs
+
+  res
+
+proc max*[T](x: openArray[T], default: T): T =
+  ## The maximum value of `x`. ``T`` needs to have a ``<`` operator.
+  ## use `default` if array is empty
+  if x.len == 0:
+    result = default
+  else:
+    for i in x:
+      if result < i: result = i
+
+
+
+template findIt*(s: typed, op: untyped): int =
+  ##[ Find first element of the sequence for which `op` evaluates as
+  true and return it's index. If no such element is found return -1
+  ]##
+
+  var result = -1
+  for idx, it {.inject.} in s:
+    if op: result = idx; break
+
+  result
+
+template findItFirst*(s: typed, op: untyped): untyped =
+  var res: typeof(s[0])
+  var found: bool = false
   for it {.inject.} in s:
-    if not op:
-      res = false
+    if op:
+      res = it
+      found = true
+      break
+
+  assert found, "Item not found in sequence"
+
+  res
+
+
+template findItFirstOpt*(s: typed, op: untyped): untyped =
+  var res: Option[typeof(s[0])]
+  for it {.inject.} in s:
+    if op:
+      res = some(it)
       break
 
   res
