@@ -47,3 +47,24 @@ when false:
     lfor 12
 
 
+let tmp1 = block:
+  let optValue {.inject.} = none(int)
+  if optValue.isSome():
+    let val = optValue.get()
+    3
+  elif 2 == 3:
+    5
+  else:
+    1
+
+dumpTree:
+  block:
+    let optValue {.inject.} = none(int)
+    if optValue.isSome():
+      let val = optValue.get()
+      3
+    elif 2 == 3:
+      5
+    else:
+      1
+
