@@ -12,6 +12,44 @@ suite "Misc helper functions":
     assert @[1].splitList() == (1, empty[int]())
     assert @[1, 2].splitList() == (1, @[2])
 
+  test "{dedent} :proc:value:":
+    assertEq "  a".dedent, "a"
+    assertEq "A\n  a".dedent, "A\n  a"
+    expect AssertionError:
+      discard "   a\n sdfasdf".dedent
+
+  test "{enclosedIn} :proc:value:":
+    assert "-+-".enclosedIn(("-", "-"))
+    assert "-+-".enclosedIn("-")
+    assert not "+".enclosedIn("-")
+
+  test "{wrapTwoColumns} :proc:value:":
+    assertEq @[("hello", "world"), ("", "nice")].wrapTwoColumns(
+      widthColLimits = (5, 5)
+    ).join("\n"), """
+      hello world
+            nice""".dedent
+
+  test "{enumerate} :template:value:":
+    assert @["cat", "dog"].enumerate() == @[(0, "cat"), (1, "dog")]
+
+  test "{join*} string joining functions":
+    assertEq @["1", "2"].joinq(", "), "\"1\", \"2\""
+    assertEq @["1", "2"].joinl(), "1\n2"
+    assertEq @["1", "2"].joinw(), "1 2"
+
+  test "{tern} :template:":
+    assert (false).tern(1, 3) == 3
+    # If second branch is executed it will raise exception - due to
+    # lazy evaluation it does not happen.
+    assert (90 == 90).tern(-1, (@[90, 22])[90]) == -1
+
+  test "{`==`} Option comparison :generic:":
+    assert some(12) == 12
+    assert not (none(int) == 2)
+    assert (some(12), some(2)) == (12, 2)
+
+
 import hmisc/iflet
 
 suite "If let":

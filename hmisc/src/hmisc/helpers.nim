@@ -8,6 +8,7 @@ import deques
 import posix
 import os
 
+import halgorithm
 
 export options
 
@@ -187,7 +188,7 @@ template assertEq*(lhs, rhs: untyped): untyped =
   let rhsVal = rhs
   testEq(lhsVal, rhsVal)
   if not (lhsVal == rhsVal):
-    raise newException(AssertionDefect, "Comparison failed")
+    raiseAssert("Comparison failed")
 
 # TODO use static hashtable instead of searching whole list each time.
 proc matchWith*[K, V](
@@ -232,12 +233,12 @@ proc joinw*(inseq: openarray[string]): string =
     assert @["as", ";;"].joinw == "as ;;"
   inseq.join(" ")
 
-proc joinq*(inseq: openarray[string]): string =
+proc joinq*(inseq: openarray[string], sep: string = " "): string =
   ## Join items using spaces and quote each item
   runnableExamples:
     assert @["as", "qq"].joinq == "\"as\" \"qq\""
 
-  inseq.mapIt("\"" & it & "\"").join(" ")
+  inseq.mapIt("\"" & it & "\"").join(sep)
 
 proc replaceN*(str: string, n: int, subst: char = ' '): string =
   ## Replace first `n` characters in string with `subst`
@@ -252,43 +253,14 @@ proc replaceN*(str: string, n: int, subst: char = ' '): string =
 
 proc enumerate*[T](s: openArray[T]): seq[(int, T)] =
   ## Return enumerated sequence of items
-  runnableExamples:
-    assert @["cat", "dog"].enumerate() == @[(0, "cat"), (1, "dog")]
-
   for idx, item in s:
     result.add((idx, item))
 
-proc printTwoColumns*(
+proc wrapTwoColumns*(
   text: seq[(string, string)],
   padding: (int, int) = (0,0),
   widthColLimits: (int, int) = (30, -1),
-  maxWidthTotal: int = 80): void =
-  ##[
-  Print two columns of text side by side
-
-  :padding: amount of spaces from left and right
-
-  :maxWidthNotal: max width of two columns plus padding
-
-  :widthColLimits: limit of each column width
-
-  :text: sequence of string pairs. Each pair will be printed on new
-  row
-
-  .. code-block::
-      @[
-        ("=first line=", "=second="),
-        ("=aaaaaaaaaaaaaaaaaa=", "=sd d fd fd ="),
-        ("=a d d d aaaaaaaaaaaaaaaaa=", "=sd d fd fd ="),
-        ("q", "=sd d fd fd =")
-      ].printTwoColumns()
-
-  .. code-block:: text
-      =first line=                 =second=
-      =aaaaaaaaaaaaaaaaaa=         =sd d fd fd =
-      =a d d d aaaaaaaaaaaaaaaaa=  =sd d fd fd =
-      q                            =sd d fd fd =
-  ]##
+  maxWidthTotal: int = 80): seq[(string, string)] =
 
   var wrapped: seq[(seq[string], seq[string])] =
     text.mapIt(
@@ -320,25 +292,62 @@ proc printTwoColumns*(
 
     let lineCount = max(lines1.len, lines2.len)
     for idx in 0 ..< lineCount:
-      echo " $# $#" % [
-        (idx < lines1.len)
-        .tern(
-          lines1[idx].alignLeft(maxWidth1 + 1),
-          " ".repeat(maxWidth1 + 1)
-        ),
-        (idx < lines2.len).tern(lines2[idx], "")]
+      # echo " $# $#" % [
+        result.add (
+          (idx < lines1.len)
+          .tern(
+            lines1[idx].alignLeft(maxWidth1 + 1),
+            " ".repeat(maxWidth1 + 1)
+          ),
+                  (idx < lines2.len).tern(lines2[idx], "")
+        )
+      # ]
 
 
+proc printTwoColumns*(
+  text: seq[(string, string)],
+  padding: (int, int) = (0,0),
+  widthColLimits: (int, int) = (30, -1),
+  maxWidthTotal: int = 80): void =
+  ## Print two columns of text side by side
+  ##
+  ## :params:
+  ##   :padding: amount of spaces from left and right
+  ##   :maxWidthNotal: max width of two columns plus padding
+  ##   :widthColLimits: limit of each column width
+  ##   :text: sequence of string pairs. Each pair will be printed on new
+  ##          row
+  ##
+  ## .. code-block::
+  ##     @[
+  ##       ("=first line=", "=second="),
+  ##       ("=aaaaaaaaaaaaaaaaaa=", "=sd d fd fd ="),
+  ##       ("=a d d d aaaaaaaaaaaaaaaaa=", "=sd d fd fd ="),
+  ##       ("q", "=sd d fd fd =")
+  ##     ].printTwoColumns()
+  ##
+  ## .. code-block:: text
+  ##     =first line=                 =second=
+  ##     =aaaaaaaaaaaaaaaaaa=         =sd d fd fd =
+  ##     =a d d d aaaaaaaaaaaaaaaaa=  =sd d fd fd =
+  ##     q                            =sd d fd fd =
+
+  for (lhs, rhs) in wrapTwoColumns(text, padding, widthColLimits, maxWidthTotal):
+    echo " $# $#" % [lhs, rhs]
+
+proc join*(text: openarray[(string, string)], sep: string = " "): string =
+  text.mapIt(it[0] & it[1]).join(sep)
 
 
-proc enclosedIn*(
+func enclosedIn*(
   str: string,
   delim: tuple[left, right: string]): bool =
   ## Check if string starts and ends with strings.
-  runnableExamples:
-    assert "--hello--".enclosedIn(("--", "--"))
   return str.startsWith(delim.left) and
     str.endsWith(delim.right)
+
+func enclosedIn*(s: string, delim: string): bool =
+  s.enclosedIn((delim, delim))
 
 proc getRandomBase64*(length: int): string =
   ## Return random base 64 string with `length` characters
@@ -352,31 +361,6 @@ func splitList*[T](s: openarray[T]): (T, seq[T]) =
   assert s.len > 0, "Cannot split empty list"
   (s[0], s[1..^1])
 
-when isMainModule:
-  block:
-    let (head, tail) = @[1].splitList()
-    doAssert head == 1
-    doAssert tail.len == 0
-
-  block:
-    let (head, tail) = @[1,2].splitList()
-    doAssert head == 1
-    doAssert tail == @[2]
-
-
-  @[
-    ("=first line=", "=second="),
-    ("=aaaaaaaaaaaaaaaaaa=", "=sd d fd fd ="),
-    ("=a d d d aaaaaaaaaaaaaaaaa=", "=sd d fd fd ="),
-    ("q", "=sd d fd fd =")
-  ].printTwoColumns()
-
-
-
-
-
-
-
 proc dedent*(multiline: string): string =
   ## Uniformly deindent multiline string
   let seplines = multiline.split('\n')
@@ -385,7 +369,15 @@ proc dedent*(multiline: string): string =
     if c == ' ': inc indent
     else: break
 
-  seplines.mapIt(if it.len == 0: it else: it[indent..^1]).join("\n")
+  seplines.mapIt(
+    if it.len == 0:
+      it
+    else:
+      assert it[0..<indent].allOfIt(it == ' '),
+        "Cannot unindent non-whitespace character"
+
+      it[indent..^1]
+  ).join("\n")
 
 proc colorPrint*(node: NimNode): void =
   # TODO convert nim ast into adequately readable form without using
