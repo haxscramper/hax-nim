@@ -179,6 +179,10 @@ suite "Tree mapping":
 
     assert res is OutTest
 
+  test "{mapItTreeDFS} get subnodes using proc call :macro:value:":
+    proc getSub(n: InTest): seq[InTest] = n.sub
+    discard inval.mapItTreeDFS(it.getSub(), string, "")
+
   test "{mapItTreeDFS} value assertions :macro:value:":
     assert inval.mapItTreeDFS(
       it.sub, OutTest,

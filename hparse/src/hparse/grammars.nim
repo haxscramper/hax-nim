@@ -1,6 +1,6 @@
 import tables, sugar, sequtils
 export tables
-import hmisc/helpers
+import hmisc/[helpers, halgorithm]
 
 
 type

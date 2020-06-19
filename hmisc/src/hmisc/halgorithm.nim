@@ -372,8 +372,13 @@ macro mapItTreeDFS*(
 
   # NOTE `subnodeCall` does not feel intuitive - injecting current
   # node into scope will be better.
+  # TEST - either write unit tests or chec if existing ones cover this
+  #      explicitly
+
+  # IDEA TEST write example/test for mapping tree to DFS sequence
 
   # TODO predicate to check if item has subnodes or not.
+  # TEST predicated for subnodes checking
   runnableExamples:
     type
       InTest = object
@@ -395,6 +400,8 @@ macro mapItTreeDFS*(
     pathIdent = ident "path"
     subnIdent = ident "subt"
 
+
+  let pos = inTree.lineInfoObj().line.newLit()
   result = quote do:
     block:
       type opType = typeof((
@@ -404,6 +411,13 @@ macro mapItTreeDFS*(
           var `subnIdent`: seq[`outType`]
 
           `op`))
+
+      # TODO TEST write unit test for compile-time error
+      # TODO TEST write unit test for correct error position reporting
+      static:
+        assert (opType is `outType`) or (opType is Option[`outType`]),
+          "Invalid type for expression result: expected either `outType` or " &
+          "`Option[outType]` in `mapItTreeDfs` on line " & $`pos`
 
       mapDFSpost(
         `inTree`,
