@@ -1,4 +1,5 @@
 import tables, options
+export tables
 
 type
   Trie*[Key, Val] = object
@@ -43,13 +44,14 @@ proc `[]=`*[Key, Val](
   trie: var Trie[Key, Val], path: openarray[Key], val: Val) =
   ## Set value at path
   var curr: ptr Trie[Key, Val] = addr trie
-  for key in path:
+  for idx, key in path:
     if key notin curr.subn:
       curr.subn[key] = Trie[Key, Val]()
 
-    curr = addr curr.subn[key]
+      curr = addr curr.subn[key]
 
   curr.value = some(val)
+
 
 proc prefixHasValue*[Key, Val](
   trie: Trie[Key, Val], path: openarray[Key]): bool =
@@ -66,6 +68,8 @@ proc prefixHasValue*[Key, Val](
 
     if key in curr.subn:
       curr = curr.subn[key]
+      if curr.value.isSome():
+        return true
     else:
       return false
 
@@ -80,9 +84,17 @@ iterator parentValues*[Key, Val](
       curr = curr.subn[key]
 
 proc paths*[Key, Val](trie: Trie[Key, Val]): seq[seq[Key]] =
-  for key, subtrie in trie.subn:
-    for path in subtrie.paths():
-      result.add @[key] & path
+  if trie.subn.len == 0:
+    return @[]
+  else:
+    for key, subtrie in trie.subn:
+      let sub = subtrie.paths()
+      if sub.len == 0:
+        for subKey, _ in subtrie.subn:
+          result.add @[key, subKey]
+      else:
+        for path in subtrie.paths():
+          result.add @[key] & path
 
 proc contains*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): bool =
   try:

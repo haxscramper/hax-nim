@@ -574,7 +574,7 @@ proc pstringRecursive(
           )
         ).arrangeKVPairs(conf, current, ident + maxFld)
     of okTable:
-      let maxFld = current.valPairs.mapIt(it.key.len()).max()
+      let maxFld = current.valPairs.mapIt(it.key.len()).max(0)
       return current.valPairs.mapIt(
         (it.key, pstringRecursive(it.val, conf, maxFld + ident))
       ).arrangeKVPairs(conf, current, ident + maxFld)
