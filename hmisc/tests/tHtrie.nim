@@ -25,3 +25,12 @@ suite "Main":
     assert tr.prefixHasValue([2, 3, 4, 5])
     assert not tr.prefixHasValue([1, 2, 3])
     assert not tr.prefixHasValue([2, 3])
+
+  test "{prefixHasValue} :object:generic:proc:":
+    var tr: Trie[int, int]
+    tr[[0, 0]] = 999
+    tr[[1, 2]] = 888
+    assert not tr.prefixHasValue([0, 1, 2])
+    tr[[0, 1, 2]] = 777
+    pprint tr
+    assert tr.prefixHasValue([0, 1, 2])

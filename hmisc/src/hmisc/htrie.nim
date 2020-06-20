@@ -43,12 +43,13 @@ proc `[]`*[Key, Val](
 proc `[]=`*[Key, Val](
   trie: var Trie[Key, Val], path: openarray[Key], val: Val) =
   ## Set value at path
+  # echo "Setting value ", val, " at path ", path
   var curr: ptr Trie[Key, Val] = addr trie
   for idx, key in path:
     if key notin curr.subn:
       curr.subn[key] = Trie[Key, Val]()
 
-      curr = addr curr.subn[key]
+    curr = addr curr.subn[key]
 
   curr.value = some(val)
 

@@ -336,7 +336,7 @@ proc reduce*[Obj, VarSym, FunSym, Val](
   maxDepth: int = 40,
   maxIterations: int = 4000,
   reduceConstraints: ReduceConstraints = rcApplyOnce
-                ): tuple[term: Obj, ok: bool] =
+                ): tuple[term: Obj, ok: bool, rewPaths: Trie[int, IntSet]] =
   ## Perform reduction of `term` using `system` rules.
   ##
   ## Iterate over all subterms (redexes) in `term` and try each reduction
@@ -361,6 +361,9 @@ proc reduce*[Obj, VarSym, FunSym, Val](
   ##         using different rules.
   var tmpTerm = term
   var rewPaths: Trie[int, IntSet]
+  defer:
+    result.rewPaths = rewPaths
+
   block outerLoop:
     var iterIdx: int = 0
     while true:
@@ -371,7 +374,7 @@ proc reduce*[Obj, VarSym, FunSym, Val](
           reduceConstraints == rcRewriteOnce and
           rewPaths.prefixHasValue(path)
         ):
-          # echo "rewriting at path ", path
+          # echo "Testing path ", path
           for idx, rule in system:
             if (
               # Avoid using this rule again on the same path
@@ -397,16 +400,25 @@ proc reduce*[Obj, VarSym, FunSym, Val](
 
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
+              # echo "reducing at path ", path
+              # echo rewPaths.paths()
+              # echo path
+              # echo "has prefix - ", rewPaths.prefixHasValue(path)
               case reduceConstraints:
                 of rcApplyOnce:
                   if path notin rewPaths:
                     rewPaths[path] = IntSet()
 
                   rewPaths[path].incl idx
-                of rcRewriteOnce: rewPaths[path] = IntSet()
+                of rcRewriteOnce:
+                  rewPaths[path] = IntSet()
+                  # echo "Added path to rewritten"
+                  # echo "has prefix - ", rewPaths.prefixHasValue(path)
+
                 else:
                   discard
 
+              # echo "^^^^^^^^"
               let newEnv = unifRes.get()
 
               # New value from generator
@@ -415,10 +427,10 @@ proc reduce*[Obj, VarSym, FunSym, Val](
 
               if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
                 canReduce = true
-                result[1] = true
+                result.ok = true
               else:
-                return (tmpTerm, true)
+                return (tmpTerm, true, rewPaths)
 
       if not canReduce:
-        result[0] = tmpTerm
+        result.term = tmpTerm
         break

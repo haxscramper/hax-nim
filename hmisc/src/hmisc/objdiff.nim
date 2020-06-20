@@ -1,6 +1,6 @@
 # {.push warning[UnusedImport] = off.}
 
-
+import hmisc/htrie
 import sugar, strutils, sequtils, strformat
 
 ## Diff two objects
@@ -90,9 +90,32 @@ proc parseEnumSet[Enum](node: NimNode): set[Enum] =
 
 import hmisc/helpers
 
+proc makeLiteralBranch(setExpr, caseBody: NimNode): NimNode =
+  # echo "########"
+  # echo setExpr.toStrLit()
+  # echo caseBody.toStrLit()
+  # defer:
+  #   echo result.toStrLit()
+  # echo "^^^^^^^"
+
+  let setLiteral =
+    case setExpr.kind:
+      of nnkIdent: nnkCurly.newTree(setExpr)
+      else: setExpr
+
+  result = nnkElifExpr.newTree(
+    nnkInfix.newTree(ident "in", ident "objType", setLiteral),
+    caseBody
+  )
+
+
 macro switchType(expr, body: untyped): untyped =
   # echo body.treeRepr()
   var branchSets {.global, compiletime.}: set[AnyKind]
+  var kindSet: set[AnyKind]
+  for val in disjointIter(AnyKind):
+    kindSet.incl val
+
   proc registerSet(node: NimNode, anchor: NimNode): void =
     let parsed = parseEnumSet[AnyKind](node)
     let diff = branchSets * parsed
@@ -106,20 +129,18 @@ macro switchType(expr, body: untyped): untyped =
       branchSets.incl parsed
 
 
+  var hasElse {.global, compiletime.} = false
+  var branches {.global, compiletime.}: seq[NimNode]
   let rewrite = makeNodeRewriteSystem:
     rule:
       patt: Call([[setExpr]], [[caseBody]])
       outp:
-        let setLiteral =
-          case setExpr.kind:
-            of nnkIdent: nnkCurly.newTree(setExpr)
-            else: setExpr
+        registerSet(setExpr, setExpr)
+        branches.add makeLiteralBranch(setExpr, caseBody)
 
-        registerSet(setLiteral, setExpr)
-        nnkElifExpr.newTree(
-          nnkInfix.newTree(ident "in", ident "objType", setLiteral),
-          caseBody
-        )
+        nnkStmtList.newTree()
+
+
     rule:
       patt: Infix(Ident(".."), [[start]], [[final]], [[caseBody]])
       outp:
@@ -128,19 +149,33 @@ macro switchType(expr, body: untyped): untyped =
         )
 
         registerSet(setLiteral, start)
-        nnkElifExpr.newTree(
-          nnkInfix.newTree(ident "in", ident "objType", setLiteral),
-          caseBody
-        )
+        branches.add makeLiteralBranch(setLiteral, caseBody)
+
+        nnkStmtList.newTree()
+
+    rule:
+      patt: Call([[setExpr]], [[caseBody]], Else([[elseBody]]))
+      outp:
+        block:
+          registerSet(setExpr, setExpr)
+          branches.add makeLiteralBranch(setExpr, caseBody)
+
+        block:
+          hasElse = true
+          let diff = kindSet - branchSets
+          let setLiteral = nnkCurly.newTree(toSeq(diff).mapIt(ident $it))
+          registerSet(setLiteral, elseBody)
+          branches.add makeLiteralBranch(setLiteral, caseBody)
+
+        nnkStmtList.newTree()
+
 
 
   let term = body.toTerm()
-  let reduced = reduce(term, rewrite, nimAstImpl)
-
-  var kindSet: set[AnyKind]
-  for val in disjointIter(AnyKind):
-    kindSet.incl val
-
+  let reduced = reduce(
+    term, rewrite, nimAstImpl,
+    reduceConstraints = rcRewriteOnce
+  )
 
   if reduced.ok:
     let diff = (kindSet - branchSets)
@@ -148,21 +183,22 @@ macro switchType(expr, body: untyped): untyped =
       raiseAssert("Not all cases are covered in type match " &
         posString(expr) & ". Missing " & $diff)
 
-    result = nnkWhenStmt.newTree(
-      toSeq(reduced.term.fromTerm().children()) & @[
-        nnkElse.newTree(
-          nnkStmtList.newTree(
-            nnkDiscardStmt.newTree(
-              newEmptyNode())))])
+    result = nnkWhenStmt.newTree(branches)
 
-    echo result.toStrLit()
     let kindId = ident "objType"
     result =
       quote do:
         const `kindId`: AnyKind = objKind(`expr`)
         `result`
 
+    echo result.toStrLit()
+
+
 
 switchType(12):
   akNone:
-    discard
+    echo "none"
+  akInt:
+    echo "integer"
+  else:
+    echo "else"
