@@ -5,7 +5,7 @@ import sugar
 
 import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
 
-export hterms_callback, hterms_tree, macros
+export hterms_callback, hterms_tree, macros, halgorithm
 
 const constantNodes =
   {
@@ -53,14 +53,14 @@ proc buildPatternDecl(
   node: NimNode, path: seq[int],
   subt: seq[NimNode], vars: var seq[string]): NimNode =
   ## Convert pattern declaraion into pattern matcher.
-  ## 
+  ##
   ## :params:
   ##    :node: current node to convert into pattern matchers
   ##    :path: path for current node
   ##    :subt: List of subterms for which patterns have already been
   ##           created
   ##    :vars: List of variables discovered during tree traversal.
-  ##           Newfound variables are appended to it.  
+  ##           Newfound variables are appended to it.
   # IDEA TODO write generalized version of this proc for generatic
   # patern matchers for any kind of homogenous AST wit enum as functor
 
@@ -124,8 +124,9 @@ proc makePatternDecl(
   sectBody: NimNode): tuple[node: NimNode, vars: seq[string]] =
   ## Declare pattern matcher for section body
   var vars: seq[string]
-  let ruleMatcherDef = mapItTreeDFS(
-    subnodes, NimNode, sectBody,
+  let ruleMatcherDef = sectBody.mapItTreeDFS(
+    toSeq(it.subnodes),
+    NimNode,
     buildPatternDecl(it, path, subt, vars))
 
   return (node: ruleMatcherDef, vars: vars)

@@ -2,7 +2,7 @@
 ## values/types from terms.
 
 import hashes, sequtils, tables, strformat, strutils
-import helpers, deques, intsets
+import helpers, deques, intsets, halgorithm
 
 import htrie
 
@@ -98,9 +98,18 @@ proc isBound*[VarSym, Obj](env: TermEnv[VarSym, Obj], term: VarSym): bool =
 
 proc `[]`*[VarSym, Obj](e: TermEnv[VarSym, Obj], t: VarSym): Obj =
   ## Access value from environment.
-  e.values[t]
+  try:
+    e.values[t]
+  except KeyError:
+    # TODO check if `VarSym` can be converter to string
+    # TODO use define to constrol exception verbosity
+    let vars = e.mapPairs($lhs).joinq()
+    raise newException(
+      KeyError,
+      &"Missing variable `{t}` in environment. Have vars: {vars}")
 
-proc `[]=`*[VarSym, Obj](system: var RedSystem[VarSym, Obj], lhs, rhs: Obj): void =
+proc `[]=`*[VarSym, Obj](
+  system: var RedSystem[VarSym, Obj], lhs, rhs: Obj): void =
   ## Add rule to environment
   system.rules[lhs] = rhs
 
@@ -226,7 +235,12 @@ proc unif*[Obj, VarSym, FunSym, Val](
     if cb.getFSym(val1) != cb.getFSym(val2):
       return none(TermEnv[VarSym, Obj])
 
-    for (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
+    if cb.getSubt(val1).len != cb.getSubt(val2).len:
+      # TEST with different-sized term unification
+      # TODO provide `reason` for failure
+      return none(TermEnv[VarSym, Obj])
+
+    for idx, (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
       let res = unif(arg1, arg2, cb, tmpRes)
       if res.isSome():
         tmpRes = res.get()
@@ -235,7 +249,8 @@ proc unif*[Obj, VarSym, FunSym, Val](
 
     return some(tmpRes)
 
-iterator redexes*[Obj, VarSym, FunSym, Val](term: Obj, cb: TermImpl[Obj, VarSym, FunSym, Val]
+iterator redexes*[Obj, VarSym, FunSym, Val](
+  term: Obj, cb: TermImpl[Obj, VarSym, FunSym, Val]
                                 ): tuple[red: Obj, path: TermPath] =
   ## Iterate over all redex in term
   var que: Deque[(Obj, TermPath)]
@@ -323,11 +338,11 @@ proc reduce*[Obj, VarSym, FunSym, Val](
   reduceConstraints: ReduceConstraints = rcApplyOnce
                 ): tuple[term: Obj, ok: bool] =
   ## Perform reduction of `term` using `system` rules.
-  ## 
+  ##
   ## Iterate over all subterms (redexes) in `term` and try each reduction
   ## rule in `system`. If rule matches, replace subterm with output of
   ## the rule value generator.
-  ## 
+  ##
   ## :params:
   ##    :term: term to reduce
   ##    :system: collection of rules (matcher - generator pairs)
@@ -343,7 +358,7 @@ proc reduce*[Obj, VarSym, FunSym, Val](
   ##       - **rcApplyOnce** do not use the same rule on term or any of
   ##         it's descendants after rule has been applied once. Reduction
   ##         of the term (or descendants) might still take place but
-  ##         using different rules.  
+  ##         using different rules.
   var tmpTerm = term
   var rewPaths: Trie[int, IntSet]
   block outerLoop:

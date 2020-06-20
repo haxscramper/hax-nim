@@ -173,8 +173,8 @@ proc testEq*[A, B](lhs: A, rhs: B) =
           echo &"LHS #{idx}: '{line[0]}'"
           echo &"RHS #{idx}: '{line[1]}'"
           break
-        else:
-          echo &"#{idx}: '{line[0]}' == '{line[1]}'"
+        # else:
+        #   echo &"#{idx}: '{line[0]}' == '{line[1]}'"
 
     else:
       echo "LHS: ", lhsStr
@@ -233,12 +233,12 @@ proc joinw*(inseq: openarray[string]): string =
     assert @["as", ";;"].joinw == "as ;;"
   inseq.join(" ")
 
-proc joinq*(inseq: openarray[string], sep: string = " "): string =
+proc joinq*(inseq: openarray[string], sep: string = " ", wrap: string = "\""): string =
   ## Join items using spaces and quote each item
   runnableExamples:
     assert @["as", "qq"].joinq == "\"as\" \"qq\""
 
-  inseq.mapIt("\"" & it & "\"").join(sep)
+  inseq.mapIt(wrap & it & wrap).join(sep)
 
 proc replaceN*(str: string, n: int, subst: char = ' '): string =
   ## Replace first `n` characters in string with `subst`
@@ -386,3 +386,31 @@ proc colorPrint*(node: NimNode): void =
   file.writeFile($node.toStrLit())
   discard staticExec("nimpretty " & file)
   echo staticExec("pygmentize -f terminal " & file)
+
+
+template last*(s: untyped): untyped =
+  ## Syntactic sugar for s[^1]
+  s[^1]
+
+
+func emptySeq*[T](): seq[T] = discard
+
+
+func posString*(node: NimNode): string =
+  let info = node.lineInfoObj()
+  return "on line " & $info.line
+
+
+macro disjointIterImpl(x: typed): untyped =
+  var values: seq[NimNode]
+  for value in x.getTypeImpl[1..^1]:
+    values.add newIdentNode($value.tostrlit)
+
+  result = nnkStmtList.newTree(
+    nnkPrefix.newTree(
+      newIdentNode("@"),
+      nnkBracket.newTree(values)))
+
+macro disjointIter*(x: typed): untyped =
+  nnkBracket.newTree(x.getType[1][1..^1])
+

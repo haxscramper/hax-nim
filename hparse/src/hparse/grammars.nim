@@ -104,7 +104,11 @@ proc newTree*[Tok](tok: Tok): ParseTree[Tok] =
   ParseTree[Tok](kind: pkTerm, tok: tok)
 
 proc newTree*[Tok](name: NTermSym, subnodes: varargs[ParseTree[Tok]]): ParseTree[Tok] =
-  ParseTree[Tok](name: name, subnodes: subnodes)
+  ParseTree[Tok](kind: pkNTerm, name: name, subnodes: toSeq(subnodes))
+
+func tok*[Tok](tree: ParseTree[Tok]): Tok =
+  assert tree.kind == pkTerm
+  return tree.tok
 
 iterator subnodes*[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
   assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"

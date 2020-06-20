@@ -9,7 +9,7 @@ import deques
 export deques
 
 # IDEA `itemsBFS` and `itemsDFS` to iterate over nodes in tree
-# IDEA `pairsBFS` and `pairsDFS` to iterate over paths 
+# IDEA `pairsBFS` and `pairsDFS` to iterate over paths
 #      (similar to index?) + nodes in tree
 
 template mapItBFStoSeq*(

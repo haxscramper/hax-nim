@@ -604,7 +604,14 @@ const objectPPrintConf = PPrintConf(
   nowrapMultiline: true
 )
 
-proc pprint*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): void =
+
+proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
   var conf = objectPPrintConf
   conf.maxWidth = maxWidth
-  echo prettyString(toSimpleTree(obj), conf, ident)
+  prettyString(toSimpleTree(obj), conf, ident)
+
+proc pprint*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): void =
+  echo pstring(obj, ident,  maxWidth)
+  # var conf = objectPPrintConf
+  # conf.maxWidth = maxWidth
+  # echo prettyString(toSimpleTree(obj), conf, ident)

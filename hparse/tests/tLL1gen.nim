@@ -13,6 +13,7 @@ type
     kind: TokenKind
 
   TPatt = Patt[TokenKind]
+  PTree = ParseTree[Token]
 
 
 macro grammarTest(): untyped =
@@ -40,28 +41,107 @@ macro grammarTest(): untyped =
 
   let compGrammar = computeGrammar(grammar)
   # pprint compGrammar
-  let impl = makeGrammarParser(compGrammar)
-
-  result = impl
-  colorPrint(result)
+  result = makeGrammarParser(compGrammar)
 
 grammarTest()
 
-var testStream = makeStream(@[
-  Token(kind: tkOpBrace),
-  Token(kind: tkIdent),
-  Token(kind: tkComma),
-  Token(kind: tkIdent),
-  Token(kind: tkComma),
-  Token(kind: tkIdent),
-  Token(kind: tkCloseBrace)
-])
+proc parseTokens(toks: seq[TokenKind]): ParseTree[Token] =
+  var root = ParseTree[Token](kind: pkNTerm)
+  var stream = makeStream(toks.mapIt(Token(kind: it)))
+  parseList(stream, root)
+  return root
 
-var root = ParseTree[Token](kind: pkNTerm)
-parseList(testStream, root)
+proc pe(kind: PattKind, args: varargs[PTree]): PTree =
+  newTree(kind, toSeq(args))
+
+proc pt(tok: TokenKind): PTree =
+  newTree(Token(kind: tok))
+
+proc pn(name: NTermSym, args: varargs[PTree]): PTree =
+  newTree(name, toSeq(args))
+
+func mapString(s: string): seq[TokenKind] =
+  s.mapIt(
+    case it:
+      of '[': tkOpBrace
+      of ']': tkCloseBrace
+      of ',': tkComma
+      else: tkIdent
+  )
+
+proc `$`(a: PTree): string = pstring(a)
+
+proc tokensBFS(tree: PTree): seq[Token] =
+  tree.mapItBFStoSeq(
+    toSeq(it.subnodes()),
+    if it.kind == pkTerm: some(it.tok) else: none(Token),
+    it.kind != pkTerm
+  )
+
 
 suite "LL(1) parser simple":
-  test "Parse no-nested list":
+  test "Parse simple list":
+    let tree = parseTokens(@[
+      tkOpBrace,
+      tkIdent,
+      tkComma,
+      tkIdent,
+      tkComma,
+      tkIdent,
+      tkCloseBrace
+    ])
+
+    assert tree.tokensBFS() == pe(
+      pkConcat,
+      pt(tkOpBrace),
+      pkConcat.pe(
+        pt(tkIdent),
+        pkZeroOrMore.pe(
+          pkConcat.pe(pt(tkComma), pt(tkIdent)),
+          pkConcat.pe(pt(tkComma), pt(tkIdent))
+        )
+      ),
+      pt(tkCloseBrace)
+    ).tokensBFS()
+
+  test "Parse nested list":
+    let tree = parseTokens(@[
+      tkOpBrace,
+        tkOpBrace,
+          tkIdent,
+        tkCloseBrace,
+      tkCloseBrace
+    ])
+
+    assert tree.tokensBFS() == pkConcat.pe(
+      pt(tkOpBrace),
+      pkConcat.pe(
+        pt(tkOpBrace),
+        pkConcat.pe(pt(tkIdent)),
+        pt(tkCloseBrace)
+      ),
+      pt(tkCloseBrace)
+    ).tokensBFS()
+
+  test "Deeply nested list with idents":
+    # TODO unit test error for unfinished input
+    # TODO test erorr for incorrect token expected
+    let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
+
+    # ERROR `index out of bounds, the container is empty`
+    # pprint tree
+
+  test "Map parse tree to ast":
+    let root = parseTokens(@[
+      tkOpBrace,
+      tkIdent,
+      tkComma,
+      tkIdent,
+      tkComma,
+      tkIdent,
+      tkCloseBrace
+    ])
+
     type
       Ast = object
         case isList: bool
@@ -77,11 +157,10 @@ suite "LL(1) parser simple":
         return toSeq(node.subnodes())
 
     let res = root.mapItTreeDFS(
-      it.getSubnodes, Ast,
+      it.getSubnodes,
+      Ast,
       (it.kind == pkTerm).tern(
         (Ast(isList: false, ident: "ze")),
         (Ast(isList: true, subnodes: subt))
       )
     )
-
-    pprint res
