@@ -108,9 +108,9 @@ proc buildPatternDecl(
         elif callSym in @["CommentStmt", "Ident", "Sym"]:
           let strLit = node[1]
           let nodeMaker = ident("new" & callSym & "Node")
-          let valueSym = ident "value"
+          # let valueSym = ident "value"
           termValue = quote do:
-            ((let `valueSym` = `strLit`; `nodeMaker`(`strLit`)))
+            ((let valueSym = `strLit`; `nodeMaker`(`strLit`)))
 
         return quote do:
           NodeTerm(tkind: tkConstant, value: `termValue`)
@@ -186,6 +186,8 @@ macro makeNodeRewriteSystem*(body: untyped): untyped =
   result = newTree(nnkBracket, matcherTuples)
   result = quote do:
     RedSystem[string, NodeTerm](rules: @`result`)
+
+  # echo result.toStrLit()
 
 
 proc treeRepr*[Tree, Enum](

@@ -1,6 +1,6 @@
 # {.push warning[UnusedImport] = off.}
 
-import hmisc/htrie
+import hmisc/[htrie, hpprint]
 import sugar, strutils, sequtils, strformat
 
 ## Diff two objects
@@ -54,8 +54,6 @@ template objKind(o: untyped): AnyKind =
     akFloat32               #  a float32
   elif o is float64:
     akFloat64               #  a float64
-  # elif o is float128:
-  #   akFloat128              #  a float128
   elif o is uint:
     akUInt                  #  an unsigned int
   elif o is uint8:
@@ -69,7 +67,7 @@ template objKind(o: untyped): AnyKind =
   else:
     akNone                   ## invalid any
 
-import macroutils, ast_pattern_matching, macros
+import macros
 
 
 import hmisc/hterms_nimast
@@ -77,7 +75,13 @@ import hmisc/hterms_nimast
 proc parseEnumSet[Enum](node: NimNode): set[Enum] =
   case node.kind:
     of nnkIdent:
-      return {parseEnum[Enum]($node)}
+      try:
+        return {parseEnum[Enum]($node)}
+      except ValueError:
+        raise newException(
+          ValueError,
+          getCurrentExceptionMsg() & " for expression " & posString(node)
+        )
     of nnkInfix:
       assert node[0] == ident("..")
       return {parseEnum[Enum]($node[1]) .. parseEnum[Enum]($node[2])}
@@ -111,14 +115,14 @@ proc makeLiteralBranch(setExpr, caseBody: NimNode): NimNode =
 
 macro switchType(expr, body: untyped): untyped =
   # echo body.treeRepr()
-  var branchSets {.global, compiletime.}: set[AnyKind]
+  var branchSets {.global, compiletime.}: set[AnyKind] = {akFloat128}
   var kindSet: set[AnyKind]
   for val in disjointIter(AnyKind):
     kindSet.incl val
 
   proc registerSet(node: NimNode, anchor: NimNode): void =
     let parsed = parseEnumSet[AnyKind](node)
-    let diff = branchSets * parsed
+    let diff = (branchSets * parsed) - {akFloat128}
     if diff.len > 0:
       raiseAssert(
         "Wrong type match: expression " & posString(anchor) &
@@ -128,6 +132,10 @@ macro switchType(expr, body: untyped): untyped =
     else:
       branchSets.incl parsed
 
+  echo "---"
+  echo body.toStrLit()
+  echo body.treeRepr()
+  echo "---"
 
   var hasElse {.global, compiletime.} = false
   var branches {.global, compiletime.}: seq[NimNode]
@@ -135,6 +143,7 @@ macro switchType(expr, body: untyped): untyped =
     rule:
       patt: Call([[setExpr]], [[caseBody]])
       outp:
+        echo setExpr.toStrLit()
         registerSet(setExpr, setExpr)
         branches.add makeLiteralBranch(setExpr, caseBody)
 
@@ -159,6 +168,27 @@ macro switchType(expr, body: untyped): untyped =
         block:
           registerSet(setExpr, setExpr)
           branches.add makeLiteralBranch(setExpr, caseBody)
+
+        block:
+          hasElse = true
+          let diff = kindSet - branchSets
+          let setLiteral = nnkCurly.newTree(toSeq(diff).mapIt(ident $it))
+          registerSet(setLiteral, elseBody)
+          branches.add makeLiteralBranch(setLiteral, caseBody)
+
+        nnkStmtList.newTree()
+
+    rule:
+      patt: Infix(
+        Ident(".."), [[start]], [[final]], [[caseBody]], [[elseBody]])
+      outp:
+        block:
+          let setLiteral = nnkCurly.newTree(
+              nnkInfix.newTree(ident "..", start, final)
+          )
+
+          registerSet(setLiteral, start)
+          branches.add makeLiteralBranch(setLiteral, caseBody)
 
         block:
           hasElse = true
@@ -195,10 +225,125 @@ macro switchType(expr, body: untyped): untyped =
 
 
 
-switchType(12):
-  akNone:
-    echo "none"
-  akInt:
-    echo "integer"
-  else:
-    echo "else"
+
+func ppConst(val: string, ctype: string = ""): ObjTree =
+  ObjTree(constType: ctype, kind: okConstant, strLit: val)
+
+proc prettyPrintConverter*(val: Any): ObjTree =
+  case val.kind:
+    of akNone:
+      return ppConst("<invalid>")
+    of akBool:
+      return ppConst($val.getBool(), "bool")
+    of akChar:
+      return ppConst($val.getChar(), "char")
+    of akEnum:
+      return ppConst($val.getEnumField(), "<enum>")
+    of akSet:
+      return ObjTree(
+        kind: okSequence,
+        valItems: toSeq(val.elements()).mapIt(ppConst($it))
+      )
+    of akObject, akTuple:
+      return ObjTree(
+        sectioned: false,
+        kind: okComposed,
+        fldPairs: toSeq(val.fields()).mapPairs(
+          (name: lhs, value: prettyPrintConverter(rhs))
+        )
+      )
+    of akRange:
+      echo "RANGS????"
+
+    of akRef, akPtr:
+      return prettyPrintConverter(val[])
+
+    of akSequence, akArray:
+      return ObjTree(
+        kind: okSequence,
+        valItems:
+          block:
+            collect(newSeq):
+              for i in 0 ..< val.len():
+                prettyPrintConverter(val)
+      )
+
+    of akProc:
+      echo "zzz"
+
+    of akPointer:
+      return ppConst("<ptr addr>", "<pointer>")
+
+    of akString:
+      return ppConst(val.getString(), "string")
+
+    of akCString:
+      return ppConst($val.getCString(), "cstring")
+
+    of akInt:
+      return ppConst($val.getInt(), "int")
+
+    of akInt8:
+      return ppConst($val.getInt8(), "int8")
+
+    of akInt16:
+      return ppConst($val.getInt16(), "int16")
+
+    of akInt32:
+      return ppConst($val.getInt32(), "int32")
+
+    of akInt64:
+      return ppConst($val.getInt64(), "int64")
+
+    of akFloat:
+      return ppConst($val.getFloat(), "float")
+
+    of akFloat32:
+      return ppConst($val.getFloat32(), "float32")
+
+    of akFloat64:
+      return ppConst($val.getFloat64(), "float64")
+
+    of akUInt:
+      return ppConst(system.`$`(val.getUInt()), "uint")
+
+    of akUInt8:
+      return ppConst(system.`$`(val.getUInt8()), "uint8")
+
+    of akUInt16:
+      return ppConst(system.`$`(val.getUInt16()), "uint16")
+
+    of akUInt32:
+      return ppConst(system.`$`(val.getUInt32()), "uint32")
+
+    of akUInt64:
+      return ppConst(system.`$`(val.getUInt64()), "uint64")
+
+    else:
+      discard
+
+proc getField[Obj](obj: var Obj, path: openarray[int]): Any =
+  if path.len == 1:
+    return toAny[Obj](obj)
+
+  switchType(obj):
+    akNone:
+      echo "none"
+    akString .. akUInt64:
+      return toAny(obj)
+    else:
+      echo "else"
+
+type
+  Tree = object
+    f1: seq[Tree]
+    f2: seq[Tree]
+    val: int
+
+block:
+  var val = 12
+  pprint getField(val, [1])
+
+block:
+  var val = Tree(f1: @[Tree(val: 12), Tree(val: 22)])
+  pprint getField(val, [1])

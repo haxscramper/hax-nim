@@ -110,7 +110,7 @@ func isKVpairs(obj: ObjTree): bool =
 
 import json
 
-proc dedicatedConvertMatcher[Obj](
+proc dedicatedConvertMatcher*[Obj](
   val: Obj, conv: proc(obj: Obj): ObjTree): ObjTree =
   ## Helper proc to correctly resolve overloading for pretty print
   ## converters
@@ -155,9 +155,15 @@ proc toSimpleTree*[Obj](
   entry: Obj, conf: PPrintConf = PPrintConf()): ObjTree =
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
-  when compiles(dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)):
+  mixin prettyPrintConverter# (entry)
+  when compiles(
+    prettyPrintConverter(entry)
+  # dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
+  ):
     # If dedicated implementation exists, use it
-    return dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
+
+    return prettyPrintConverter(entry)
+    # return dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
   elif not (
       (entry is seq) or
       (entry is array) or
@@ -235,6 +241,8 @@ proc toSimpleTree*[Obj](
   else:
     when entry is string:
       let val = "\"" & entry & "\""
+    elif entry is pointer:
+      let val = "<pointer>"
     else:
       let val = $entry
 
