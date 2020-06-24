@@ -49,3 +49,28 @@ suite "Main":
     assertEq tr[@[0]], 1488
     assertEq tr.paths(), @[@[0]]
     assertEq tr.paths().len, 1
+
+  test "{merge} Empty trie with filled :value:":
+    var tr1: Trie[int, int]
+    var tr2: Trie[int, int]
+
+    tr2[[1, 2, 3]] = 888
+    tr2[[2, 2, 3]] = 888
+    tr1.merge tr2
+
+    assertEq tr1[[1, 2, 3]], 888
+    assertEq tr1[[2, 2, 3]], 888
+
+
+  test "{merge} two trees :value:":
+    var tr1: Trie[int, int]
+    var tr2: Trie[int, int]
+
+    tr2[[1, 2, 3]] = 888
+    tr2[[2, 2, 3]] = 898
+    tr1[[1, 9]] = 8
+    tr1.merge tr2
+
+    assertEq tr1[[1, 2, 3]], 888
+    assertEq tr1[[2, 2, 3]], 898
+    assertEq tr1[[1, 9]], 8

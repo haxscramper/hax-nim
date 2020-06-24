@@ -16,7 +16,7 @@ proc `[]`*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): Val =
       raise newException(
         KeyError, "Trie key not found: " & $path)
 
-  echo curr
+  # echo curr
   if curr.value.isNone():
     raise newException(
       KeyError, "Trie key not found: " & $path)
@@ -114,3 +114,13 @@ proc contains*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): bool =
     return true
   except KeyError:
     return false
+
+proc merge*[Key, Val](trie: var Trie[Key, Val], other: Trie[Key, Val]): void =
+  for path in other.paths():
+    trie[path] = other[path]
+
+
+proc merge*[Key, Val](trie: Trie[Key, Val], other: Trie[Key, Val]): Trie[Key, Val] =
+  result = trie
+  for path in other.paths():
+    result[path] = other[path]
