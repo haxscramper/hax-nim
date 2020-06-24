@@ -32,5 +32,20 @@ suite "Main":
     tr[[1, 2]] = 888
     assert not tr.prefixHasValue([0, 1, 2])
     tr[[0, 1, 2]] = 777
-    pprint tr
     assert tr.prefixHasValue([0, 1, 2])
+
+
+  test "{paths} Set value on path using array :value:":
+    var tr: Trie[int, int]
+    tr[[0, 2]] = 1488
+    assertEq tr.paths(), @[@[0, 2]]
+    assertEq tr.paths().len, 1
+    assertEq tr[@[0, 2]], 1488
+
+  test "{paths} Path of length 1 :value:":
+    var tr: Trie[int, int]
+    tr[@[0]] = 1488
+    # pprint tr
+    assertEq tr[@[0]], 1488
+    assertEq tr.paths(), @[@[0]]
+    assertEq tr.paths().len, 1

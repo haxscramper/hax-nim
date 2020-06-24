@@ -73,3 +73,20 @@ proc t1(arg: string, offset: int = arg.len()): void =
 
 t1("sdf")
 t1("sdfsdf", 22)
+
+
+#==================  macro with undefined identitifer  ===================#
+
+block:
+  macro test(a, b: untyped) =
+    echo "macro test"
+    discard
+
+  proc procedure() =
+    test(1):
+      hello:
+        world:
+          11
+
+        thisIdentifierIsCertainlyNotDefined:
+          nope

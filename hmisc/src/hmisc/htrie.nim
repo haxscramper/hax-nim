@@ -16,6 +16,7 @@ proc `[]`*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): Val =
       raise newException(
         KeyError, "Trie key not found: " & $path)
 
+  echo curr
   if curr.value.isNone():
     raise newException(
       KeyError, "Trie key not found: " & $path)
@@ -85,15 +86,25 @@ iterator parentValues*[Key, Val](
       curr = curr.subn[key]
 
 proc paths*[Key, Val](trie: Trie[Key, Val]): seq[seq[Key]] =
+  # echo trie
+  # echo "searching for paths"
   if trie.subn.len == 0:
+    # echo "Subnode is empty"
     return @[]
   else:
+    # echo "Subnode has ", trie.subn.len(), " nodes"
     for key, subtrie in trie.subn:
       let sub = subtrie.paths()
       if sub.len == 0:
-        for subKey, _ in subtrie.subn:
-          result.add @[key, subKey]
+        # echo "Subtrie has no paths"
+        if subtrie.subn.len == 0:
+          result.add @[key]
+        else:
+          for subKey, _ in subtrie.subn:
+            result.add @[key, subKey]
       else:
+        # echo "sub has paths:"
+        # echo sub
         for path in subtrie.paths():
           result.add @[key] & path
 
@@ -103,4 +114,3 @@ proc contains*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): bool =
     return true
   except KeyError:
     return false
-

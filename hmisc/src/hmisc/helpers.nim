@@ -153,6 +153,11 @@ proc mismatchStart(str1, str2: string): int =
     return -1
 
 proc testEq*[A, B](lhs: A, rhs: B) =
+  static:
+    assert compiles(lhs == rhs),
+     "Cannot directly compare objects of type" & $typeof(lhs) &
+       " and " & $typeof(rhs)
+
   if lhs != rhs:
     let lhsStr = $lhs
     let rhsStr = $rhs
@@ -413,4 +418,3 @@ macro disjointIterImpl(x: typed): untyped =
 
 macro disjointIter*(x: typed): untyped =
   nnkBracket.newTree(x.getType[1][1..^1])
-
