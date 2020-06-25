@@ -254,7 +254,7 @@ block:
   let v {.varPragma.} = 111
   var v {.varPragma.} = 111
 
-block:
+when false:
   block:
     macro getConst(sym: typed) =
       echo sym.treeRepr()
@@ -315,13 +315,13 @@ suite "Field switch macro":
 
 type
   ObjDiffKind = enum
-    odkLength
+    odkLen
     odkKind
     odkValue
 
   ObjDiff = object
     case kind: ObjDiffKind:
-      of odkLength:
+      of odkLen:
         lhsLen, rhsLen: int
       else:
         discard
@@ -330,17 +330,40 @@ type
   ObjDiffPaths = Trie[int, ObjDiff]
 
 
-proc diff[Obj](lhs, rhs: Obj, path: TreePath = @[0]): ObjDiffPaths =
-  when Obj is seq:
-    discard
+# macro
+
+proc diff[T](lhs, rhs: T, path: TreePath = @[0]): ObjDiffPaths =
+  when T is seq:
+    if lhs.len() != rhs.len():
+      result[path] = ObjDiff(kind: odkLen, lhsLen: lhs.len(), rhsLen: rhs.len())
+
+    for idx, (lval, rval) in zip(lhs, rhs):
+      result.merge diff(lval, rval, path & @[idx])
+  # elif T is object:
+  #   # TODO how to check for different kind?
+  #   discard
+
   else:
     if lhs != rhs:
       result[path] = ObjDiff(kind: odkValue)
-      echo "integer comparison"
-      echo lhs, rhs
 
 #================================  tests  ================================#
 
 suite "Main":
   test "diff integers":
     assertEq diff(1, 2).paths(), @[@[0]]
+
+  # NOTE test diff with string sequece too
+  test "{diff} seq":
+    assertEq diff(@[1], @[2]).paths(), @[@[0, 0]]
+    assertEq diff(@[1, 1], @[2, 1]).paths(), @[@[0, 0]]
+    assertEq diff(@[1, 2], @[2, 1]).paths(), @[@[0, 0], @[0, 1]]
+    assertEq diff(@[1], @[1]).paths(), emptySeq[seq[int]]()
+    assertEq diff(@["hel"], @["`1`"]).paths(), @[@[0]]
+
+  test "{diff} Object field difference":
+    type
+      U = object
+        f1: int
+
+    assertEq diff(U(f1: 90), U(f1: 91)).paths(), @[@[0, 0]]

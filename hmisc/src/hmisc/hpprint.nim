@@ -3,7 +3,7 @@
 ## Universal pretty-printer
 
 import hmisc/[helpers, defensive, halgorithm]
-import tables, sequtils, math, strutils, strformat
+import tables, sequtils, math, strutils, strformat, macros
 import typetraits
 
 import gara, with
@@ -54,19 +54,26 @@ type
     okComposed ## Named list of field-value pairs with possilby
     ## different types for fields (and values). List name is optional
     ## (unnamed object), field name is optional (unnamed fields)
+  FieldBranch* = object
+    value: ObjTree ## Match value for case branch
+    flds: seq[Field] ## Fields in the case branch
+    isElse: bool
 
   Field* = object
     ## More complex representation of object's field - supports
     ## recursive fields with case objects. IMPLEMENT - not currently
     ## supported.
+    name*: string
     fldType*: string ## Type of field value
+    value*: ObjTree
     case isKind*: bool
       of true:
-        subfields: seq[tuple[name: string, fld: Field]] ## Key-value
-        ## list of subfields
+        selected*: int ## Index of selected branch
+        branches*: seq[FieldBranch] ## List of all branches as
+                                    ## `value-branch` pairs.
       of false:
-        name: string ## Name of the field
-        value: ObjTree ## Tree representation for field value
+        discard
+
 
   ObjTree* = object
     case kind*: ObjKind
@@ -103,6 +110,108 @@ type
             # case fields as well as nested ones
             kindBlocks*: seq[Field] ## Object field tree. TODO -
             ## currently not implemented
+
+
+func `==`(lhs, rhs: Field): bool
+
+func `==`(lhs, rhs: ObjTree): bool =
+  lhs.kind == rhs.kind and
+    (
+      case lhs.kind:
+        of okConstant:
+          lhs.constType == rhs.constType and
+          lhs.strLit == rhs.strLit
+        of okSequence:
+          lhs.itemType == rhs.itemType and
+          subnodesEq(lhs, rhs, valItems)
+        of okTable:
+          lhs.keyType == rhs.keyType and
+          lhs.valType == rhs.valType and
+          zip(lhs.valPairs, rhs.valPairs).allOfIt(
+            (it[0].key == it[1].key) and (it[0].val == it[1].val)
+          )
+        of okComposed:
+          lhs.namedObject == rhs.namedObject and
+          lhs.namedFields == rhs.namedFields and
+          lhs.name == rhs.name and
+          lhs.sectioned == rhs.sectioned and
+          (
+            case lhs.sectioned:
+              of true:
+                subnodesEq(lhs, rhs, kindBlocks)
+              of false:
+                zip(lhs.fldPairs, rhs.fldPairs).mapPairs(
+                  (lhs.name == rhs.name) and (lhs.value == rhs.value)
+                ).foldl(a and b)
+          )
+
+    )
+
+func `==`(lhs, rhs: Field): bool =
+  lhs.isKind == rhs.isKind and
+    (
+      case lhs.isKind:
+        of true:
+          lhs.name == rhs.name and
+          lhs.fldType == rhs.fldType and
+          lhs.value == rhs.value and
+          subnodesEq(lhs, rhs, branches)
+        of false:
+          true
+    )
+
+proc getFields*(node: NimNode): seq[Field]
+
+proc getBranches*(node: NimNode): seq[FieldBranch] =
+  assert node.kind == nnkRecCase
+  for branch in node[1..^1]:
+    assert branch.kind == nnkOfBranch
+    result.add FieldBranch(
+      flds: branch.getFields()
+    )
+
+    # for field in branch[1..^1]:
+    #   assert field.kind in {nnkIdentDefs, nnkRecList}
+
+
+proc getFields*(node: NimNode): seq[Field] =
+  case node.kind:
+    of nnkObjectTy:
+      return node[2].getFields()
+    of nnkRecList:
+      for elem in node:
+        result &= elem.getFields()
+    of nnkRecCase:
+      let idefs = node[0]
+      var top = (field: $idefs[0], kindType: $idefs[1])
+      for branch in node[1..^1]:
+        for fld in branch[1]:
+          if fld.kind == nnkRecCase:
+            result = Field(
+              isKind: true,
+              branches: fld.getBranches()
+            )
+          else:
+            result = Field(
+              isKind: false
+            )
+
+      result.add top
+    else:
+      discard
+
+
+
+macro makeFieldsLiteral*(node: typed): seq[Field] =
+  let kind = node.getTypeImpl().kind
+  case kind:
+    of nnkBracketExpr:
+      let typeSym = node.getTypeImpl()[1]
+      result = newLit(getFields(typeSym.getTypeImpl()))
+    of nnkObjectTy, nnkRefTy:
+      result = newLit(getFields(node.getTypeImpl()))
+    else:
+      raiseAssert("Unknown parameter kind: " & $kind)
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs

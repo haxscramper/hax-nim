@@ -277,6 +277,15 @@ suite "Simple sequence templates":
       ).foldl((not a.ok).tern(a, b))
       assertEq res, (id: 1, ok: false)
 
+
+  block: # Get first mismatch for two sequences
+    assert true and zip(
+      @[(1, 2)],
+      @[(1, 2)]
+    ).mapPairs(
+      (lhs[0] == rhs[0]) and (lhs[1] == rhs[1])
+    ).foldl(a and b)
+
   test "{subnodesEq} :template:":
     type
       U = object

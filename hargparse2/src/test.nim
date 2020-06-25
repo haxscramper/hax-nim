@@ -10,7 +10,7 @@ import typeinfo
 import typetraits
 import tables
 
-## Partially sueccessful experiment on passing **ANY** value from
+## Partially successful experiment on passing **ANY** value from
 ## compile time to runtime as long as type can *exist* at runtime.
 ## Also might work if you need to pass /value/ of nim node to toplevel
 ## macro. Currently it works only on types that expos all necessary

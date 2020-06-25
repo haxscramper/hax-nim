@@ -3,7 +3,9 @@ export tables
 
 type
   Trie*[Key, Val] = object
-    subn: Table[Key, Trie[Key, Val]]
+    # Ordered table used for ease of testing - compare `paths()` with
+    # sequence literal
+    subn: OrderedTable[Key, Trie[Key, Val]]
     value: Option[Val]
 
 proc `[]`*[Key, Val](trie: Trie[Key, Val], path: openarray[Key]): Val =
@@ -120,7 +122,7 @@ proc merge*[Key, Val](trie: var Trie[Key, Val], other: Trie[Key, Val]): void =
     trie[path] = other[path]
 
 
-proc merge*[Key, Val](trie: Trie[Key, Val], other: Trie[Key, Val]): Trie[Key, Val] =
+proc merge*[Key, Val](
+  trie: Trie[Key, Val], other: Trie[Key, Val]): Trie[Key, Val] =
   result = trie
-  for path in other.paths():
-    result[path] = other[path]
+  result.merge(other)

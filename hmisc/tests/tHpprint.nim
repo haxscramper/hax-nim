@@ -5,7 +5,7 @@ import strutils
 
 import hmisc/hpprint
 
-suite "Library parts unit tests":
+suite "Block labeling":
   template test(
     labels: untyped, chunkLines: seq[string] = @["[|||]"]): untyped =
     relativePosition(
@@ -36,7 +36,6 @@ suite "Library parts unit tests":
            [|||]
          }}}""".dedent
 
-
   test "Multiline block compact":
     assertEq $(test(
       @{ rpBottomRight: (text: "}}", offset: 2),
@@ -48,7 +47,6 @@ suite "Library parts unit tests":
          """
          {{[||||]
            [||||]}}""".dedent
-
 
   test "Multiline block expanded":
     assertEq $(test(
@@ -63,7 +61,6 @@ suite "Library parts unit tests":
            [||||]
            [||||]
          }}""".dedent
-
 
   test "Multiline block expanded with prefix":
     assertEq $(test(
@@ -80,7 +77,6 @@ suite "Library parts unit tests":
          - [||||]
          }}""".dedent
 
-
   test "Invalid prefix assertion":
     try:
       discard test(@{
@@ -93,6 +89,126 @@ suite "Library parts unit tests":
       assert getCurrentExceptionMsg().startsWith("Incompatible chunk labels")
     except:
       fail("Wrong exception")
+
+suite "Compile-time object passthrough":
+  test "Regular const value":
+    discard
+
+suite "Case object field iteration":
+  discard
+
+  test "No case fields":
+    type
+      U = object
+        f1: int
+
+    assert U.makeFieldsLiteral() == emptySeq[Field]()
+
+  test "Single case field":
+    type
+      U = object
+        case kind: bool
+          of true:
+            f1: int
+          of false:
+            f2: float
+
+    if not (U.makeFieldsLiteral() == @[
+      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+         flds: @[ Field(fldType: "int", isKind: false, name: "f1") ],
+         isElse: false
+        ),
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+         flds: @[ Field(fldType: "float", isKind: false, name: "f2") ],
+         isElse: false
+        ),
+      ]
+    )]):
+      raiseAssert "Fail"
+
+  test "Multiple case fields":
+    type
+      U = object
+        case kind1: bool
+          of true: f11: int
+          of false: f21: float
+
+        case kind2: char
+          of 'a':
+            f12: int
+          else:
+            f22: float
+
+    if not (U.makeFieldsLiteral() == @[
+      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+         flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
+         isElse: false
+         ),
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+         flds: @[ Field(fldType: "float", isKind: false, name: "f21") ],
+         isElse: false
+         ),
+      ]),
+      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+         flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
+         isElse: false
+        ),
+        (value: ObjTree(),
+         flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
+         isElse: true
+        ),
+      ])
+    ]):
+      raiseAssert "Fail"
+
+  test "Nested case fields":
+    type
+      U = object
+        case kind1: bool
+          of true: f11: int
+          of false:
+            case kind2: char
+              of 'a':
+                f12: int
+              else:
+                f22: float
+
+
+    if not (U.makeFieldsLiteral() == @[
+      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+         flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
+         isElse: false
+         ),
+        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+         flds: @[
+           Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+             (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+              flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
+              isElse: false
+             ),
+             (value: ObjTree(),
+              flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
+              isElse: true
+             ),
+           ])
+         ],
+         isElse: false
+         ),
+      ]),
+    ]):
+      raiseAssert "Fail"
+
+  #[
+  test "Get fields inside of generic proc":
+
+  test "Check if enum is case parameter":
+
+  ]#
+
 
 type
   Obj1 = object
