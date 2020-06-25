@@ -1,8 +1,7 @@
 import unittest
-import hmisc/hpprint
-import sugar, json, sequtils, tables
+import sugar, json, sequtils, tables, strformat
 
-import hmisc/halgorithm
+import hmisc/[halgorithm, helpers, hpprint]
 
 type
   InTest = object
@@ -106,7 +105,7 @@ suite "Tree mapping":
     # )
 
   test "{mapItBFStoSeq} filter json node :template:example:":
-    ## Map json tree to sequence. 
+    ## Map json tree to sequence.
     let jsonNode = parseJson """
       {"menu": {
         "id": "file",
@@ -252,6 +251,32 @@ suite "Simple sequence templates":
     assert res is seq[string]
     assert res == @["0 () 222", "1 () aaa"]
 
+  test "{mapPairs} Element index injection :value:template:":
+    assertEq [1, 2, 3].mapPairs((val: rhs, id: idx)),
+      @[(val: 1, id: 0), (val: 2, id: 1), (val: 3, id: 2)]
+
+  test "{mapPairs} Rezip-compare sequence of tuples :template:":
+    block: # Two sequence of identical types
+      var seq1 = @[(f1: 12, f2: "22"), (f1: 2, f2: "22")]
+      var seq2 = @[(f1: 22, f2: "22"), (f1: 2, f2: "20")]
+      assertEq zip(seq1, seq2).mapPairs(&"{lhs.f1}+{rhs.f1}={lhs.f2}/{rhs.f2}"),
+          @["12+22=22/22", "2+2=22/20"]
+
+    block: # Two sequence of different types
+      var seq1 = @[(f1: 12, f2: "22"), (f1: 2, f2: "22")]
+      var seq2 = @[(f3: 22, f4: "22"), (f3: 2, f4: "20")]
+      assertEq zip(seq1, seq2).mapPairs(&"{lhs.f1}+{rhs.f3}={lhs.f2}/{rhs.f4}"),
+          @["12+22=22/22", "2+2=22/20"]
+
+    block: # Get first mismatch for two sequences
+      let res = zip(
+        @[(1, 2), (3, 4), (3, 4), (3, 9)],
+        @[(1, 2), (3, 7), (3, 4), (3, 4)]
+      ).mapPairs(
+        (id: idx, ok: (lhs[0] == rhs[0]) and (lhs[1] == rhs[1]))
+      ).foldl((not a.ok).tern(a, b))
+      assertEq res, (id: 1, ok: false)
+
   test "{subnodesEq} :template:":
     type
       U = object
@@ -286,5 +311,3 @@ suite "Simple sequence templates":
     assert not [3, 4, 5].anyOfIt(it < 1)
     var tmp: seq[int]
     assert not tmp.anyOfIt(it > 9)
-
-

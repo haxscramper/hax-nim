@@ -160,8 +160,8 @@ proc nthType2*[T1, T2](a: (T1, T2)): T2 =
   discard
 
 template mapPairs*(s: untyped, op: untyped): untyped =
-  ## `mapIt` for object with `pairs`. `lhs` and `rhs` are injected
-  ## into scope
+  ## `mapIt` for object with `pairs`. `lhs`, `rhs` and `idx` are
+  ## injected into scope
   const openarrPairs = ((s is array) or (s is seq) or (s is openarray))
 
   when openarrPairs:
@@ -179,6 +179,7 @@ template mapPairs*(s: untyped, op: untyped): untyped =
       type TLhs = int
       type TRhs = type((items(s)))
 
+  var idx {.inject.}: int = 0
   type TRes = type((
     block:
       var lhs {.inject.}: TLhs
@@ -193,12 +194,14 @@ template mapPairs*(s: untyped, op: untyped): untyped =
         let lhs {.inject.} = lhsTmp
         let rhs {.inject.} = rhsTmp
         res.add op
+        inc idx
 
     else:
       for lhsTmp, rhsTmp in s:
         let lhs {.inject.} = lhsTmp
         let rhs {.inject.} = rhsTmp
         res.add op
+        inc idx
 
   else:
     when compiles(for k, v in pairs(s): discard):
@@ -206,12 +209,14 @@ template mapPairs*(s: untyped, op: untyped): untyped =
         let lhs {.inject.} = lhsTmp
         let rhs {.inject.} = rhsTmp
         res.add op
+        inc idx
     else:
       var lhs {.inject.}: int = 0
       for rhsTmp in s:
         let rhs {.inject.} = rhsTmp
         res.add op
         inc lhs
+        inc idx
 
   res
 
