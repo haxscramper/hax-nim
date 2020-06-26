@@ -165,15 +165,23 @@ proc getFields*(node: NimNode): seq[Field]
 
 proc getBranches(node: NimNode): seq[FieldBranch] =
   assert node.kind == nnkRecCase, &"Cannot get branches from node kind {node.kind}"
+  let caseType = $node[0][1]
   for branch in node[1..^1]:
     case branch.kind:
       of nnkOfBranch:
         result.add FieldBranch(
-          flds: branch.getFields(), isElse: false
+          value: ObjTree(kind: okConstant, constType: caseType, strLit: $branch[0].toStrLit()),
+          flds: branch[1].getFields(),
+          isElse: false
         )
       of nnkElse:
         result.add FieldBranch(
-          flds: branch.getFields(), isElse: true
+          value: ObjTree(
+            kind: okConstant,
+            constType: caseType,
+            strLit: $branch[0] & "---"
+          ),
+          flds: branch[1].getFields(), isElse: true
         )
       else:
         raiseAssert(&"Unexpected branch kind {branch.kind}")
@@ -210,19 +218,23 @@ proc getFields*(node: NimNode): seq[Field] =
             )
 
           of nnkIdentDefs: # Regular field definition
-            result.add Field(
-              isKind: false,
-              name: descr.name,
-              fldType: descr.fldType
-            )
+            result = getFields(elem)
 
           else:
             discard
 
-        result &= elem.getFields()
+        # result &= elem.getFields()
 
+    of nnkIdentDefs:
+      let descr = getFieldDescription(node)
+      result.add Field(
+        isKind: false,
+        name: descr.name,
+        fldType: descr.fldType
+      )
     else:
-      discard
+      raiseAssert(
+        &"Unexpected node kind in `getFields` {node.kind}")
 
 
 
@@ -237,8 +249,8 @@ macro makeFieldsLiteral*(node: typed): seq[Field] =
     else:
       raiseAssert("Unknown parameter kind: " & $kind)
 
-  defer:
-    echo result.toStrLit()
+  # defer:
+  #   echo result.toStrLit()
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs

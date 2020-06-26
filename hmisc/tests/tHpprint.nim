@@ -105,7 +105,6 @@ suite "Case object field iteration":
     assert U.makeFieldsLiteral() == @[
       Field(name: "f1", fldType: "int", isKind: false)]
 
-#[
   test "Single case field":
     type
       U = object
@@ -115,7 +114,8 @@ suite "Case object field iteration":
           of false:
             f2: float
 
-    if not (U.makeFieldsLiteral() == @[
+    let lhs = U.makeFieldsLiteral()
+    let rhs = @[
       Field(fldType: "bool", name: "kind", isKind: true, branches: @[
         FieldBranch(
           value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
@@ -128,8 +128,18 @@ suite "Case object field iteration":
           isElse: false
         ),
       ]
-    )]):
+    )]
+
+    if lhs != rhs:
+      # echo "\t\texpected"
+      # # pprint rhs
+      # echo rhs
+      # echo "\t\tfound"
+      # # pprint lhs
+      # echo lhs
       raiseAssert "Fail"
+
+#[
 
   test "Multiple case fields":
     type
@@ -213,7 +223,6 @@ suite "Case object field iteration":
       ]),
     ]):
       raiseAssert "Fail"
-
 ]#
 
   #[
