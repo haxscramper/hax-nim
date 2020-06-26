@@ -102,8 +102,10 @@ suite "Case object field iteration":
       U = object
         f1: int
 
-    assert U.makeFieldsLiteral() == emptySeq[Field]()
+    assert U.makeFieldsLiteral() == @[
+      Field(name: "f1", fldType: "int", isKind: false)]
 
+#[
   test "Single case field":
     type
       U = object
@@ -115,13 +117,15 @@ suite "Case object field iteration":
 
     if not (U.makeFieldsLiteral() == @[
       Field(fldType: "bool", name: "kind", isKind: true, branches: @[
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-         flds: @[ Field(fldType: "int", isKind: false, name: "f1") ],
-         isElse: false
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ Field(fldType: "int", isKind: false, name: "f1") ],
+          isElse: false
         ),
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
-         flds: @[ Field(fldType: "float", isKind: false, name: "f2") ],
-         isElse: false
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+          flds: @[ Field(fldType: "float", isKind: false, name: "f2") ],
+          isElse: false
         ),
       ]
     )]):
@@ -142,23 +146,27 @@ suite "Case object field iteration":
 
     if not (U.makeFieldsLiteral() == @[
       Field(fldType: "bool", name: "kind", isKind: true, branches: @[
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-         flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
-         isElse: false
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
+          isElse: false
          ),
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
-         flds: @[ Field(fldType: "float", isKind: false, name: "f21") ],
-         isElse: false
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+          flds: @[ Field(fldType: "float", isKind: false, name: "f21") ],
+          isElse: false
          ),
       ]),
       Field(fldType: "bool", name: "kind", isKind: true, branches: @[
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-         flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
-         isElse: false
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
+          isElse: false
         ),
-        (value: ObjTree(),
-         flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
-         isElse: true
+        FieldBranch(
+          value: ObjTree(),
+          flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
+          isElse: true
         ),
       ])
     ]):
@@ -179,28 +187,34 @@ suite "Case object field iteration":
 
     if not (U.makeFieldsLiteral() == @[
       Field(fldType: "bool", name: "kind", isKind: true, branches: @[
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-         flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
-         isElse: false
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
+          isElse: false
          ),
-        (value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
-         flds: @[
-           Field(fldType: "bool", name: "kind", isKind: true, branches: @[
-             (value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-              flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
-              isElse: false
-             ),
-             (value: ObjTree(),
-              flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
-              isElse: true
-             ),
-           ])
-         ],
+        FieldBranch(
+          value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+          flds: @[
+            Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+              FieldBranch(
+                value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+                flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
+                isElse: false
+              ),
+              FieldBranch(
+                value: ObjTree(),
+                flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
+                isElse: true
+              ),
+            ])
+          ],
          isElse: false
          ),
       ]),
     ]):
       raiseAssert "Fail"
+
+]#
 
   #[
   test "Get fields inside of generic proc":

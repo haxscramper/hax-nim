@@ -54,10 +54,11 @@ type
     okComposed ## Named list of field-value pairs with possilby
     ## different types for fields (and values). List name is optional
     ## (unnamed object), field name is optional (unnamed fields)
+
   FieldBranch* = object
-    value: ObjTree ## Match value for case branch
-    flds: seq[Field] ## Fields in the case branch
-    isElse: bool
+    value*: ObjTree ## Match value for case branch
+    flds*: seq[Field] ## Fields in the case branch
+    isElse*: bool
 
   Field* = object
     ## More complex representation of object's field - supports
@@ -162,17 +163,35 @@ func `==`(lhs, rhs: Field): bool =
 
 proc getFields*(node: NimNode): seq[Field]
 
-proc getBranches*(node: NimNode): seq[FieldBranch] =
-  assert node.kind == nnkRecCase
+proc getBranches(node: NimNode): seq[FieldBranch] =
+  assert node.kind == nnkRecCase, &"Cannot get branches from node kind {node.kind}"
   for branch in node[1..^1]:
-    assert branch.kind == nnkOfBranch
-    result.add FieldBranch(
-      flds: branch.getFields()
-    )
+    case branch.kind:
+      of nnkOfBranch:
+        result.add FieldBranch(
+          flds: branch.getFields(), isElse: false
+        )
+      of nnkElse:
+        result.add FieldBranch(
+          flds: branch.getFields(), isElse: true
+        )
+      else:
+        raiseAssert(&"Unexpected branch kind {branch.kind}")
 
-    # for field in branch[1..^1]:
-    #   assert field.kind in {nnkIdentDefs, nnkRecList}
 
+proc getFieldDescription(node: NimNode): tuple[name, fldType: string] =
+  case node.kind:
+    of nnkIdentDefs:
+      return (
+        name: $node[0],
+        fldType: $node[1]
+      )
+    of nnkRecCase:
+      return getFieldDescription(node[0])
+
+    else:
+      raiseAssert(
+        &"Cannot get field description from node of kind {node.kind}")
 
 proc getFields*(node: NimNode): seq[Field] =
   case node.kind:
@@ -180,23 +199,28 @@ proc getFields*(node: NimNode): seq[Field] =
       return node[2].getFields()
     of nnkRecList:
       for elem in node:
-        result &= elem.getFields()
-    of nnkRecCase:
-      let idefs = node[0]
-      var top = (field: $idefs[0], kindType: $idefs[1])
-      for branch in node[1..^1]:
-        for fld in branch[1]:
-          if fld.kind == nnkRecCase:
-            result = Field(
+        let descr = getFieldDescription(elem)
+        case elem.kind:
+          of nnkRecCase: # Case field
+            result.add Field(
               isKind: true,
-              branches: fld.getBranches()
-            )
-          else:
-            result = Field(
-              isKind: false
+              branches: getBranches(elem),
+              name: descr.name,
+              fldType: descr.fldType
             )
 
-      result.add top
+          of nnkIdentDefs: # Regular field definition
+            result.add Field(
+              isKind: false,
+              name: descr.name,
+              fldType: descr.fldType
+            )
+
+          else:
+            discard
+
+        result &= elem.getFields()
+
     else:
       discard
 
@@ -212,6 +236,9 @@ macro makeFieldsLiteral*(node: typed): seq[Field] =
       result = newLit(getFields(node.getTypeImpl()))
     else:
       raiseAssert("Unknown parameter kind: " & $kind)
+
+  defer:
+    echo result.toStrLit()
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
