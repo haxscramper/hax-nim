@@ -320,3 +320,13 @@ suite "Simple sequence templates":
     assert not [3, 4, 5].anyOfIt(it < 1)
     var tmp: seq[int]
     assert not tmp.anyOfIt(it > 9)
+
+suite "Misc algorithms":
+  test "{longestCommonSubsequence}":
+    template tmp(s1, s2, s3: untyped): untyped =
+      assertEq longestCommonSubsequence(s1, s2), s3
+
+    tmp(@[1, 2], @[1, 2], @[1, 2])
+    tmp(@[1, 2, 3], @[1, 2], @[1, 2])
+    tmp("GAC", "AGCAT", "GA")
+    tmp(@[1, 2, 3], @[1, 3], @[1, 3])
