@@ -159,66 +159,80 @@ proc nthType2*[T1, T2](a: (T1, T2)): T2 =
   ## `pairs` iterator
   discard
 
-template mapPairs*(s: untyped, op: untyped): untyped =
+macro mapPairs*(
+  inseq: untyped, op: untyped,
+  injectNames: untyped): untyped =
   ## `mapIt` for object with `pairs`. `lhs`, `rhs` and `idx` are
   ## injected into scope
-  const openarrPairs = ((s is array) or (s is seq) or (s is openarray))
+  assert injectNames.kind == nnkPar
+  var inj: tuple[lhs, rhs, idx: string] = ("lhs", "rhs", "idx")
+  for pair in injectNames:
+    case $pair[0]:
+      of "lhs": inj.lhs = $pair[1]
+      of "rhs": inj.rhs = $pair[1]
+      of "idx": inj.idx = $pair[1]
 
-  when openarrPairs:
-    when s[0] is tuple:
-      type TLhs = type((s[0][0]))
-      type TRhs = type((s[0][1]))
-    else:
-      type TLhs = int
-      type TRhs = type((s[0]))
-  else:
-    when compiles(for k, v in pairs(s): discard):
-      type TLhs = type((pairs(s).nthType1))
-      type TRhs = type((pairs(s).nthType2))
-    else:
-      type TLhs = int
-      type TRhs = type((items(s)))
+  let
+    lhsId = ident(inj.lhs)
+    rhsId = ident(inj.rhs)
+    idxId = ident(inj.idx)
 
-  var idx {.inject.}: int = 0
-  type TRes = type((
+  quote do:
     block:
-      var lhs {.inject.}: TLhs
-      var rhs {.inject.}: TRhs
-      op))
+      const openarrPairs = ((`inseq` is array) or (`inseq` is seq) or (`inseq` is openarray))
 
-  var res: seq[TRes]
+      when openarrPairs:
+        when `inseq`[0] is tuple:
+          type TLhs = type((`inseq`[0][0]))
+          type TRhs = type((`inseq`[0][1]))
+        else:
+          type TLhs = int
+          type TRhs = type((`inseq`[0]))
+      else:
+        when compiles(for k, v in pairs(`inseq`): discard):
+          type TLhs = type((pairs(`inseq`).nthType1))
+          type TRhs = type((pairs(`inseq`).nthType2))
+        else:
+          type TLhs = int
+          type TRhs = type((items(`inseq`)))
 
-  when openarrPairs:
-    when s[0] is tuple:
-      for (lhsTmp, rhsTmp) in s:
-        let lhs {.inject.} = lhsTmp
-        let rhs {.inject.} = rhsTmp
-        res.add op
-        inc idx
+      var `idxId` {.inject.}: int = 0
+      type TRes = type((
+        block:
+          var `lhsId` {.inject.}: TLhs
+          var `rhsId` {.inject.}: TRhs
+          `op`))
 
-    else:
-      for lhsTmp, rhsTmp in s:
-        let lhs {.inject.} = lhsTmp
-        let rhs {.inject.} = rhsTmp
-        res.add op
-        inc idx
+      var res: seq[TRes]
 
-  else:
-    when compiles(for k, v in pairs(s): discard):
-      for lhsTmp, rhsTmp in s:
-        let lhs {.inject.} = lhsTmp
-        let rhs {.inject.} = rhsTmp
-        res.add op
-        inc idx
-    else:
-      var lhs {.inject.}: int = 0
-      for rhsTmp in s:
-        let rhs {.inject.} = rhsTmp
-        res.add op
-        inc lhs
-        inc idx
+      when openarrPairs:
+        when `inseq`[0] is tuple:
+          for (`lhsId`, `rhsId`) in `inseq`:
+            res.add `op`
+            inc `idxId`
 
-  res
+        else:
+          for `lhsId`, `rhsId` in `inseq`:
+            res.add `op`
+            inc `idxId`
+
+      else:
+        when compiles(for k, v in pairs(`inseq`): discard):
+          for `lhsId`, `rhsId` in `inseq`:
+            res.add `op`
+            inc `idxId`
+        else:
+          var lhs {.inject.}: int = 0
+          for `rhsId` in `inseq`:
+            res.add `op`
+            inc `lhsId`
+            inc `idxId`
+
+      res
+
+
+template mapPairs*(inseq: untyped, op: untyped): untyped =
+  mapPairs(inseq, op, (lhs: lhs, rhs: rhs, idx: idx))
 
 proc max*[T](x: openArray[T], default: T): T =
   ## The maximum value of `x`. ``T`` needs to have a ``<`` operator.
@@ -437,7 +451,7 @@ macro mapItTreeDFS*(
                           result.add subn
       )
 
-import tables
+import tables, strutils
 
 proc longestCommonSubsequence*[T](x, y: seq[T]): seq[T] =
   # Just copied from https://en.wikipedia.org/wiki/Longest_common_subsequence_problem
@@ -460,7 +474,11 @@ proc longestCommonSubsequence*[T](x, y: seq[T]): seq[T] =
     mem[(i, j)]
 
   echo "\t\t===="
-  echo " ", x.mapPairs(idx).join("")
+  echo " ", toSeq(y.mapPairs($idx)).join(" ")
+  # echo toSeq(x.mapPairs($idx & y.mapPairs(
+
+  # )))
+
   proc backtrack(i, j: int): seq[T] =
     echo &"At position ({i}, {j}), x: {x}, y: {y}"
     defer:

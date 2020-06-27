@@ -255,6 +255,20 @@ suite "Simple sequence templates":
     assertEq [1, 2, 3].mapPairs((val: rhs, id: idx)),
       @[(val: 1, id: 0), (val: 2, id: 1), (val: 3, id: 2)]
 
+  test "{mapPairs} Custom injected name :macro:value:":
+    ## Add column and row index to each value in matrix
+    assertEq @[
+      @[1, 3],
+      @[4, 5]
+    ].mapPairs(rhs.mapPairs(
+      col + row + val,
+      (idx: row, rhs: val)
+    ), (idx: col)),
+      @[
+        @[1, 4],
+        @[5, 7]
+      ]
+
   test "{mapPairs} Rezip-compare sequence of tuples :template:":
     block: # Two sequence of identical types
       var seq1 = @[(f1: 12, f2: "22"), (f1: 2, f2: "22")]
