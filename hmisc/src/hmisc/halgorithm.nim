@@ -459,69 +459,36 @@ proc longestCommonSubsequence*[T](x, y: seq[T]): seq[T] =
   proc lcs(i, j: int): int =
     if (i, j) notin mem:
       mem[(i, j)] =
-        if i > 0 and j > 0 and x[i] == y[j]:
-          lcs(i - 1, j - 1) + 1 # NOTE
-        elif i > 0 and j > 0 and x[i] != y[j]:
+        if i == -1 or j == -1:
+          0
+        elif x[i] == y[j]:
+          lcs(i - 1, j - 1) + 1
+        else:
           max(
             lcs(i, j - 1),
             lcs(i - 1, j)
           )
-        else:
-          assert i == 0 or j == 0
-          0
-
 
     mem[(i, j)]
-
-  echo "\t\t===="
-  echo " ", toSeq(y.mapPairs($idx)).join(" ")
-  # echo toSeq(x.mapPairs($idx & y.mapPairs(
-
-  # )))
-
-  proc backtrack(i, j: int): seq[T] =
-    echo &"At position ({i}, {j}), x: {x}, y: {y}"
-    defer:
-      echo result
-
-    if i == 0 or j == 0:
-      @[x[i]]
-    elif x[i] == y[j]:
-      backtrack(i - 1, j - 1) & @[x[i]]
-    elif mem[(i, j - 1)] > mem[(i - 1, j)]:
-      backtrack(i, j - 1)
-    else:
-      backtrack(i - 1, j)
 
   let
     m = x.len - 1
     n = y.len - 1
 
-  discard lcs(m, n)
-  echo mem
-  return backtrack(m, n)
+  proc backtrack(i, j: int): seq[T] =
+    if i == 0:
+      @[x[i]]
+    elif j == 0:
+      @[y[j]]
+    elif x[i] == y[j]:
+      backtrack(i - 1, j - 1) & @[x[i]]
+    elif lcs(i, j - 1) > lcs(i - 1, j):
+      backtrack(i, j - 1)
+    else:
+      backtrack(i - 1, j)
+
+  result = backtrack(m, n)
+
 
 proc longestCommonSubsequence*[T](x, y: openarray[T]): seq[T] =
   longestCommonSubsequence(toSeq(x), toSeq(y))
-
-
-
-# when isMainModule:
-#   echo @[(1,2), (1,9), (4,32), (1,3)].twoPassSortByIt(it[0], it[1])
-
-
-# TODO implement
-# template maxIt(sequence, operation: untyped): untyped  =
-#   assert sequence.len > 0, "cannot find max of empty sequence"
-#   var result: type(sequence[0]) = sequence[0]
-#   for i in 1..<sequence.len:
-#     let
-#       lhs {.inject.} = result
-#       rhs {.inject.} = sequence[i]
-
-#     if operation: # lhs is 'smaller' than rhs
-#       result = lhs
-#     else:
-#       result = rhs
-
-#   return result

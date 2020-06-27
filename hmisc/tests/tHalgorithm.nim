@@ -191,6 +191,8 @@ suite "Tree mapping":
           sub: subt
         )) == outval
 
+import strutils
+
 suite "Simple sequence templates":
   test "{allOfIt} empty sequence :template:":
     var empty: seq[int]
@@ -269,6 +271,29 @@ suite "Simple sequence templates":
         @[5, 7]
       ]
 
+  test "{mapPairs} Print 2d array :macro:example:":
+    ## Absolutely useless example - use for loop instead.
+    let mem = @[
+      @[1, 3, 4, 5],
+      @[4, 5, 6, 7]
+    ]
+
+    let res = (
+      @["[   " & toSeq(mem[0].mapPairs($lhs)).join(" ")] &
+        toSeq(
+          mem.mapPairs(
+            $i & " | " &
+              rhs.mapPairs(mem[i][j], (idx: j)).join(" "), (idx: i)
+          )
+        )
+    ).join("\n")
+
+    assertEq res, """
+    [   0 1 2 3
+    0 | 1 3 4 5
+    1 | 4 5 6 7""".dedent
+
+
   test "{mapPairs} Rezip-compare sequence of tuples :template:":
     block: # Two sequence of identical types
       var seq1 = @[(f1: 12, f2: "22"), (f1: 2, f2: "22")]
@@ -336,11 +361,14 @@ suite "Simple sequence templates":
     assert not tmp.anyOfIt(it > 9)
 
 suite "Misc algorithms":
-  test "{longestCommonSubsequence}":
+  test "{longestCommonSubsequence} :generic:value:":
     template tmp(s1, s2, s3: untyped): untyped =
       assertEq longestCommonSubsequence(s1, s2), s3
 
     tmp(@[1, 2], @[1, 2], @[1, 2])
     tmp(@[1, 2, 3], @[1, 2], @[1, 2])
     tmp("GAC", "AGCAT", "GA")
-    tmp(@[1, 2, 3], @[1, 3], @[1, 3])
+    tmp("XMJYAUZ", "MZJAWXU", "MJAU")
+    tmp("AABC", "BC", "BC")
+    tmp("AC", "ABC", "AC")
+    tmp("AB", "A", "A")
