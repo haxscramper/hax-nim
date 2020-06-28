@@ -509,18 +509,19 @@ proc fuzzyMatchRecursive[Seq, Item](
   scoreFunc: proc(patt, other: Seq, matches: seq[int]): int
     ): tuple[ok: bool, score: int] =
 
-  echov &"Start with matches: {matches}, patt: {pattIdx}, other: {otherIdx}"
-  defer: echov &"Finished, buffer: {matches}"
 
   var otherIdx = otherIdx
   var pattIdx = pattIdx
-  var matches = matches
 
   if (recLevel > maxRec) or
      (pattIdx == patt.len) or
      (otherIdx == other.len):
     result.ok = false
     return result
+
+  # echov &"patt idx: {pattIdx}, other idx: {otherIdx}"
+  # defer:
+  #   echov &"Finished, buffer: {matches}, score: {result.score}"
 
 
   var hadRecursiveMatch: bool = false
@@ -530,9 +531,6 @@ proc fuzzyMatchRecursive[Seq, Item](
   var succMatchBuf: seq[int] = matches
   while (pattIdx < patt.len) and (otherIdx < other.len):
     if cmpEq(patt[pattIdx], other[otherIdx]):
-      if not (succStart < matches.len):
-        return
-
       let recRes = fuzzyMatchRecursive(
         patt,
         other,
@@ -546,42 +544,44 @@ proc fuzzyMatchRecursive[Seq, Item](
         scoreFunc
       )
 
-      # echo &"Recurisive: {matches} -> {succMatchBuf}"
-      # echo &"Rec score: {recRes.score}, succ idx: {succStart}"
+      # echov &"Recursive test score: {recRes.score}, current: {bestRecursiveScore}"
       if (not hadRecursiveMatch) or (recRes.score > bestRecursiveScore):
+        # echov &"Updated best recursive score, sub buf: {succMatchBuf}"
         bestRecursiveScore = recRes.score
         bestRecursiveMatches = succMatchBuf
 
+      matches[pattIdx] = otherIdx
+      succMatchBuf[pattIdx] = otherIdx
+
       hadRecursiveMatch = true
 
-      matches[pattIdx] = otherIdx
-      echov &"Has match on idx: {otherIdx}, patt: {pattIdx}, matches: {matches}"
+      # echov &"Has match on idx: {otherIdx}, patt: {pattIdx}, matches: {matches}"
       inc pattIdx
-      inc succStart
 
     inc otherIdx
 
 
   let fullMatch: bool = (pattIdx == patt.len)
-  let currentScore = scoreFunc(patt, other, bestRecursiveMatches)
+  let currentScore = scoreFunc(patt, other, matches)
+  # echov &"Score: {currentScore}, matches: {matches}, best rec: {bestRecursiveScore} {bestRecursiveMatches}"
 
-  echov &"Full match: {fullMatch}, {pattIdx} == {patt.len}"
+  # echov &"Full match: {fullMatch}, {pattIdx} == {patt.len}"
   if fullMatch:
     result.score = currentScore
 
   if hadRecursiveMatch and (not fullMatch or (bestRecursiveScore > currentScore)):
-    echov &"Recursive had better results: {bestRecursiveScore} > {currentScore}"
+    # echov &"Recursive had better results: {bestRecursiveScore} > {currentScore}"
     result.score = bestRecursiveScore
     result.ok = true
     matches = bestRecursiveMatches
-    echov &"Assign to matches: {matches}"
+    # echov &"Assign to matches: {matches}"
     # echo &"Recursive match has better results: {bestRecursiveMatches}"
   elif fullMatch:
     # echov "Full match completed"
-    echov &"Full match results: {matches}"
+    # echov &"Full match results: {matches}"
     result.ok = true
   else:
-    echov &"Else"
+    # echov &"Else"
     result.ok = false
 
 
@@ -595,7 +595,7 @@ proc fuzzyMatchImpl[Seq, Item](
   ## other matches pattern.
   var matchBuf: seq[int] = newSeqWith(patt.len, 0)
   var succStart: int
-  echov &"Calling recursive implementation: input buffer {matchBuf}"
+  # echov &"Calling recursive implementation: input buffer {matchBuf}"
   let recMatch = fuzzyMatchRecursive[Seq, Item](
     patt = patt,
     other = other,
@@ -609,7 +609,7 @@ proc fuzzyMatchImpl[Seq, Item](
     scoreFunc = matchScore
   )
 
-  echov &"Finished recursive implementation, buffer: {matchBuf}"
+  # echov &"Finished recursive implementation, buffer: {matchBuf}"
 
   return (
     ok: recMatch.ok,

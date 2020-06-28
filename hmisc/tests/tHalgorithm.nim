@@ -376,13 +376,33 @@ suite "Misc algorithms":
     tmp("AB", "A", "A")
 
   test "{fuzzyMatch} fuzzy string matching":
-    # echo fuzzyMatch(
-    #   "<<", "<<",
-    #   proc(p, o: string, m: seq[int]): int = m.len
-    # )
+    template test(
+      patt, input: string, expr: untyped, expected: seq[int]): untyped =
+      let res = fuzzyMatch(
+        patt, input,
+        proc(p, o: string, m: seq[int]): int =
+          let p {.inject.} = p
+          let o {.inject.} = o
+          let m {.inject.} = m
+          expr
+      )
 
-    echo fuzzyMatch(
-      "123", "01234",
-      proc(p, o: string, m: seq[int]): int =
-        m.sum()
-    )
+      assert res.ok
+      assertEq res.matches, expected
+
+      if res.matches != expected:
+        echo input
+        var buf = " ".repeat(input.len)
+        for pattIdx, inIdx in res.matches:
+          buf[inIdx] = patt[pattIdx]
+
+        echo buf
+
+        buf = " ".repeat(input.len)
+        for pattIdx, inIdx in expected:
+          buf[inIdx] = patt[pattIdx]
+
+        echo buf
+
+    test("123", "010233", m.sum() * 7, @[1, 3, 5])
+    test("123", "01122330", 1, @[1, 3, 5])
