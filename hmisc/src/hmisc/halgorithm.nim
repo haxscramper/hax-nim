@@ -1,4 +1,5 @@
 import sequtils
+import strutils, strformat
 import macros
 import sugar
 
@@ -454,7 +455,8 @@ macro mapItTreeDFS*(
 import tables, strutils
 
 proc longestCommonSubsequence*[T](x, y: seq[T]): seq[T] =
-  # Just copied from https://en.wikipedia.org/wiki/Longest_common_subsequence_problem
+  # TODO Multiple subsequences
+  # TODO Weighted subsequences
   var mem: CountTable[(int, int)]
   proc lcs(i, j: int): int =
     if (i, j) notin mem:
@@ -492,3 +494,138 @@ proc longestCommonSubsequence*[T](x, y: seq[T]): seq[T] =
 
 proc longestCommonSubsequence*[T](x, y: openarray[T]): seq[T] =
   longestCommonSubsequence(toSeq(x), toSeq(y))
+
+
+template echov*(other: varargs[string, `$`]): untyped =
+  let pref = "| ".repeat(getStackTraceEntries().len)
+  echo pref, other.join(" ")
+
+proc fuzzyMatchRecursive[Seq, Item](
+  patt, other: Seq,
+  pattIdx, otherIdx: int,
+  recLevel, maxRec: int,
+  succStart: var int, matches: var seq[int],
+  cmpEq: proc(lhs, rhs: Item): bool,
+  scoreFunc: proc(patt, other: Seq, matches: seq[int]): int
+    ): tuple[ok: bool, score: int] =
+
+  echov &"Start with matches: {matches}, patt: {pattIdx}, other: {otherIdx}"
+  defer: echov &"Finished, buffer: {matches}"
+
+  var otherIdx = otherIdx
+  var pattIdx = pattIdx
+  var matches = matches
+
+  if (recLevel > maxRec) or
+     (pattIdx == patt.len) or
+     (otherIdx == other.len):
+    result.ok = false
+    return result
+
+
+  var hadRecursiveMatch: bool = false
+  var bestRecursiveScore: int = 0
+  var bestRecursiveMatches: seq[int]
+
+  var succMatchBuf: seq[int] = matches
+  while (pattIdx < patt.len) and (otherIdx < other.len):
+    if cmpEq(patt[pattIdx], other[otherIdx]):
+      if not (succStart < matches.len):
+        return
+
+      let recRes = fuzzyMatchRecursive(
+        patt,
+        other,
+        pattIdx,
+        otherIdx + 1,
+        recLevel + 1,
+        maxRec,
+        succStart,
+        succMatchBuf,
+        cmpEq,
+        scoreFunc
+      )
+
+      # echo &"Recurisive: {matches} -> {succMatchBuf}"
+      # echo &"Rec score: {recRes.score}, succ idx: {succStart}"
+      if (not hadRecursiveMatch) or (recRes.score > bestRecursiveScore):
+        bestRecursiveScore = recRes.score
+        bestRecursiveMatches = succMatchBuf
+
+      hadRecursiveMatch = true
+
+      matches[pattIdx] = otherIdx
+      echov &"Has match on idx: {otherIdx}, patt: {pattIdx}, matches: {matches}"
+      inc pattIdx
+      inc succStart
+
+    inc otherIdx
+
+
+  let fullMatch: bool = (pattIdx == patt.len)
+  let currentScore = scoreFunc(patt, other, bestRecursiveMatches)
+
+  echov &"Full match: {fullMatch}, {pattIdx} == {patt.len}"
+  if fullMatch:
+    result.score = currentScore
+
+  if hadRecursiveMatch and (not fullMatch or (bestRecursiveScore > currentScore)):
+    echov &"Recursive had better results: {bestRecursiveScore} > {currentScore}"
+    result.score = bestRecursiveScore
+    result.ok = true
+    matches = bestRecursiveMatches
+    echov &"Assign to matches: {matches}"
+    # echo &"Recursive match has better results: {bestRecursiveMatches}"
+  elif fullMatch:
+    # echov "Full match completed"
+    echov &"Full match results: {matches}"
+    result.ok = true
+  else:
+    echov &"Else"
+    result.ok = false
+
+
+
+proc fuzzyMatchImpl[Seq, Item](
+  patt, other: Seq,
+  matchScore: proc(patt, other: Seq, matches: seq[int]): int
+                  ): tuple[ok: bool, score: int, matches: seq[int]] =
+  ## Perform fuzzy matching of `other` agains `patt`. Return `score` -
+  ## how similar two sequences are and `matches` - indices for which
+  ## other matches pattern.
+  var matchBuf: seq[int] = newSeqWith(patt.len, 0)
+  var succStart: int
+  echov &"Calling recursive implementation: input buffer {matchBuf}"
+  let recMatch = fuzzyMatchRecursive[Seq, Item](
+    patt = patt,
+    other = other,
+    pattIdx = 0,
+    otherIdx = 0,
+    recLevel = 0,
+    maxRec = 10,
+    succStart = succStart,
+    matches = matchBuf,
+    cmpEq = (proc(lhs, rhs: Item): bool = (lhs == rhs)),
+    scoreFunc = matchScore
+  )
+
+  echov &"Finished recursive implementation, buffer: {matchBuf}"
+
+  return (
+    ok: recMatch.ok,
+    score: recMatch.score,
+    matches: matchBuf
+  )
+
+proc fuzzyMatch*[T](
+  patt, other: openarray[T],
+  matchScore: proc(patt, other: openarray[T], matches: seq[int]): int
+                 ): tuple[ok: bool, score: int, matches: seq[int]] =
+  fuzzyMatchImpl[openarray[T], T](patt, other, matchScore)
+
+
+proc fuzzyMatch*(
+  patt, other: string,
+  matchScore: proc(patt, other: string, matches: seq[int]): int
+                 ): tuple[ok: bool, score: int, matches: seq[int]] =
+  fuzzyMatchImpl[string, char](patt, other, matchScore)

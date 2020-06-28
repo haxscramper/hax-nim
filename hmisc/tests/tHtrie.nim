@@ -74,3 +74,13 @@ suite "Main":
     assertEq tr1[[1, 2, 3]], 888
     assertEq tr1[[2, 2, 3]], 898
     assertEq tr1[[1, 9]], 8
+
+  test "{prefixedValues}":
+    var tr: Trie[int, int]
+    tr[[0, 1, 2]] = 9
+    tr[[0, 1]] = 8
+    tr[[0]] = 7
+
+    assertEq toSeq(tr.prefixedValues([0, 1, 2])), @[7, 8, 9]
+    assertEq toSeq(
+      tr.prefixedValues([0, 1, 2], topDown = false)), @[9, 8, 7]

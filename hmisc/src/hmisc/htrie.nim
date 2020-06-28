@@ -77,15 +77,34 @@ proc prefixHasValue*[Key, Val](
     else:
       return false
 
-iterator parentValues*[Key, Val](
-  trie: Trie[Key, Val], path: openarray[Key]): Val =
+iterator prefixedValues*[Key, Val](
+  trie: Trie[Key, Val], path: openarray[Key], topDown: bool = true): Val =
+
+  # for key in path:
+  #   if path[0 .. pathEnd] in trie:
+  #     yield trie[path[0 .. pathEnd]]
+
+  #   pathEnd += direction
+
+  var buf: seq[Val]
   var curr = trie
   for key in path:
     if curr.value.isSome():
-      yield curr.value.get()
+      buf.add curr.value.get()
 
     if key in curr.subn:
       curr = curr.subn[key]
+
+  if curr.value.isSome():
+    buf.add curr.value.get()
+
+  if topDown:
+    for val in buf:
+      yield val
+  else:
+    for val in buf.reversed():
+      yield val
+
 
 proc paths*[Key, Val](trie: Trie[Key, Val]): seq[seq[Key]] =
   # echo trie

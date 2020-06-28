@@ -360,6 +360,8 @@ suite "Simple sequence templates":
     var tmp: seq[int]
     assert not tmp.anyOfIt(it > 9)
 
+import math
+
 suite "Misc algorithms":
   test "{longestCommonSubsequence} :generic:value:":
     template tmp(s1, s2, s3: untyped): untyped =
@@ -372,3 +374,15 @@ suite "Misc algorithms":
     tmp("AABC", "BC", "BC")
     tmp("AC", "ABC", "AC")
     tmp("AB", "A", "A")
+
+  test "{fuzzyMatch} fuzzy string matching":
+    # echo fuzzyMatch(
+    #   "<<", "<<",
+    #   proc(p, o: string, m: seq[int]): int = m.len
+    # )
+
+    echo fuzzyMatch(
+      "123", "01234",
+      proc(p, o: string, m: seq[int]): int =
+        m.sum()
+    )

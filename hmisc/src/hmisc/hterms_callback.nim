@@ -3,8 +3,10 @@
 
 import hashes, sequtils, tables, strformat, strutils
 import helpers, deques, intsets, halgorithm
+export tables, intsets
 
 import htrie
+export htrie
 
 type
   TermKind* = enum
@@ -380,8 +382,10 @@ proc reduce*[Obj, VarSym, FunSym, Val](
               # Avoid using this rule again on the same path
               (reduceConstraints == rcApplyOnce) and
               (rewPaths.prefixHasValue(path)) and
-              toSeq(rewPaths.parentValues(path)).anyOfIt(idx in it)
+              toSeq(rewPaths.prefixedValues(path)).anyOfIt(idx in it)
             ):
+              # echo "===="
+              # echo &"Skipping rule {idx} at path {path}"
               continue
 
             let lhs: TermMatcher[VarSym, Obj] = rule.rule
@@ -400,10 +404,18 @@ proc reduce*[Obj, VarSym, FunSym, Val](
 
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
-              # echo "reducing at path ", path
-              # echo rewPaths.paths()
-              # echo path
+              # echo "===="
+              # echo &"Using rule {idx} at path {path}"
+              # echo &"Reduction constraints: {reduceConstraints}"
               # echo "has prefix - ", rewPaths.prefixHasValue(path)
+              # echo &"Known paths: "
+              # for path in rewPaths.paths():
+              #   echo &"Path: {path}, value: ", toSeq(rewPaths[path])
+
+              # echo "(reduceConstraints == rcApplyOnce) and", (reduceConstraints == rcApplyOnce)
+              # echo "(rewPaths.prefixHasValue(path)) and", (rewPaths.prefixHasValue(path))
+              # echo "toSeq(rewPaths.parentValues(path)).anyOfIt(idx in it)", toSeq(rewPaths.prefixedValues(path)).anyOfIt(idx in it)
+
               case reduceConstraints:
                 of rcApplyOnce:
                   if path notin rewPaths:
@@ -412,8 +424,6 @@ proc reduce*[Obj, VarSym, FunSym, Val](
                   rewPaths[path].incl idx
                 of rcRewriteOnce:
                   rewPaths[path] = IntSet()
-                  # echo "Added path to rewritten"
-                  # echo "has prefix - ", rewPaths.prefixHasValue(path)
 
                 else:
                   discard
