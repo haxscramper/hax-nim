@@ -105,7 +105,6 @@ suite "Case object field iteration":
     assert U.makeFieldsLiteral() == @[
       Field(name: "f1", fldType: "int", isKind: false)]
 
-
   test "Multiple fields on the same level":
     type
       U = object
@@ -123,10 +122,10 @@ suite "Case object field iteration":
     ]
 
     if generated != expected:
-      "/tmp/generated.nim".writeFile(pstring generated)
-      "/tmp/expected.nim".writeFile(pstring expected)
-      shell:
-        cwdiff /tmp/expected.nim /tmp/generated.nim
+      # "/tmp/generated.nim".writeFile(pstring generated)
+      # "/tmp/expected.nim".writeFile(pstring expected)
+      # shell:
+      #   cwdiff /tmp/expected.nim /tmp/generated.nim
 
       quit 1
 
@@ -270,11 +269,48 @@ suite "Case object field iteration":
     generic(U())
 
 
+  test "Get all kind fields":
+    type
+      U = object
+        case kind1: bool
+          of true: f11: int
+          of false:
+            case kind2: char
+              of 'a':
+                f12: int
+              else:
+                f22: float
 
-      #[
-  test "Check if enum is case parameter":
+        case kind3: bool
+          of true:
+            f31: float
+          of false:
+            f32: seq[seq[seq[seq[seq[set[char]]]]]]
 
-  ]#
+
+    let generated = makeFieldsLiteral(U).getKindFields()
+    let expected = @[
+      Field(
+        name: "kind1", fldType: "bool", isKind: true, branches: @[
+          FieldBranch(
+            value: ObjTree(
+              kind: okConstant, constType: "bool", strLit: "false"),
+            flds: @[
+              Field(name: "kind2", fldType: "char", isKind: true)
+            ]
+          )
+        ]
+      ),
+      Field(name: "kind3", fldType: "bool", isKind: true)
+    ]
+
+    if generated != expected:
+      "/tmp/generated.nim".writeFile(pstring generated)
+      "/tmp/expected.nim".writeFile(pstring expected)
+      shell:
+        cwdiff /tmp/expected.nim /tmp/generated.nim
+
+      quit 1
 
 
 type

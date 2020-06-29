@@ -187,7 +187,7 @@ proc getFieldDescription(node: NimNode): tuple[name, fldType: string] =
     of nnkIdentDefs:
       return (
         name: $node[0],
-        fldType: $node[1]
+        fldType: $(node[1].toStrLit)
       )
     of nnkRecCase:
       return getFieldDescription(node[0])
@@ -231,7 +231,22 @@ proc getFields*(node: NimNode): seq[Field] =
       raiseAssert(
         &"Unexpected node kind in `getFields` {node.kind}")
 
-
+proc getKindFields*(flds: seq[Field]): seq[Field] =
+  for fld in flds:
+    if fld.isKind:
+      result.add Field(
+        isKind: true,
+        name: fld.name,
+        value: fld.value,
+        fldType: fld.fldType,
+        branches: fld.branches.mapIt(
+          FieldBranch(
+            value: it.value,
+            isElse: it.isElse,
+            flds: it.flds.getKindFields()
+          )
+        ).filterIt(it.flds.len > 0)
+      )
 
 macro makeFieldsLiteral*(node: typed): seq[Field] =
   let kind = node.getTypeImpl().kind
