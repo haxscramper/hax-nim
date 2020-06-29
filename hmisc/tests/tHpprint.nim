@@ -131,15 +131,7 @@ suite "Case object field iteration":
     )]
 
     if lhs != rhs:
-      # echo "\t\texpected"
-      # # pprint rhs
-      # echo rhs
-      # echo "\t\tfound"
-      # # pprint lhs
-      # echo lhs
       raiseAssert "Fail"
-
-#[
 
   test "Multiple case fields":
     type
@@ -154,8 +146,9 @@ suite "Case object field iteration":
           else:
             f22: float
 
-    if not (U.makeFieldsLiteral() == @[
-      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+    let generated = U.makeFieldsLiteral()
+    let expected  = @[
+      Field(fldType: "bool", name: "kind1", isKind: true, branches: @[
         FieldBranch(
           value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
           flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
@@ -167,9 +160,9 @@ suite "Case object field iteration":
           isElse: false
          ),
       ]),
-      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+      Field(fldType: "char", name: "kind2", isKind: true, branches: @[
         FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+          value: ObjTree(kind: okConstant, constType: "char", strLit: "'a'"),
           flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
           isElse: false
         ),
@@ -179,7 +172,10 @@ suite "Case object field iteration":
           isElse: true
         ),
       ])
-    ]):
+    ]
+
+
+    if generated != expected:
       raiseAssert "Fail"
 
   test "Nested case fields":
@@ -194,9 +190,9 @@ suite "Case object field iteration":
               else:
                 f22: float
 
-
-    if not (U.makeFieldsLiteral() == @[
-      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+    let generated = U.makeFieldsLiteral()
+    let expected = @[
+      Field(fldType: "bool", name: "kind1", isKind: true, branches: @[
         FieldBranch(
           value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
           flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
@@ -205,9 +201,10 @@ suite "Case object field iteration":
         FieldBranch(
           value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
           flds: @[
-            Field(fldType: "bool", name: "kind", isKind: true, branches: @[
+            Field(fldType: "char", name: "kind2", isKind: true, branches: @[
               FieldBranch(
-                value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
+                value: ObjTree(
+                  kind: okConstant, constType: "char", strLit: "'a'"),
                 flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
                 isElse: false
               ),
@@ -221,9 +218,12 @@ suite "Case object field iteration":
          isElse: false
          ),
       ]),
-    ]):
+    ]
+
+    if generated != expected:
+      "/tmp/generated.nim".writeFile(pstring generated)
+      "/tmp/expected.nim".writeFile(pstring expected)
       raiseAssert "Fail"
-]#
 
   #[
   test "Get fields inside of generic proc":

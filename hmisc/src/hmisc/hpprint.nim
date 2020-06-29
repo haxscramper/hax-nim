@@ -176,12 +176,7 @@ proc getBranches(node: NimNode): seq[FieldBranch] =
         )
       of nnkElse:
         result.add FieldBranch(
-          value: ObjTree(
-            kind: okConstant,
-            constType: caseType,
-            strLit: $branch[0] & "---"
-          ),
-          flds: branch[1].getFields(), isElse: true
+          flds: branch[0].getFields(), isElse: true
         )
       else:
         raiseAssert(&"Unexpected branch kind {branch.kind}")
