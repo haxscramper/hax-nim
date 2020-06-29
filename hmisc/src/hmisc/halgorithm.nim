@@ -502,9 +502,9 @@ template echov*(other: varargs[string, `$`]): untyped =
 
 proc fuzzyMatchRecursive[Seq, Item](
   patt, other: Seq,
-  pattIdx, otherIdx: int,
+  pattIdx, otherIdx: int8,
   recLevel, maxRec: int,
-  succStart: var int, matches: var seq[int],
+  succStart: var int, matches: var seq[int8],
   cmpEq: proc(lhs, rhs: Item): bool,
   scoreFunc: proc(patt, other: Seq, matches: seq[int]): int
     ): tuple[ok: bool, score: int] =
@@ -519,16 +519,11 @@ proc fuzzyMatchRecursive[Seq, Item](
     result.ok = false
     return result
 
-  # echov &"patt idx: {pattIdx}, other idx: {otherIdx}"
-  # defer:
-  #   echov &"Finished, buffer: {matches}, score: {result.score}"
-
-
   var hadRecursiveMatch: bool = false
   var bestRecursiveScore: int = 0
-  var bestRecursiveMatches: seq[int]
+  var bestRecursiveMatches: seq[int8]
 
-  var succMatchBuf: seq[int] = matches
+  var succMatchBuf: seq[int8] = matches
   while (pattIdx < patt.len) and (otherIdx < other.len):
     if cmpEq(patt[pattIdx], other[otherIdx]):
       let recRes = fuzzyMatchRecursive(
@@ -562,7 +557,7 @@ proc fuzzyMatchRecursive[Seq, Item](
 
 
   let fullMatch: bool = (pattIdx == patt.len)
-  let currentScore = scoreFunc(patt, other, matches)
+  let currentScore = scoreFunc(patt, other, matches.mapIt(it.int))
   # echov &"Score: {currentScore}, matches: {matches}, best rec: {bestRecursiveScore} {bestRecursiveMatches}"
 
   # echov &"Full match: {fullMatch}, {pattIdx} == {patt.len}"
@@ -593,8 +588,8 @@ proc fuzzyMatchImpl[Seq, Item](
   ## Perform fuzzy matching of `other` agains `patt`. Return `score` -
   ## how similar two sequences are and `matches` - indices for which
   ## other matches pattern.
-  var matchBuf: seq[int] = newSeqWith(patt.len, 0)
-  var succStart: int
+  var matchBuf: seq[int8] = newSeqWith(patt.len, 0.int8)
+  var succStart = 0
   # echov &"Calling recursive implementation: input buffer {matchBuf}"
   let recMatch = fuzzyMatchRecursive[Seq, Item](
     patt = patt,
@@ -614,7 +609,7 @@ proc fuzzyMatchImpl[Seq, Item](
   return (
     ok: recMatch.ok,
     score: recMatch.score,
-    matches: matchBuf
+    matches: matchBuf.mapIt(it.int)
   )
 
 proc fuzzyMatch*[T](
