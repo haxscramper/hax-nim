@@ -1,4 +1,4 @@
-import unittest
+import unittest, shell
 
 import hmisc/[helpers, defensive]
 import strutils
@@ -104,6 +104,31 @@ suite "Case object field iteration":
 
     assert U.makeFieldsLiteral() == @[
       Field(name: "f1", fldType: "int", isKind: false)]
+
+
+  test "Multiple fields on the same level":
+    type
+      U = object
+        f1: int
+        f2: float
+        f3: char
+        f4: string
+
+    let generated = U.makeFieldsLiteral()
+    let expected = @[
+      Field(name: "f1", fldType: "int", isKind: false),
+      Field(name: "f2", fldType: "float", isKind: false),
+      Field(name: "f3", fldType: "char", isKind: false),
+      Field(name: "f4", fldType: "string", isKind: false)
+    ]
+
+    if generated != expected:
+      "/tmp/generated.nim".writeFile(pstring generated)
+      "/tmp/expected.nim".writeFile(pstring expected)
+      shell:
+        cwdiff /tmp/expected.nim /tmp/generated.nim
+
+      quit 1
 
   test "Single case field":
     type
@@ -221,13 +246,32 @@ suite "Case object field iteration":
     ]
 
     if generated != expected:
-      "/tmp/generated.nim".writeFile(pstring generated)
-      "/tmp/expected.nim".writeFile(pstring expected)
       raiseAssert "Fail"
 
-  #[
   test "Get fields inside of generic proc":
+    proc generic[T](a: T): void =
+      let generated = T.makeFieldsLiteral()
+      let expected = @[
+        Field(name: "f1", fldType: "int", isKind: false),
+        Field(name: "f2", fldType: "char", isKind: false)
+      ]
 
+      if generated != expected:
+        # "/tmp/generated.nim".writeFile(pstring generated)
+        # "/tmp/expected.nim".writeFile(pstring expected)
+        raiseAssert "Fail"
+
+
+    type
+      U = object
+        f1: int
+        f2: char
+
+    generic(U())
+
+
+
+      #[
   test "Check if enum is case parameter":
 
   ]#

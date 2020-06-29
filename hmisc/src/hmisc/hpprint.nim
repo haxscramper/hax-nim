@@ -213,7 +213,7 @@ proc getFields*(node: NimNode): seq[Field] =
             )
 
           of nnkIdentDefs: # Regular field definition
-            result = getFields(elem)
+            result.add getFields(elem)[0]
 
           else:
             discard
