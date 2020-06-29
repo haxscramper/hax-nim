@@ -192,8 +192,9 @@ template assertEq*(lhs, rhs: untyped): untyped =
   let lhsVal = lhs
   let rhsVal = rhs
   testEq(lhsVal, rhsVal)
+  let lInfo = instantiationInfo()
   if not (lhsVal == rhsVal):
-    raiseAssert("Comparison failed")
+    raiseAssert("Comparison failed on line " & $lInfo.line)
 
 # TODO use static hashtable instead of searching whole list each time.
 proc matchWith*[K, V](

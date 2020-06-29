@@ -339,9 +339,11 @@ proc diff[T](lhs, rhs: T, path: TreePath = @[0]): ObjDiffPaths =
 
     for idx, (lval, rval) in zip(lhs, rhs):
       result.merge diff(lval, rval, path & @[idx])
-  # elif T is object:
-  #   # TODO how to check for different kind?
-  #   discard
+  elif T is object:
+    var idx: int = 0
+    for name, valLhs, valRhs in fieldPairs(lhs, rhs):
+      result.merge diff(valLhs, valRhs, path & @[idx])
+      inc idx
 
   else:
     if lhs != rhs:
@@ -359,7 +361,7 @@ suite "Main":
     assertEq diff(@[1, 1], @[2, 1]).paths(), @[@[0, 0]]
     assertEq diff(@[1, 2], @[2, 1]).paths(), @[@[0, 0], @[0, 1]]
     assertEq diff(@[1], @[1]).paths(), emptySeq[seq[int]]()
-    assertEq diff(@["hel"], @["`1`"]).paths(), @[@[0]]
+    assertEq diff(@["hel"], @["`1`"]).paths(), @[@[0, 0]]
 
   test "{diff} Object field difference":
     type
