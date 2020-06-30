@@ -188,6 +188,7 @@ func isSubcommandFor(tok: ParsedToken, comm: CommandDescrBase): bool =
   ## command description
   tok.key.isSubcommandFor(comm)
 
+# TODO replace using `rx`
 func longOptRegex(): Regex = re"--((?:\w|-|_){2,})[:=](.*)"
 func longFlagRegex(): Regex = re"--((?:\w|-|_){2,})$"
 func shortOptRegex(): Regex = re"-(\w[_?+=])[:=](.*)"

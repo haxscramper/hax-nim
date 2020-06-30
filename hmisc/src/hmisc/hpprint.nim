@@ -1,5 +1,12 @@
 # TODO account for control codes in stings
 
+# TODO allow to discard certain elements after they have been
+# generated. NOTE to not overcomplicate interface it should be done
+# using `isAllowed(val: ObjTree)` instead of generic predicate.
+
+# TODO allow to compress elements back if necessary (rst node
+# represents each field as separate leaf)
+
 ## Universal pretty-printer
 
 import hmisc/[helpers, defensive, halgorithm]
@@ -210,11 +217,16 @@ proc getFieldDescription(node: NimNode): tuple[name, fldType: string] =
 
 proc getFields*(node: NimNode): seq[Field[NimNode]] =
   case node.kind:
+    of nnkObjConstr:
+      # echo node.treeRepr()
+      return getFields(node[0])
     of nnkSym:
       let kind = node.getTypeImpl().kind
       case kind:
         of nnkBracketExpr:
           let typeSym = node.getTypeImpl()[1]
+          # echo "Type symbol: ", typeSym.treeRepr()
+          # echo "Impl: ", typeSym.getTypeImpl().treeRepr()
           result = getFields(typeSym.getTypeImpl())
         of nnkObjectTy, nnkRefTy:
           result = getFields(node.getTypeImpl())
@@ -322,7 +334,7 @@ proc unrollFieldLoop(
   body: NimNode,
   fldIdx: int,
   genParam: tuple[
-    lhsObj, rhsObj, lhsName, rhsName, idxName, isKindName: string]
+    lhsObj, rhsObj, lhsName, rhsName, idxName, isKindName, fldName: string]
      ): tuple[node: NimNode, fldIdx: int] =
 
   result.node = newStmtList()
@@ -338,6 +350,7 @@ proc unrollFieldLoop(
       let `ident(genParam.idxName)`: int = `newLit(fldIdx)`
       let `lhsId` = `ident(genParam.lhsObj)`.`fldId`
       let `rhsId` = `ident(genParam.rhsObj)`.`fldId`
+      let `ident(genParam.fldName)`: string = `newLit(fld.name)`
       block:
         `body`
 
@@ -374,23 +387,53 @@ proc unrollFieldLoop(
 
 
 macro parallelFieldPairs*(lhsObj, rhsObj: typed, body: untyped): untyped =
+  ##[
+
+Iterate two objects in parallel. Works for case objects.
+
+Similar to parallel `fieldPairs` but also works for case objects.
+Allows to iterate two objects at once, while keeping track of `kind`
+fields for each type. The body is unrolled and correct variables are
+injected for each field.
+
+Injected variables
+------------------
+
+name
+  name of the current field
+lhs, rhs
+  value of current fields
+fldIdx
+  int. Index of current field in the object.
+lshObj, rhsObj
+  Original objects being iterated. [1]_
+isKind
+  bool. Whether or not current field is used as case parameter for object
+
+
+.. [1] Useful when iterating over results of expression
+
+  ]##
+
   let genParams = (
     lhsObj: "lhsObj",
     rhsObj: "rhsObj",
     lhsName: "lhs",
     rhsName: "rhs",
     idxName: "fldIdx",
-    isKindName: "isKind"
+    isKindName: "isKind",
+    fldName: "name"
   )
 
   let (unrolled, _) = getFields(lhsObj).unrollFieldLoop(body, 0, genParams)
 
-  echo unrolled.toStrLit()
   result = superquote do:
     block:
       let `ident(genParams.lhsObj)` = `lhsObj`
       let `ident(genParams.rhsObj)` = `rhsObj`
       `unrolled`
+
+  # echo result.toStrLit()
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
