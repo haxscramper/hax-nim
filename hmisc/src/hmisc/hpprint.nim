@@ -312,21 +312,7 @@ proc discardNimNode(input: seq[Field[NimNode]]): seq[ValField] =
         )
 
 macro makeFieldsLiteral*(node: typed): seq[ValField] =
-  # var tmpRes: seq[Field[NimNode]]
-  # let kind = node.getTypeImpl().kind
-  # case kind:
-  #   of nnkBracketExpr:
-  #     let typeSym = node.getTypeImpl()[1]
-  #     tmpRes = getFields(typeSym.getTypeImpl())
-  #   of nnkObjectTy, nnkRefTy:
-  #     tmpRes = getFields(node.getTypeImpl())
-  #   else:
-  #     raiseAssert("Unknown parameter kind: " & $kind)
   result = newLit(node.getFields().discardNimNode)
-  # echo result.toStrLit()
-
-  # defer:
-  #   echo result.toStrLit()
 
 
 proc unrollFieldLoop(
@@ -411,7 +397,7 @@ isKind
   bool. Whether or not current field is used as case parameter for object
 
 
-.. [1] Useful when iterating over results of expression
+[1] Useful when iterating over results of expression
 
   ]##
 
@@ -486,15 +472,10 @@ proc toSimpleTree*[Obj](
   entry: Obj, conf: PPrintConf = PPrintConf()): ValObjTree =
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
-  mixin prettyPrintConverter# (entry)
-  when compiles(
-    prettyPrintConverter(entry)
-  # dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
-  ):
+  mixin prettyPrintConverter
+  when compiles(prettyPrintConverter(entry)):
     # If dedicated implementation exists, use it
-
     return prettyPrintConverter(entry)
-    # return dedicatedConvertMatcher[Obj](entry, prettyPrintConverter)
   elif not (
       (entry is seq) or
       (entry is array) or
