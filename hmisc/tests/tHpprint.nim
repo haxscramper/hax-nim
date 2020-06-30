@@ -107,7 +107,7 @@ suite "Case object field iteration":
       ValField(name: "f1", fldType: "int", isKind: false)
     ]
 
-    echo $(ValField())
+    # echo $(ValField())
     # static:
     #   echo typeof(generated)
     #   echo typeof(expected)
@@ -350,10 +350,13 @@ suite "Case object field iteration":
           of false:
             f2: string
 
+        f3: int
+
     let value1 = U(kind: true, f1: '1')
     let value2 = U(kind: true, f1: '1')
     parallelFieldPairs(value1, value2):
-      discard diff(lhs, rhs)
+      echo "12"
+      # discard diff(lhs, rhs)
 
 
 

@@ -4,7 +4,7 @@
 
 import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat, macros
-import typetraits
+import typetraits, macroutils
 
 import gara, with
 
@@ -210,6 +210,16 @@ proc getFieldDescription(node: NimNode): tuple[name, fldType: string] =
 
 proc getFields*(node: NimNode): seq[Field[NimNode]] =
   case node.kind:
+    of nnkSym:
+      let kind = node.getTypeImpl().kind
+      case kind:
+        of nnkBracketExpr:
+          let typeSym = node.getTypeImpl()[1]
+          result = getFields(typeSym.getTypeImpl())
+        of nnkObjectTy, nnkRefTy:
+          result = getFields(node.getTypeImpl())
+        else:
+          raiseAssert("Unknown parameter kind: " & $kind)
     of nnkObjectTy:
       return node[2].getFields()
     of nnkRecList:
@@ -290,26 +300,97 @@ proc discardNimNode(input: seq[Field[NimNode]]): seq[ValField] =
         )
 
 macro makeFieldsLiteral*(node: typed): seq[ValField] =
-  var tmpRes: seq[Field[NimNode]]
-  let kind = node.getTypeImpl().kind
-  case kind:
-    of nnkBracketExpr:
-      let typeSym = node.getTypeImpl()[1]
-      tmpRes = getFields(typeSym.getTypeImpl())
-    of nnkObjectTy, nnkRefTy:
-      tmpRes = getFields(node.getTypeImpl())
-    else:
-      raiseAssert("Unknown parameter kind: " & $kind)
-
-
-  result = newLit(tmpRes.discardNimNode)
+  # var tmpRes: seq[Field[NimNode]]
+  # let kind = node.getTypeImpl().kind
+  # case kind:
+  #   of nnkBracketExpr:
+  #     let typeSym = node.getTypeImpl()[1]
+  #     tmpRes = getFields(typeSym.getTypeImpl())
+  #   of nnkObjectTy, nnkRefTy:
+  #     tmpRes = getFields(node.getTypeImpl())
+  #   else:
+  #     raiseAssert("Unknown parameter kind: " & $kind)
+  result = newLit(node.getFields().discardNimNode)
   # echo result.toStrLit()
 
   # defer:
   #   echo result.toStrLit()
 
+
+proc unrollFieldLoop(
+  flds: seq[Field[NimNode]],
+  body: NimNode,
+  fldIdx: int,
+  genParam: tuple[
+    lhsObj, rhsObj, lhsName, rhsName, idxName, isKindName: string]
+     ): tuple[node: NimNode, fldIdx: int] =
+
+  result.node = newStmtList()
+  var fldIdx: int = fldIdx
+  for fld in flds:
+    var tmpRes = newStmtList()
+    # echo &"Fld idx: {fldIdx} for {fld.name}"
+    let lhsId = ident(genParam.lhsName)
+    let rhsId = ident(genParam.rhsName)
+    let fldId = ident(fld.name)
+    tmpRes.add superquote do:
+      let `ident(genParam.isKindName)`: bool = `newLit(fld.isKind)`
+      let `ident(genParam.idxName)`: int = `newLit(fldIdx)`
+      let `lhsId` = `ident(genParam.lhsObj)`.`fldId`
+      let `rhsId` = `ident(genParam.rhsObj)`.`fldId`
+      block:
+        `body`
+
+    inc fldIdx
+    if fld.isKind:
+      # TODO check if two field kinds are identical
+      var caseBlock = nnkCaseStmt.newTree(
+        newDotExpr(ident genParam.lhsObj, ident fld.name)
+      )
+
+      for branch in fld.branches:
+        let (branchBody, lastIdx) =
+          branch.flds.unrollFieldLoop(body, fldIdx, genParam)
+
+        fldIdx = lastIdx
+        caseBlock.add nnkOfBranch.newTree(
+          branch.ofValue,
+          newStmtList(
+            branchBody
+          )
+        )
+
+      tmpRes.add superquote do:
+        if `ident(genParam.lhsObj)`.`fldId` == `ident(genParam.rhsObj)`.`fldId`:
+          `caseBlock`
+
+    result.node.add quote do:
+      block:
+        `tmpRes`
+
+
+  result.node = newBlockStmt(result.node)
+  result.fldIdx = fldIdx
+
+
 macro parallelFieldPairs*(lhsObj, rhsObj: typed, body: untyped): untyped =
-  discard
+  let genParams = (
+    lhsObj: "lhsObj",
+    rhsObj: "rhsObj",
+    lhsName: "lhs",
+    rhsName: "rhs",
+    idxName: "fldIdx",
+    isKindName: "isKind"
+  )
+
+  let (unrolled, _) = getFields(lhsObj).unrollFieldLoop(body, 0, genParams)
+
+  echo unrolled.toStrLit()
+  result = superquote do:
+    block:
+      let `ident(genParams.lhsObj)` = `lhsObj`
+      let `ident(genParams.rhsObj)` = `rhsObj`
+      `unrolled`
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
@@ -323,31 +404,31 @@ proc dedicatedConvertMatcher*[Obj](
   ## converters
   return conv(val)
 
-proc prettyPrintConverter(val: JsonNode): ObjTree =
+proc prettyPrintConverter(val: JsonNode): ValObjTree =
   ## Dedicated pretty-print converter implementation for `JsonNode`
   case val.kind:
     of JNull:
-      return ObjTree(
+      return ValObjTree(
         constType: "nil", kind: okConstant, strLit: "null")
     of JBool:
-      return ObjTree(
+      return ValObjTree(
         constType: "bool", kind: okConstant, strLit: $val.getBool())
     of JInt:
-      return ObjTree(
+      return ValObjTree(
         constType: "int", kind: okConstant, strLit: $val.getInt())
     of JFloat:
-      return ObjTree(
+      return ValObjTree(
         constType: "string", kind: okConstant, strLit: $val.getFloat())
     of JString:
-      return ObjTree(
+      return ValObjTree(
         constType: "string", kind: okConstant, strLit: &"\"{val.getStr()}\"")
     of JArray:
-      return ObjTree(
+      return ValObjTree(
         kind: okSequence,
         valItems: val.getElems().map(prettyPrintConverter)
       )
     of JObject:
-      return ObjTree(
+      return ValObjTree(
         kind: okComposed,
         namedFields: true,
         namedObject: false,
