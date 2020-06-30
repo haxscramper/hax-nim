@@ -369,3 +369,14 @@ suite "Main":
         f1: int
 
     assertEq diff(U(f1: 90), U(f1: 91)).paths(), @[@[0, 0]]
+    # block:
+    #   let res = diff(
+    #     U(kind: true, f1: '1'),
+    #     U(kind: true, f1: '9')
+    #   )
+
+    # block:
+    #   let res = diff(
+    #     U(kind: true, f1: '9'),
+    #     U(kind: false, f2: "hello")
+    #   )

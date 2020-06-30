@@ -8,7 +8,7 @@ import typetraits
 
 import gara, with
 
-export tables
+export tables, halgorithm
 
 type
   Delim* = object
@@ -55,39 +55,45 @@ type
     ## different types for fields (and values). List name is optional
     ## (unnamed object), field name is optional (unnamed fields)
 
-  FieldBranch* = object
-    value*: ObjTree ## Match value for case branch
-    flds*: seq[Field] ## Fields in the case branch
+  FieldBranch*[Node] = object
+    # IDEA three possible parameters: `NimNode` (for compile-time
+    # operations), `PNode` (for analysing code at runtime) and.
+    when Node is NimNode:
+      ofValue*: Node ## Exact AST used in field branch
+    else:
+      value*: ObjTree[Node] ## Match value for case branch
+
+    flds*: seq[Field[Node]] ## Fields in the case branch
     isElse*: bool
 
-  Field* = object
+  Field*[Node] = object
     ## More complex representation of object's field - supports
     ## recursive fields with case objects. IMPLEMENT - not currently
     ## supported.
     name*: string
     fldType*: string ## Type of field value
-    value*: ObjTree
+    value*: ObjTree[Node]
     case isKind*: bool
       of true:
         selected*: int ## Index of selected branch
-        branches*: seq[FieldBranch] ## List of all branches as
+        branches*: seq[FieldBranch[Node]] ## List of all branches as
                                     ## `value-branch` pairs.
       of false:
         discard
 
 
-  ObjTree* = object
+  ObjTree*[Node] = object
     case kind*: ObjKind
       of okConstant:
         constType*: string ## Type of the value
         strlit*: string ## Value representation in string form
       of okSequence:
         itemType*: string ## Type of the sequence item
-        valItems*: seq[ObjTree] ## List of values
+        valItems*: seq[ObjTree[Node]] ## List of values
       of okTable:
         keyType*: string ## Type of table key
         valType*: string ## TYpe of value key
-        valPairs*: seq[tuple[key: string, val: ObjTree]] ## List of
+        valPairs*: seq[tuple[key: string, val: ObjTree[Node]]] ## List of
         ## key-value pairs for table
       of okComposed:
         namedObject*: bool ## This object's type has a name? (tuples
@@ -103,19 +109,23 @@ type
             # sequence.
 
             # TODO Add field type
-            fldPairs*: seq[tuple[name: string, value: ObjTree]] ## Sequence
+            fldPairs*: seq[tuple[name: string, value: ObjTree[Node]]] ## Sequence
             ## of field-value pairs for object representation
           of true:
             # Most of the case objects have one `kind` field named
             # 'kind' but this should account for cases with multiple
             # case fields as well as nested ones
-            kindBlocks*: seq[Field] ## Object field tree. TODO -
+            kindBlocks*: seq[Field[Node]] ## Object field tree. TODO -
             ## currently not implemented
 
+  ValObjTree* = ObjTree[void] ## Object tree used at runtime.
+  ValField* = Field[void] ## Field used at runtime
+  ValFieldBranch* = FieldBranch[void] ## Field branch used at runtime
 
-func `==`(lhs, rhs: Field): bool
 
-func `==`(lhs, rhs: ObjTree): bool =
+func `==`*[Node](lhs, rhs: Field[Node]): bool
+
+func `==`*[Node](lhs, rhs: ObjTree[Node]): bool =
   lhs.kind == rhs.kind and
     (
       case lhs.kind:
@@ -148,7 +158,7 @@ func `==`(lhs, rhs: ObjTree): bool =
 
     )
 
-func `==`(lhs, rhs: Field): bool =
+func `==`*[Node](lhs, rhs: Field[Node]): bool =
   lhs.isKind == rhs.isKind and
     (
       case lhs.isKind:
@@ -161,21 +171,23 @@ func `==`(lhs, rhs: Field): bool =
           true
     )
 
-proc getFields*(node: NimNode): seq[Field]
+proc getFields*(node: NimNode): seq[Field[NimNode]]
 
-proc getBranches(node: NimNode): seq[FieldBranch] =
+proc getBranches(node: NimNode): seq[FieldBranch[NimNode]] =
   assert node.kind == nnkRecCase, &"Cannot get branches from node kind {node.kind}"
   let caseType = $node[0][1]
   for branch in node[1..^1]:
     case branch.kind:
       of nnkOfBranch:
-        result.add FieldBranch(
-          value: ObjTree(kind: okConstant, constType: caseType, strLit: $branch[0].toStrLit()),
+        result.add FieldBranch[NimNode](
+          ofValue: branch[0] # ObjTree[NimNode](
+            # kind: okConstant, constType: caseType, strLit: $branch[0].toStrLit())
+          ,
           flds: branch[1].getFields(),
           isElse: false
         )
       of nnkElse:
-        result.add FieldBranch(
+        result.add FieldBranch[NimNode](
           flds: branch[0].getFields(), isElse: true
         )
       else:
@@ -196,7 +208,7 @@ proc getFieldDescription(node: NimNode): tuple[name, fldType: string] =
       raiseAssert(
         &"Cannot get field description from node of kind {node.kind}")
 
-proc getFields*(node: NimNode): seq[Field] =
+proc getFields*(node: NimNode): seq[Field[NimNode]] =
   case node.kind:
     of nnkObjectTy:
       return node[2].getFields()
@@ -205,7 +217,7 @@ proc getFields*(node: NimNode): seq[Field] =
         let descr = getFieldDescription(elem)
         case elem.kind:
           of nnkRecCase: # Case field
-            result.add Field(
+            result.add Field[NimNode](
               isKind: true,
               branches: getBranches(elem),
               name: descr.name,
@@ -222,7 +234,7 @@ proc getFields*(node: NimNode): seq[Field] =
 
     of nnkIdentDefs:
       let descr = getFieldDescription(node)
-      result.add Field(
+      result.add Field[NimNode](
         isKind: false,
         name: descr.name,
         fldType: descr.fldType
@@ -231,16 +243,16 @@ proc getFields*(node: NimNode): seq[Field] =
       raiseAssert(
         &"Unexpected node kind in `getFields` {node.kind}")
 
-proc getKindFields*(flds: seq[Field]): seq[Field] =
+proc getKindFields*[Node](flds: seq[Field[Node]]): seq[Field[Node]] =
   for fld in flds:
     if fld.isKind:
-      result.add Field(
+      result.add Field[Node](
         isKind: true,
         name: fld.name,
         value: fld.value,
         fldType: fld.fldType,
         branches: fld.branches.mapIt(
-          FieldBranch(
+          FieldBranch[Node](
             value: it.value,
             isElse: it.isElse,
             flds: it.flds.getKindFields()
@@ -248,19 +260,56 @@ proc getKindFields*(flds: seq[Field]): seq[Field] =
         ).filterIt(it.flds.len > 0)
       )
 
-macro makeFieldsLiteral*(node: typed): seq[Field] =
+proc discardNimNode(input: seq[Field[NimNode]]): seq[ValField] =
+  for fld in input:
+    case fld.isKind:
+      of true:
+        result.add ValField(
+          isKind: true,
+          name: fld.name,
+          fldType: fld.fldType,
+          selected: fld.selected,
+          branches: fld.branches.mapIt(
+            ValFieldBranch(
+              value: ValObjTree(
+                kind: okConstant,
+                constType: (it.isElse).tern("", fld.fldType),
+                strLit: (it.isElse).tern("", $it.ofValue.toStrLit())
+              ),
+              isElse: it.isElse,
+              flds: it.flds.discardNimNode()
+            )
+          )
+        )
+
+      of false:
+        result.add ValField(
+          isKind: false,
+          name: fld.name,
+          fldType: fld.fldType
+        )
+
+macro makeFieldsLiteral*(node: typed): seq[ValField] =
+  var tmpRes: seq[Field[NimNode]]
   let kind = node.getTypeImpl().kind
   case kind:
     of nnkBracketExpr:
       let typeSym = node.getTypeImpl()[1]
-      result = newLit(getFields(typeSym.getTypeImpl()))
+      tmpRes = getFields(typeSym.getTypeImpl())
     of nnkObjectTy, nnkRefTy:
-      result = newLit(getFields(node.getTypeImpl()))
+      tmpRes = getFields(node.getTypeImpl())
     else:
       raiseAssert("Unknown parameter kind: " & $kind)
 
+
+  result = newLit(tmpRes.discardNimNode)
+  # echo result.toStrLit()
+
   # defer:
   #   echo result.toStrLit()
+
+macro parallelFieldPairs*(lhsObj, rhsObj: typed, body: untyped): untyped =
+  discard
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
@@ -310,7 +359,7 @@ proc prettyPrintConverter(val: JsonNode): ObjTree =
 
 
 proc toSimpleTree*[Obj](
-  entry: Obj, conf: PPrintConf = PPrintConf()): ObjTree =
+  entry: Obj, conf: PPrintConf = PPrintConf()): ValObjTree =
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
   mixin prettyPrintConverter# (entry)
@@ -328,12 +377,11 @@ proc toSimpleTree*[Obj](
       (entry is openarray) or
       (entry is string)
     ) and compiles(for k, v in pairs(entry): discard):
-    result = ObjTree(
+    result = ValObjTree(
       kind: okTable,
       keyType: $typeof((pairs(entry).nthType1)),
       valType: $typeof((pairs(entry).nthType2))
     )
-
 
     for key, val in pairs(entry):
       result.valPairs.add(($key, toSimpleTree(val)))
@@ -341,7 +389,7 @@ proc toSimpleTree*[Obj](
   elif not (
       (entry is string)
     ) and (compiles(for i in items(entry): discard)):
-    result = ObjTree(
+    result = ValObjTree(
       kind: okSequence,
       itemType: $typeof(items(entry))
     )
@@ -353,7 +401,7 @@ proc toSimpleTree*[Obj](
        (entry is ref object) or
        (entry is tuple):
     when (entry is object) or (entry is ref object):
-      result = ObjTree(
+      result = ValObjTree(
         kind: okComposed,
         name: $typeof(Obj),
         sectioned: false,
@@ -361,7 +409,7 @@ proc toSimpleTree*[Obj](
         namedFields: true
       )
     elif isNamedTuple(Obj):
-      result = ObjTree(
+      result = ValObjTree(
         kind: okComposed,
         name: $typeof(Obj),
         sectioned: false,
@@ -369,7 +417,7 @@ proc toSimpleTree*[Obj](
         namedFields: true
       )
     else:
-      result = ObjTree(
+      result = ValObjTree(
         kind: okComposed,
         sectioned: false,
         namedFields: false,
@@ -378,7 +426,7 @@ proc toSimpleTree*[Obj](
 
     when (entry is ref object):
       if entry == nil:
-        result = ObjTree(
+        result = ValObjTree(
           kind: okConstant,
           constType: $(typeof(Obj)),
           strLit: "nil")
@@ -391,7 +439,7 @@ proc toSimpleTree*[Obj](
 
 
   elif (entry is proc):
-    result = ObjTree(
+    result = ValObjTree(
       kind: okConstant,
       constType: $(typeof(Obj)),
       strLit: $(typeof(Obj))
@@ -404,7 +452,7 @@ proc toSimpleTree*[Obj](
     else:
       let val = $entry
 
-    result = ObjTree(
+    result = ValObjTree(
       kind: okConstant,
       constType: $typeof(Obj),
       strLit: val
@@ -580,7 +628,7 @@ proc getWrapperConf(current: ObjTree, conf: PPrintConf): tuple[start, final: Del
 
 
 proc getLabelConfiguration(
-  conf: PPrintConf, current: ObjTree, ident: int): tuple[
+  conf: PPrintConf, current: ValObjTree, ident: int): tuple[
   item, blocks: ChunkLabels,
   widthconf: (int, int)] =
   ## Get label configuration

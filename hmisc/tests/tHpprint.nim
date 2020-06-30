@@ -97,15 +97,24 @@ suite "Compile-time object passthrough":
 suite "Case object field iteration":
   discard
 
-  test "No case fields":
+  test "{makeFieldsLiteral} No case fields :macro:":
     type
       U = object
         f1: int
 
-    assert U.makeFieldsLiteral() == @[
-      Field(name: "f1", fldType: "int", isKind: false)]
+    let generated = U.makeFieldsLiteral()
+    let expected = @[
+      ValField(name: "f1", fldType: "int", isKind: false)
+    ]
 
-  test "Multiple fields on the same level":
+    echo $(ValField())
+    # static:
+    #   echo typeof(generated)
+    #   echo typeof(expected)
+
+    assert generated == expected
+
+  test "{makeFieldsLiteral} Multiple fields on the same level :macro:":
     type
       U = object
         f1: int
@@ -115,10 +124,10 @@ suite "Case object field iteration":
 
     let generated = U.makeFieldsLiteral()
     let expected = @[
-      Field(name: "f1", fldType: "int", isKind: false),
-      Field(name: "f2", fldType: "float", isKind: false),
-      Field(name: "f3", fldType: "char", isKind: false),
-      Field(name: "f4", fldType: "string", isKind: false)
+      ValField(name: "f1", fldType: "int", isKind: false),
+      ValField(name: "f2", fldType: "float", isKind: false),
+      ValField(name: "f3", fldType: "char", isKind: false),
+      ValField(name: "f4", fldType: "string", isKind: false)
     ]
 
     if generated != expected:
@@ -129,7 +138,7 @@ suite "Case object field iteration":
 
       quit 1
 
-  test "Single case field":
+  test "{makeFieldsLiteral} Single case field :macro:":
     type
       U = object
         case kind: bool
@@ -140,15 +149,18 @@ suite "Case object field iteration":
 
     let lhs = U.makeFieldsLiteral()
     let rhs = @[
-      Field(fldType: "bool", name: "kind", isKind: true, branches: @[
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-          flds: @[ Field(fldType: "int", isKind: false, name: "f1") ],
+      ValField(fldType: "bool", name: "kind", isKind: true, branches: @[
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ ValField(fldType: "int", isKind: false, name: "f1") ],
           isElse: false
         ),
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
-          flds: @[ Field(fldType: "float", isKind: false, name: "f2") ],
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "bool", strLit: "false"),
+          flds: @[ ValField(
+            fldType: "float", isKind: false, name: "f2") ],
           isElse: false
         ),
       ]
@@ -157,7 +169,7 @@ suite "Case object field iteration":
     if lhs != rhs:
       raiseAssert "Fail"
 
-  test "Multiple case fields":
+  test "{makeFieldsLiteral} Multiple case fields :macro:":
     type
       U = object
         case kind1: bool
@@ -172,27 +184,32 @@ suite "Case object field iteration":
 
     let generated = U.makeFieldsLiteral()
     let expected  = @[
-      Field(fldType: "bool", name: "kind1", isKind: true, branches: @[
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-          flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
+      ValField(fldType: "bool", name: "kind1", isKind: true, branches: @[
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ ValField(
+            fldType: "int", isKind: false, name: "f11") ],
           isElse: false
          ),
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
-          flds: @[ Field(fldType: "float", isKind: false, name: "f21") ],
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "bool", strLit: "false"),
+          flds: @[ ValField(
+            fldType: "float", isKind: false, name: "f21") ],
           isElse: false
          ),
       ]),
-      Field(fldType: "char", name: "kind2", isKind: true, branches: @[
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "char", strLit: "'a'"),
-          flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
+      ValField(fldType: "char", name: "kind2", isKind: true, branches: @[
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "char", strLit: "'a'"),
+          flds: @[ ValField(fldType: "int", isKind: false, name: "f12") ],
           isElse: false
         ),
-        FieldBranch(
-          value: ObjTree(),
-          flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
+        ValFieldBranch(
+          value: ValObjTree(),
+          flds: @[ ValField(fldType: "float", isKind: false, name: "f22") ],
           isElse: true
         ),
       ])
@@ -200,9 +217,14 @@ suite "Case object field iteration":
 
 
     if generated != expected:
-      raiseAssert "Fail"
+      # raiseAssert "Fail"
+      # "/tmp/generated.nim".writeFile(pstring generated)
+      # "/tmp/expected.nim".writeFile(pstring expected)
+      # shell:
+      #   cwdiff /tmp/expected.nim /tmp/generated.nim
+      quit 1
 
-  test "Nested case fields":
+  test "{makeFieldsLiteral} Nested case fields :macro:":
     type
       U = object
         case kind1: bool
@@ -216,25 +238,30 @@ suite "Case object field iteration":
 
     let generated = U.makeFieldsLiteral()
     let expected = @[
-      Field(fldType: "bool", name: "kind1", isKind: true, branches: @[
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "true"),
-          flds: @[ Field(fldType: "int", isKind: false, name: "f11") ],
+      ValField(fldType: "bool", name: "kind1", isKind: true, branches: @[
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "bool", strLit: "true"),
+          flds: @[ ValField(fldType: "int", isKind: false, name: "f11") ],
           isElse: false
          ),
-        FieldBranch(
-          value: ObjTree(kind: okConstant, constType: "bool", strLit: "false"),
+        ValFieldBranch(
+          value: ValObjTree(
+            kind: okConstant, constType: "bool", strLit: "false"),
           flds: @[
-            Field(fldType: "char", name: "kind2", isKind: true, branches: @[
-              FieldBranch(
-                value: ObjTree(
+            ValField(
+              fldType: "char", name: "kind2", isKind: true, branches: @[
+              ValFieldBranch(
+                value: ValObjTree(
                   kind: okConstant, constType: "char", strLit: "'a'"),
-                flds: @[ Field(fldType: "int", isKind: false, name: "f12") ],
+                flds: @[ ValField(
+                  fldType: "int", isKind: false, name: "f12") ],
                 isElse: false
               ),
-              FieldBranch(
-                value: ObjTree(),
-                flds: @[ Field(fldType: "float", isKind: false, name: "f22") ],
+              ValFieldBranch(
+                value: ValObjTree(),
+                flds: @[ ValField(
+                  fldType: "float", isKind: false, name: "f22") ],
                 isElse: true
               ),
             ])
@@ -247,12 +274,12 @@ suite "Case object field iteration":
     if generated != expected:
       raiseAssert "Fail"
 
-  test "Get fields inside of generic proc":
+  test "{makeFieldsLiteral} Get fields inside of generic proc :macro:":
     proc generic[T](a: T): void =
       let generated = T.makeFieldsLiteral()
       let expected = @[
-        Field(name: "f1", fldType: "int", isKind: false),
-        Field(name: "f2", fldType: "char", isKind: false)
+        ValField(name: "f1", fldType: "int", isKind: false),
+        ValField(name: "f2", fldType: "char", isKind: false)
       ]
 
       if generated != expected:
@@ -269,7 +296,7 @@ suite "Case object field iteration":
     generic(U())
 
 
-  test "Get all kind fields":
+  test "{makeFieldsLiteral} Get all kind fields :macro:":
     type
       U = object
         case kind1: bool
@@ -290,27 +317,45 @@ suite "Case object field iteration":
 
     let generated = makeFieldsLiteral(U).getKindFields()
     let expected = @[
-      Field(
+      ValField(
         name: "kind1", fldType: "bool", isKind: true, branches: @[
-          FieldBranch(
-            value: ObjTree(
+          ValFieldBranch(
+            value: ValObjTree(
               kind: okConstant, constType: "bool", strLit: "false"),
             flds: @[
-              Field(name: "kind2", fldType: "char", isKind: true)
+              ValField(name: "kind2", fldType: "char", isKind: true)
             ]
           )
         ]
       ),
-      Field(name: "kind3", fldType: "bool", isKind: true)
+      ValField(name: "kind3", fldType: "bool", isKind: true)
     ]
 
     if generated != expected:
-      "/tmp/generated.nim".writeFile(pstring generated)
-      "/tmp/expected.nim".writeFile(pstring expected)
-      shell:
-        cwdiff /tmp/expected.nim /tmp/generated.nim
+      # "/tmp/generated.nim".writeFile(pstring generated)
+      # "/tmp/expected.nim".writeFile(pstring expected)
+      # shell:
+      #   cwdiff /tmp/expected.nim /tmp/generated.nim
 
       quit 1
+
+
+
+  test "{parallelFieldPairs}":
+    type
+      U = object
+        case kind: bool
+          of true:
+            f1: char
+          of false:
+            f2: string
+
+    let value1 = U(kind: true, f1: '1')
+    let value2 = U(kind: true, f1: '1')
+    parallelFieldPairs(value1, value2):
+      discard diff(lhs, rhs)
+
+
 
 
 type
