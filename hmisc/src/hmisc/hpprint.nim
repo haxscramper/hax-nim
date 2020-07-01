@@ -220,7 +220,7 @@ proc getFields*(node: NimNode): seq[Field[NimNode]] =
     of nnkObjConstr:
       # echo node.treeRepr()
       return getFields(node[0])
-    of nnkSym:
+    of nnkSym, nnkCall, nnkDotExpr:
       let kind = node.getTypeImpl().kind
       case kind:
         of nnkBracketExpr:
@@ -262,8 +262,9 @@ proc getFields*(node: NimNode): seq[Field[NimNode]] =
         fldType: descr.fldType
       )
     else:
+      # echo node.getTypeImpl().toStrLit()
       raiseAssert(
-        &"Unexpected node kind in `getFields` {node.kind}")
+        &"Unexpected node kind in `getFields` {node.kind}. Code: `{$node.toStrLit()}`")
 
 proc getKindFields*[Node](flds: seq[Field[Node]]): seq[Field[Node]] =
   for fld in flds:
@@ -379,8 +380,8 @@ Iterate two objects in parallel. Works for case objects.
 
 Similar to parallel `fieldPairs` but also works for case objects.
 Allows to iterate two objects at once, while keeping track of `kind`
-fields for each type. The body is unrolled and correct variables are
-injected for each field.
+fields for each type. The body is unrolled and variables are injected
+for each field.
 
 Injected variables
 ------------------
