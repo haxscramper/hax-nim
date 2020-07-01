@@ -1,4 +1,4 @@
-import unittest
+import unittest, strutils
 import sugar, json, sequtils, tables, strformat
 
 import hmisc/[halgorithm, helpers, hpprint]
@@ -61,7 +61,8 @@ suite "Tree mapping":
         name: "test",
         subs: @[
           Tree(name: "test11"),
-          Tree(name: "test12")])
+          Tree(name: "test12")
+      ])
 
     assert tree.mapItBFStoSeq(
       it.subs,
@@ -166,8 +167,52 @@ suite "Tree mapping":
       not it.isToken) == @["ident", "ident"]
 
   test "{mapDFSpost} map to linear structure :proc:macro:example:":
-    ## Convert ast to linear structure (graphviz document)
-    discard
+    ## Convert ast to linear structure (graphviz document). Fold tree
+    ## into graph with only ~20 lines of code (mostly comments)
+    type
+      T = object
+        val: string
+        sub: seq[T]
+
+    let val = T(val: "hello", sub: @[T(val: "world"), T(val: "!")])
+    let res = val.mapItTreeDFS(
+      it.sub,
+      seq[string],
+      block:
+        # Get name of the current subnode
+        let currName = it.val
+        # Get id for current node
+        let currId = "_" & path.mapIt($it).join("_")
+        # Get all subnode ids
+        let subnodes: seq[string] = collect(newSeq):
+          for idx, _ in it.sub:
+            "_" & (path & @[idx]).mapIt($it).join("_")
+
+        let edgeCode =
+          if subnodes.len > 0:
+            &"{currId} -> {{{subnodes.join(',')}}};"
+          else:
+            ""
+
+        static: # Each node was folded into sequence of strings - list
+                # of nodes is passed to upper node.
+          assert subt is seq[seq[string]]
+
+        @[
+          &"{currId} [label=\"{currName}\"];",
+          edgeCode
+        ] & subt.concat()
+    )
+
+    let inner = res.filterIt(it.len > 0).mapIt("  " & it).join('\n')
+    let final = &"digraph G {{\n{inner}\n}}"
+    assertEq final, """
+      digraph G {
+        _0 [label="hello"];
+        _0 -> {_0_0,_0_1};
+        _0_0 [label="world"];
+        _0_1 [label="!"];
+      }""".dedent()
 
   # TODO macro type assertions for option
 

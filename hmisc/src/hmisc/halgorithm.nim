@@ -370,19 +370,35 @@ proc mapDFSpost*[InTree, OutTree](
 
 macro mapItTreeDFS*(
   inTree, subnodeCall, outType, op: untyped, hasSubnodes: untyped = true): untyped =
-  ## Convert one tree type into another. Conversion is perfomed in
-  ## bottom-up manner - first child nodes are evaluated, then results are
-  ## supplied to parent nodes and so on.
-  ##
-  ## :params:
-  ##    :subnodeCall: Field with child nodes or procedure to call for
-  ##                  geting child nodes.
-  ##    :outType: Result type
-  ##    :inTree: Tree to convert
-  ##    :op: Expression for converting objects. Several variables are
-  ##         injected into scope: `it` - current tree node, `path` - path
-  ##         of the current node in original tree, `subt` - already
-  ##         converted subnodes.
+  ##[
+Convert one tree type into another. Conversion is perfomed in
+bottom-up manner - first child nodes are evaluated, then results are
+supplied to parent nodes and so on.
+
+Parameters
+^^^^^^^^^^
+
+:subnodeCall: Expression to get child nodes
+:outType: Result type
+:inTree: Tree to convert
+:op: Expression for converting objects.
+
+Injected variables
+^^^^^^^^^^^^^^^^^^
+
+:it: current tree node
+:path: path of the current node in original tree
+:subt: already converted subnodes
+
+Notes
+^^^^^
+
+Macro is a wrapper for call to recursive implementation of DFS mapper
+(`mapDFSpost`) - `op` and other expresions are wrapped into callback
+procs
+
+  ]##
+
   # TODO add proc for checking if futher recursion is not needed (trim
   # down arbitrary branches from tree)
 
@@ -399,22 +415,6 @@ macro mapItTreeDFS*(
 
   # TODO predicate to check if item has subnodes or not.
   # TEST predicated for subnodes checking
-  runnableExamples:
-    type
-      InTest = object
-        val: int
-        sub: seq[InTest]
-
-      OutTest = object
-        val: string
-        sub: seq[OutTest]
-
-    block:
-      let tmp = InTest()
-      echo mapItTreeDFS(
-        sub, OutTest, InTest(),
-        OutTest(val: $it.val & "+"))
-
   let
     itIdent = ident "it"
     pathIdent = ident "path"
@@ -422,6 +422,9 @@ macro mapItTreeDFS*(
 
 
   let pos = inTree.lineInfoObj().line.newLit()
+  # defer:
+  #   echo result.toStrLit()
+
   result = quote do:
     block:
       type opType = typeof((
@@ -435,9 +438,13 @@ macro mapItTreeDFS*(
       # TODO TEST write unit test for compile-time error
       # TODO TEST write unit test for correct error position reporting
       static:
-        assert (opType is `outType`) or (opType is Option[`outType`]),
-          "Invalid type for expression result: expected either `outType` or " &
-          "`Option[outType]` in `mapItTreeDfs` on line " & $`pos`
+        if not (opType is `outType`) or (opType is Option[`outType`]):
+          raiseAssert(
+            "Invalid type for expression result: expected either `" & $typeof(`outType`) &
+             "` or " & "`Option[" & $typeof(`outType`) &
+             "]` in `mapItTreeDfs` on line " & $`pos` & ", but `op` is " &
+            $typeof(opType)
+          )
 
       mapDFSpost(
         `inTree`,

@@ -344,6 +344,8 @@ proc printTwoColumns*(
 proc join*(text: openarray[(string, string)], sep: string = " "): string =
   text.mapIt(it[0] & it[1]).join(sep)
 
+func join*(text: openarray[string], sep: char = ' '): string =
+  text.join($sep)
 
 func enclosedIn*(
   str: string,
