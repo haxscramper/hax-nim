@@ -674,6 +674,10 @@ suite "Large object printout":
           onMouseUp: "sun1.opacity = (sun1.opacity / 100) * 90;"""".dedent()
 
 
+suite "Object tree to dot grap":
+  test "Integer":
+    echo toDotGraph(0)
+
 import hmisc/[objdiff, htrie]
 
 suite "Object diff":

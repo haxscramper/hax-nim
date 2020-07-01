@@ -166,7 +166,7 @@ suite "Tree mapping":
       if it.isToken: some(it.tok) else: none(string),
       not it.isToken) == @["ident", "ident"]
 
-  test "{mapDFSpost} map to linear structure :proc:macro:example:":
+  test "{mapItTreeDFS} map to dot grap :proc:macro:example:":
     ## Convert ast to linear structure (graphviz document). Fold tree
     ## into graph with only ~20 lines of code (mostly comments)
     type

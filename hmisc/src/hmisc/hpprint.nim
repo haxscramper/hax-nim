@@ -948,6 +948,48 @@ const objectPPrintConf = PPrintConf(
   nowrapMultiline: true
 )
 
+type
+  DotGenConfig = object
+    f1: int
+
+proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): string =
+  let tree = toSimpleTree(obj)
+  # TO whoever reading this: I had to use life support system to not
+  # die of brain overload. Just saying.
+  let folded = tree.mapItTreeDFS(
+    subnodeCall =
+      block:
+        case it.kind:
+          of okConstant: raiseAssert("No sub for `okConstant`")
+          of okSequence: it.valItems
+          of okTable: it.valPairs.mapIt(it.val)
+          of okComposed:
+            case it.sectioned:
+              of false: it.fldPairs.mapIt(it.value)
+              of true: raiseAssert(
+                "IMPLEMENT Sectioned objects are not supported RN")
+    ,
+    outType = seq[string],
+    op =
+      block:
+        let currId = "_" & it.path.mapIt($it).join("_")
+        let edgeCode =
+          if subt.len > 0:
+            let subPaths = subt.mapPairs("_" & (path & @[idx]).join("_")).join(", ")
+            # TODO display sequences and objects as compound items
+            # (using html)
+            &"{currId} -> {{{subPaths}}}"
+          else:
+            ""
+
+        @[
+          &"{currId}"
+        ]
+    ,
+    hasSubnodes =
+      block:
+        (it.kind != okConstant)
+  )
 
 proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
   var conf = objectPPrintConf

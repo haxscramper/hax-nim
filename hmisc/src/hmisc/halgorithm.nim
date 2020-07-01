@@ -9,6 +9,19 @@ export algorithm
 import deques
 export deques
 
+##[
+
+.. raw:: html
+  <style>
+
+  table th.docinfo-name {
+      text-align: left;
+  }
+
+  </style>
+
+]##
+
 # IDEA `itemsBFS` and `itemsDFS` to iterate over nodes in tree
 # IDEA `pairsBFS` and `pairsDFS` to iterate over paths
 #      (similar to index?) + nodes in tree
@@ -395,9 +408,20 @@ Notes
 
 Macro is a wrapper for call to recursive implementation of DFS mapper
 (`mapDFSpost`) - `op` and other expresions are wrapped into callback
-procs
+procs.
+
+Example
+^^^^^^^
+
+For examples of use look into `tests/tHalgorithm.nim`, 'Tree mapping
+suite'.
 
   ]##
+
+  # NOTE Too lazy to check for already implemented features. I guess
+  # most oft he things are implemented? #idea #software##emacs write
+  # helper to jump to closest todo in the code. #todo parse todo items
+  # in comments.
 
   # TODO add proc for checking if futher recursion is not needed (trim
   # down arbitrary branches from tree)
@@ -457,6 +481,10 @@ procs
         getSubnodes = proc(`itIdent`: typeof(`inTree`)): seq[typeof(`inTree`)] =
                         for subn in `subnodeCall`:
                           result.add subn
+        ,
+        hasSubnodes =
+          proc(`itIdent`: typeof(`inTree`)): bool =
+            `hasSubnodes`
       )
 
 import tables, strutils

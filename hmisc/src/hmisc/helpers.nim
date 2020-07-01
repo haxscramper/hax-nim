@@ -16,7 +16,11 @@ import strformat
 export strformat
 
 #~#=== Optional type
-type Opt*[T] = Option[T]
+type
+  Opt*[T] = Option[T]
+  TreePath* = seq[int]
+
+
 
 proc `==`*[T](opt: Opt[T],val: T): bool =
   ## Compare option with value for equatilty

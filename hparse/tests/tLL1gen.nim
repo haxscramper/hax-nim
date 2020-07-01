@@ -129,7 +129,7 @@ suite "LL(1) parser simple":
     let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
 
     # ERROR `index out of bounds, the container is empty`
-    # pprint tree
+    pprint tree
 
   test "Map parse tree to ast":
     let root = parseTokens(@[
