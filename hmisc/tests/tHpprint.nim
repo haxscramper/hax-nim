@@ -672,3 +672,53 @@ suite "Large object printout":
           vOffset:   100
           alignment: "center"
           onMouseUp: "sun1.opacity = (sun1.opacity / 100) * 90;"""".dedent()
+
+
+import hmisc/[objdiff, htrie]
+
+suite "Object diff":
+  test "diff integers":
+    assertEq diff(1, 2).paths(), @[@[0]]
+
+  # NOTE test diff with string sequece too
+  test "{diff} seq":
+    assertEq diff(@[1], @[2]).paths(), @[@[0, 0]]
+    assertEq diff(@[1, 1], @[2, 1]).paths(), @[@[0, 0]]
+    assertEq diff(@[1, 2], @[2, 1]).paths(), @[@[0, 0], @[0, 1]]
+    assertEq diff(@[1], @[1]).paths(), emptySeq[seq[int]]()
+    assertEq diff(@["hel"], @["`1`"]).paths(), @[@[0, 0]]
+
+  test "{diff} Object field difference":
+    type
+      U = object
+        f1: int
+
+    assertEq diff(U(f1: 90), U(f1: 91)).paths(), @[@[0, 0]]
+
+  test "{diff} Case object difference":
+    type
+      U = object
+        case kind: bool
+          of true:
+            f1: char
+          of false:
+            f2: string
+
+    block:
+      let res = diff(
+        U(kind: true, f1: '1'),
+        U(kind: true, f1: '9')
+      )
+
+      assertEq res.paths, @[@[0, 1]]
+
+    block:
+      let res = diff(
+        U(kind: true, f1: '9'),
+        U(kind: false, f2: "hello")
+      )
+
+      assertEq res.paths, @[@[0]]
+      assertEq res[[0]].kind, odkKind
+      # Not testig for different fields since they will not be
+      # iterated (different kinds)

@@ -314,15 +314,15 @@ suite "Field switch macro":
 #=======================  objdiff implementation  ========================#
 
 type
-  ObjDiffKind = enum
+  ObjDiffKind* = enum
     odkLen
     odkKind
     odkValue
 
-  ObjDiff = object
-    case kind: ObjDiffKind:
+  ObjDiff* = object
+    case kind*: ObjDiffKind:
       of odkLen:
-        lhsLen, rhsLen: int
+        lhsLen*, rhsLen*: int
       else:
         discard
 
@@ -330,9 +330,7 @@ type
   ObjDiffPaths = Trie[int, ObjDiff]
 
 
-# macro
-
-proc diff[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
+proc diff*[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
   when T is seq:
     if lhsIn.len() != rhsIn.len():
       result[path] = ObjDiff(kind: odkLen, lhsLen: lhsIn.len(), rhsLen: rhsIn.len())
@@ -354,52 +352,3 @@ proc diff[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
   else:
     if lhsIn != rhsIn:
       result[path] = ObjDiff(kind: odkValue)
-
-#================================  tests  ================================#
-
-suite "Main":
-  test "diff integers":
-    assertEq diff(1, 2).paths(), @[@[0]]
-
-  # NOTE test diff with string sequece too
-  test "{diff} seq":
-    assertEq diff(@[1], @[2]).paths(), @[@[0, 0]]
-    assertEq diff(@[1, 1], @[2, 1]).paths(), @[@[0, 0]]
-    assertEq diff(@[1, 2], @[2, 1]).paths(), @[@[0, 0], @[0, 1]]
-    assertEq diff(@[1], @[1]).paths(), emptySeq[seq[int]]()
-    assertEq diff(@["hel"], @["`1`"]).paths(), @[@[0, 0]]
-
-  test "{diff} Object field difference":
-    type
-      U = object
-        f1: int
-
-    assertEq diff(U(f1: 90), U(f1: 91)).paths(), @[@[0, 0]]
-
-  test "{diff} Case object difference":
-    type
-      U = object
-        case kind: bool
-          of true:
-            f1: char
-          of false:
-            f2: string
-
-    block:
-      let res = diff(
-        U(kind: true, f1: '1'),
-        U(kind: true, f1: '9')
-      )
-
-      assertEq res.paths, @[@[0, 1]]
-
-    block:
-      let res = diff(
-        U(kind: true, f1: '9'),
-        U(kind: false, f2: "hello")
-      )
-
-      assertEq res.paths, @[@[0]]
-      assertEq res[[0]].kind, odkKind
-      # Not testig for different fields since they will not be
-      # iterated (different kinds)
