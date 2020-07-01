@@ -30,7 +30,12 @@ type
   ]
 
   PPrintConf* = object
-    ## Pretty print configuration
+    ##[
+
+Pretty print configuration
+
+    ]##
+
     maxWidth*: int ## Max allowed width
     identStr*: string ## String to use for indentaion
     # wrapLargerThan*: int ##
@@ -90,6 +95,7 @@ type
 
 
   ObjTree*[Node] = object
+    path*: seq[int] ## Path of object in original tree
     case kind*: ObjKind
       of okConstant:
         constType*: string ## Type of the value
@@ -434,7 +440,7 @@ proc dedicatedConvertMatcher*[Obj](
   ## converters
   return conv(val)
 
-proc prettyPrintConverter(val: JsonNode): ValObjTree =
+proc prettyPrintConverter(val: JsonNode, path: seq[int] = @[0]): ValObjTree =
   ## Dedicated pretty-print converter implementation for `JsonNode`
   case val.kind:
     of JNull:
@@ -455,7 +461,9 @@ proc prettyPrintConverter(val: JsonNode): ValObjTree =
     of JArray:
       return ValObjTree(
         kind: okSequence,
-        valItems: val.getElems().map(prettyPrintConverter)
+        valItems: val.getElems().mapPairs(
+          prettyPrintConverter(rhs, path = path & @[idx])
+        )
       )
     of JObject:
       return ValObjTree(
@@ -465,18 +473,21 @@ proc prettyPrintConverter(val: JsonNode): ValObjTree =
         sectioned: false,
         fldPairs: val.getFields().mapPairs((
           name: lhs,
-          value: prettyPrintConverter(rhs)
+          value: prettyPrintConverter(rhs, path = path & @[idx])
         )))
 
 
 proc toSimpleTree*[Obj](
-  entry: Obj, conf: PPrintConf = PPrintConf()): ValObjTree =
+  entry: Obj, conf: PPrintConf = PPrintConf(),
+  path: seq[int] = @[0]): ValObjTree =
+  ## Top-level dispatch for pretty-printing
+  ##
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
   mixin prettyPrintConverter
-  when compiles(prettyPrintConverter(entry)):
+  when compiles(prettyPrintConverter(entry, path = path)):
     # If dedicated implementation exists, use it
-    return prettyPrintConverter(entry)
+    return prettyPrintConverter(entry, path = path)
   elif not (
       (entry is seq) or
       (entry is array) or
@@ -486,7 +497,8 @@ proc toSimpleTree*[Obj](
     result = ValObjTree(
       kind: okTable,
       keyType: $typeof((pairs(entry).nthType1)),
-      valType: $typeof((pairs(entry).nthType2))
+      valType: $typeof((pairs(entry).nthType2)),
+      path: path
     )
 
     for key, val in pairs(entry):
@@ -500,8 +512,10 @@ proc toSimpleTree*[Obj](
       itemType: $typeof(items(entry))
     )
 
+    var idx: int = 0
     for it in items(entry):
-      result.valItems.add(toSimpleTree(it))
+      result.valItems.add(toSimpleTree(it, path = path & @[idx]))
+      inc idx
 
   elif (entry is object) or
        (entry is ref object) or
@@ -530,6 +544,8 @@ proc toSimpleTree*[Obj](
         namedObject: false
       )
 
+    result.path = path
+
     when (entry is ref object):
       if entry == nil:
         result = ValObjTree(
@@ -537,18 +553,23 @@ proc toSimpleTree*[Obj](
           constType: $(typeof(Obj)),
           strLit: "nil")
       else:
+        var idx: int = 0
         for name, value in entry[].fieldPairs():
-          result.fldPairs.add((name, toSimpleTree(value)))
+          result.fldPairs.add((name, toSimpleTree(value, path = path & @[idx])))
+          inc idx
     else:
+      var idx: int = 0
       for name, value in entry.fieldPairs():
-        result.fldPairs.add((name, toSimpleTree(value)))
+        result.fldPairs.add((name, toSimpleTree(value, path = path & @[idx])))
+        inc idx
 
 
   elif (entry is proc):
     result = ValObjTree(
       kind: okConstant,
       constType: $(typeof(Obj)),
-      strLit: $(typeof(Obj))
+      strLit: $(typeof(Obj)),
+      path: path
     )
   else:
     when entry is string:
@@ -561,7 +582,8 @@ proc toSimpleTree*[Obj](
     result = ValObjTree(
       kind: okConstant,
       constType: $typeof(Obj),
-      strLit: val
+      strLit: val,
+      path: path
     )
 
 
@@ -611,7 +633,7 @@ proc makeChunk*(content: seq[string]): Chunk =
   ## Create chunk from list of lines
   Chunk(
     content: content,
-    maxWidth: content.mapIt(it.len()).max()
+    maxWidth: content.mapIt(it.len()).max(0)
   )
 
 proc makeChunk*(content: string): Chunk =
@@ -624,7 +646,7 @@ proc makeChunk*(other: seq[Chunk]): Chunk =
     content: other.mapIt(it.content).concat()
   )
 
-  result.maxWidth = result.content.mapIt(it.len()).max()
+  result.maxWidth = result.content.mapIt(it.len()).max(0)
 
 type
   ChunkLabels* = Table[RelPos, tuple[text: string, offset: int]]
@@ -691,7 +713,9 @@ proc relativePosition*(
     else:
       resLines.add(pref & line)
 
-  if rpBottomRight in labels and (rpBottomRight notin ignored):
+  if (rpBottomRight in labels) and
+     (rpBottomRight notin ignored) and
+     (resLines.len > 0):
     resLines[^1] &= labels[rpBottomRight].text
 
   if rpBottomLeft in labels:
