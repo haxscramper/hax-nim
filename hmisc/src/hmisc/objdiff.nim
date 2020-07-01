@@ -332,21 +332,27 @@ type
 
 # macro
 
-proc diff[T](lhs, rhs: T, path: TreePath = @[0]): ObjDiffPaths =
+proc diff[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
   when T is seq:
-    if lhs.len() != rhs.len():
-      result[path] = ObjDiff(kind: odkLen, lhsLen: lhs.len(), rhsLen: rhs.len())
+    if lhsIn.len() != rhsIn.len():
+      result[path] = ObjDiff(kind: odkLen, lhsLen: lhsIn.len(), rhsLen: rhsIn.len())
 
-    for idx, (lval, rval) in zip(lhs, rhs):
+    for idx, (lval, rval) in zip(lhsIn, rhsIn):
       result.merge diff(lval, rval, path & @[idx])
   elif T is object:
-    var idx: int = 0
-    for name, valLhs, valRhs in fieldPairs(lhs, rhs):
-      result.merge diff(valLhs, valRhs, path & @[idx])
-      inc idx
+    # var idx: int = 0
+    parallelFieldPairs(lhsIn, rhsIn):
+      if isKind:
+        result[path] = ObjDiff(kind: odkKind)
+      else:
+        result.merge diff(lhs, rhs, path & @[fldIdx])
+
+    # for name, valLhs, valRhs in fieldPairs(lhs, rhs):
+
+    #   inc idx
 
   else:
-    if lhs != rhs:
+    if lhsIn != rhsIn:
       result[path] = ObjDiff(kind: odkValue)
 
 #================================  tests  ================================#
@@ -369,14 +375,31 @@ suite "Main":
         f1: int
 
     assertEq diff(U(f1: 90), U(f1: 91)).paths(), @[@[0, 0]]
-    # block:
-    #   let res = diff(
-    #     U(kind: true, f1: '1'),
-    #     U(kind: true, f1: '9')
-    #   )
 
-    # block:
-    #   let res = diff(
-    #     U(kind: true, f1: '9'),
-    #     U(kind: false, f2: "hello")
-    #   )
+  test "{diff} Case object difference":
+    type
+      U = object
+        case kind: bool
+          of true:
+            f1: char
+          of false:
+            f2: string
+
+    block:
+      let res = diff(
+        U(kind: true, f1: '1'),
+        U(kind: true, f1: '9')
+      )
+
+      assertEq res.paths, @[@[0, 1]]
+
+    block:
+      let res = diff(
+        U(kind: true, f1: '9'),
+        U(kind: false, f2: "hello")
+      )
+
+      assertEq res.paths, @[@[0]]
+      assertEq res[[0]].kind, odkKind
+      # Not testig for different fields since they will not be
+      # iterated (different kinds)
