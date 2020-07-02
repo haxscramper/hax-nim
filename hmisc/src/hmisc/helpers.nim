@@ -358,6 +358,27 @@ func enclosedIn*(
   return str.startsWith(delim.left) and
     str.endsWith(delim.right)
 
+
+func wrap*(
+  str: string,
+  delim: tuple[left, right: string]): string =
+  ## Check if string starts and ends with strings.
+  return delim.left & str & delim.right
+
+
+func escapeHTML*(input: string): string =
+  input.multiReplace([
+    (">", "&gt;"),
+    ("<", "&lt;"),
+    ("&", "&amp;"),
+    ("\"", "&quot;")
+  ])
+
+func quote*(input: string): string =
+  input.multiReplace([
+    ("\"", "\\\"")
+  ]).wrap(("\"", "\""))
+
 func enclosedIn*(s: string, delim: string): bool =
   s.enclosedIn((delim, delim))
 

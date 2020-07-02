@@ -11,9 +11,25 @@ relevant places.
 ]##
 
 type
-  NodeId = distinct int
+  NodeId = object
+    path: seq[int]
 
-func `$`(id: NodeId): string = "_" & $int(id)
+func `$`(id: NodeId): string =
+  "_" & id.path.mapIt($it).join(":")
+
+converter toNodeId(id: int): NodeId =
+  ## Create single node id
+  NodeId(path: @[id])
+
+converter toNodeId(ids: seq[int]): seq[NodeId] =
+  ## Create multiple node ids
+  ids.mapIt(NodeId(path: @[it]))
+
+converter toNodeId(ids: seq[seq[int]]): seq[NodeId] =
+  ## Create multile node ids for record nodes
+  ids.mapIt(NodeId(path: it))
+
+
 
 type
   NodeShape = enum
@@ -153,7 +169,7 @@ type
 
 type
   RecordField = object
-    id*: string ## Record field id
+    id*: int ## Record field id
     text*: string ## Text in record field
     # REVIEW allow use of html directly?
     vertical*: bool ## Orientation direction
@@ -176,6 +192,7 @@ type
    weights specifying how much of region is filled with each color.
 
     ]##
+    id*: NodeId
     case style: NodeStyle
       # NOTE not clear what happens with 'filled' node that uses color
       # list
@@ -223,8 +240,8 @@ type
 type
   Edge = object
     arrowSpec: Arrow
-    source: NodeId
-    target: seq[NodeId]
+    src: NodeId
+    to: seq[NodeId]
 
 type
   Graph = object
@@ -256,7 +273,7 @@ type
       of dtkEdgeDef:
         origin: NodeId
         targets: seq[NodeId]
-        edgeAttrib: StringTableRef
+        edgeAttributes: StringTableRef
       of dtkProperty:
         key, val: string
       of dtkSubgraph:
@@ -264,11 +281,13 @@ type
         elements: seq[DotTree]
 
 func toString(record: RecordField): string =
-  discard
+  # TODO keep track of graph direction to ensure correct rotation
+  &"<{record.id}> {record.text}"
 
 func toTree(node: Node, level: int = 0): DotTree =
   var attr = newStringTable()
   result = DotTree(kind: dtkNodeDef)
+  result.nodeId = node.id
 
   case node.style:
     of nstStriped, nstWedged:
@@ -282,10 +301,21 @@ func toTree(node: Node, level: int = 0): DotTree =
       if node.style != nstDefault:
         attr["style"] = $node.style
 
+  case node.shape:
+    of nsaRecord, nsaMRecord:
+      attr["label"] = node.flds.mapIt(toString(it)).join(" | ").quote()
+    else:
+      discard
+
   result.nodeAttributes = attr
 
 func toTree(edge: Edge, level: int = 0): DotTree =
   result = DotTree(kind: dtkEdgeDef)
+  var attrs = newStringTable()
+  result.origin = edge.src
+  result.targets = edge.to
+
+  result.edgeAttributes = attrs
 
 func toTree(graph: Graph, level: int = 0): DotTree =
   result = DotTree(kind: dtkSubgraph)
@@ -305,6 +335,7 @@ func toTree(graph: Graph, level: int = 0): DotTree =
 
   result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
   result.elements.add graph.edges.mapIt(toTree(it, level + 1))
+  result.elements.add graph.subgraphs.mapIt(toTree(it, level + 1))
 
 
 proc join(ropes: openarray[Rope], sep: string = " "): Rope =
@@ -315,21 +346,22 @@ proc join(ropes: openarray[Rope], sep: string = " "): Rope =
 
     result.add rope
 
-proc toRope(tree: DotTree): Rope =
+proc toRope(tree: DotTree, level: int = 0): Rope =
+  let pref = "  ".repeat(level)
   case tree.kind:
     of dtkSubgraph:
       var tmp = tree.elements[0]
-      tree.section.join(" ") & " {\n" &
-        tree.elements.map(toRope).join("\n") &
-      "\n}"
+      pref & tree.section.join(" ") & " {\n" &
+        tree.elements.mapIt(toRope(it, level + 1)).join("\n") &
+      "\n" & pref & "}"
     of dtkProperty:
-      rope(&"{tree.key} = {tree.val};")
+      rope(&"{pref}{tree.key} = {tree.val};")
     of dtkNodeDef:
       let attrs = tree.nodeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
       if attrs.len == 0:
-        rope(&"{tree.nodeId};")
+        rope(&"{pref}{tree.nodeId};")
       else:
-        rope(&"{tree.nodeId}[{attrs}];")
+        rope(&"{pref}{tree.nodeId}[{attrs}];")
     of dtkEdgeDef:
       let rhs =
         if tree.targets.len == 1:
@@ -337,17 +369,52 @@ proc toRope(tree: DotTree): Rope =
         else:
           tree.targets.mapIt($it).join(", ").wrap(("{", "}"))
 
-      let attrs = tree.edgeAttrib.mapPairs(&"{lhs}={rhs}").join(", ")
+      let attrs = tree.edgeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
       if attrs.len == 0:
-        rope(&"{tree.origin} -> {rhs};")
+        rope(&"{pref}{tree.origin} -> {rhs};")
       else:
-        rope(&"{tree.origin} -> {rhs}[{attrs}];")
+        rope(&"{pref}{tree.origin} -> {rhs}[{attrs}];")
 
 proc `$`(graph: Graph): string = $graph.toTree().toRope()
 
-echo Graph(
+#===============================  testing  ===============================#
+import shell
+
+let res = Graph(
   name: "G",
   nodes: @[
-    Node()
+    Node(id: 12),
+    Node(id: 25),
+    Node(id: 23),
+    Node(
+      id: 8,
+      shape: nsaRecord,
+      flds: @[
+        RecordField(id: 8, text: "Hello"),
+        RecordField(id: 9, text: "world")
+      ]
+    )
+  ],
+  edges: @[
+    Edge(src: 12, to: @[23, 25])
+  ],
+  subgraphs: @[
+    Graph(
+      name: "ZZ",
+      isCluster: true,
+      nodes: @[
+        Node(id: 999)
+      ]
+    )
   ]
 )
+
+let file = "/tmp/file.dot"
+
+file.writeFile($res)
+
+echo file.readFile()
+
+shell:
+  "dot -Tpng -o/tmp/file-tmp.png /tmp/file.dot"
+  cp "/tmp/file-tmp.png" "/tmp/file.png"

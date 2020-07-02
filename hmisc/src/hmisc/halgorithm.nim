@@ -388,30 +388,26 @@ Convert one tree type into another. Conversion is perfomed in
 bottom-up manner - first child nodes are evaluated, then results are
 supplied to parent nodes and so on.
 
-Parameters
-^^^^^^^^^^
+## Parameters
 
 :subnodeCall: Expression to get child nodes
 :outType: Result type
 :inTree: Tree to convert
 :op: Expression for converting objects.
 
-Injected variables
-^^^^^^^^^^^^^^^^^^
+## Injected variables
 
 :it: current tree node
 :path: path of the current node in original tree
 :subt: already converted subnodes
 
-Notes
-^^^^^
+## Notes
 
 Macro is a wrapper for call to recursive implementation of DFS mapper
 (`mapDFSpost`) - `op` and other expresions are wrapped into callback
 procs.
 
-Example
-^^^^^^^
+## Example
 
 For examples of use look into `tests/tHalgorithm.nim`, 'Tree mapping
 suite'.
