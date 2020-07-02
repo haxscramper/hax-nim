@@ -1,6 +1,8 @@
 import colors, options, strtabs, ropes, sequtils, strutils, strformat
 import helpers, halgorithm
 
+
+
 ##[
 Statically typed wrapper on top of graphviz node description
 format.
@@ -418,7 +420,6 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
 proc `$`(graph: Graph): string = $graph.toTree().toRope()
 
 #===============================  testing  ===============================#
-import shell
 
 let res = Graph(
   name: "G",
@@ -452,12 +453,21 @@ let res = Graph(
   ]
 )
 
-let file = "/tmp/file.dot"
+{.define(shellThrowException).}
+import shell
 
-file.writeFile($res)
+proc topng*(
+  graph: Graph,
+  resfile: string,
+  tmpfile: string = "/tmp/dot-file.dot",
+  tmpimage: string = "/tmp/dot-image-tmp.png"
+     ): void =
+  ## Generate file from graph
 
-echo file.readFile()
+  tmpfile.writeFile($graph)
+  let shellcmd = &"dot -Tpng -o{tmpimage} {tmpfile}"
+  shell:
+    ($shellcmd)
+    cp ($tmpimage) ($resfile)
 
-shell:
-  "dot -Tpng -o/tmp/file-tmp.png /tmp/file.dot"
-  cp "/tmp/file-tmp.png" "/tmp/file.png"
+res.topng("/tmp/file.png")
