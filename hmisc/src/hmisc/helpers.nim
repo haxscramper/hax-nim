@@ -374,11 +374,6 @@ func escapeHTML*(input: string): string =
     ("\"", "&quot;")
   ])
 
-func quote*(input: string): string =
-  input.multiReplace([
-    ("\"", "\\\"")
-  ]).wrap(("\"", "\""))
-
 func enclosedIn*(s: string, delim: string): bool =
   s.enclosedIn((delim, delim))
 

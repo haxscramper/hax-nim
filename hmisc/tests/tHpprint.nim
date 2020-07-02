@@ -429,7 +429,14 @@ var conf = PPrintConf(
 )
 
 template pstr(arg: untyped, ident: int = 0): untyped =
-  toSimpleTree(arg).prettyString(conf, ident)
+  var counter =
+    iterator(): int {.closure.} =
+      var cnt: int = 0
+      while true:
+        yield cnt
+        inc cnt
+
+  toSimpleTree(arg, counter).prettyString(conf, ident)
 
 suite "Simple configuration":
   test "integer":
@@ -557,7 +564,14 @@ var jsonConf = PPrintConf(
 )
 
 template pjson(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(jsonConf)
+  var counter =
+    iterator(): int {.closure.} =
+      var cnt: int = 0
+      while true:
+        yield cnt
+        inc cnt
+
+  toSimpleTree(arg, counter).prettyString(jsonConf)
 
 suite "Json pretty printing":
   test "Reparse int":
@@ -617,7 +631,14 @@ var treeConf = PPrintConf(
 )
 
 template treeStr(arg: untyped): untyped =
-  toSimpleTree(arg).prettyString(treeConf)
+  var counter =
+    iterator(): int {.closure.} =
+      var cnt: int = 0
+      while true:
+        yield cnt
+        inc cnt
+
+  toSimpleTree(arg, counter).prettyString(treeConf)
 
 suite "Large object printout":
   test "Large JSON as treeRepr":
@@ -677,6 +698,16 @@ suite "Large object printout":
 suite "Object tree to dot grap":
   test "Integer":
     echo toDotGraph(0)
+
+  test "Graph":
+    var counter =
+      iterator(): int =
+        var cnt: int = 0
+        while true:
+          yield cnt
+          inc cnt
+
+    echo pstring(toSimpleTree([9, 10], idCounter = counter))
 
 import hmisc/[objdiff, htrie]
 

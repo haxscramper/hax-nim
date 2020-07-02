@@ -96,6 +96,7 @@ Pretty print configuration
 
   ObjTree*[Node] = object
     path*: seq[int] ## Path of object in original tree
+    objId*: int
     case kind*: ObjKind
       of okConstant:
         constType*: string ## Type of the value
@@ -478,13 +479,16 @@ proc prettyPrintConverter(val: JsonNode, path: seq[int] = @[0]): ValObjTree =
 
 
 proc toSimpleTree*[Obj](
-  entry: Obj, conf: PPrintConf = PPrintConf(),
+  entry: Obj,
+  idCounter: var iterator(): int,
+  conf: PPrintConf = PPrintConf(),
   path: seq[int] = @[0]): ValObjTree =
   ## Top-level dispatch for pretty-printing
   ##
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
   mixin prettyPrintConverter
+
   when compiles(prettyPrintConverter(entry, path = path)):
     # If dedicated implementation exists, use it
     return prettyPrintConverter(entry, path = path)
@@ -494,27 +498,35 @@ proc toSimpleTree*[Obj](
       (entry is openarray) or
       (entry is string)
     ) and compiles(for k, v in pairs(entry): discard):
+
     result = ValObjTree(
       kind: okTable,
       keyType: $typeof((pairs(entry).nthType1)),
       valType: $typeof((pairs(entry).nthType2)),
-      path: path
+      path: path,
+      objId: idCounter()
     )
 
     for key, val in pairs(entry):
-      result.valPairs.add(($key, toSimpleTree(val)))
+      result.valPairs.add(($key, toSimpleTree(val,
+          idCounter
+      )))
 
   elif not (
       (entry is string)
     ) and (compiles(for i in items(entry): discard)):
     result = ValObjTree(
       kind: okSequence,
-      itemType: $typeof(items(entry))
+      itemType: $typeof(items(entry)),
+      objId: idCounter()
     )
 
     var idx: int = 0
     for it in items(entry):
-      result.valItems.add(toSimpleTree(it, path = path & @[idx]))
+      result.valItems.add(toSimpleTree(
+        it, path = path & @[idx],
+        idCounter = idCounter
+      ))
       inc idx
 
   elif (entry is object) or
@@ -526,7 +538,8 @@ proc toSimpleTree*[Obj](
         name: $typeof(Obj),
         sectioned: false,
         namedObject: true,
-        namedFields: true
+        namedFields: true,
+        objId: idCounter()
       )
     elif isNamedTuple(Obj):
       result = ValObjTree(
@@ -534,14 +547,16 @@ proc toSimpleTree*[Obj](
         name: $typeof(Obj),
         sectioned: false,
         namedObject: false,
-        namedFields: true
+        namedFields: true,
+        objId: idCounter()
       )
     else:
       result = ValObjTree(
         kind: okComposed,
         sectioned: false,
         namedFields: false,
-        namedObject: false
+        namedObject: false,
+        objId: idCounter()
       )
 
     result.path = path
@@ -551,16 +566,25 @@ proc toSimpleTree*[Obj](
         result = ValObjTree(
           kind: okConstant,
           constType: $(typeof(Obj)),
-          strLit: "nil")
+          strLit: "nil",
+          objId: idCounter()
+        )
       else:
         var idx: int = 0
         for name, value in entry[].fieldPairs():
-          result.fldPairs.add((name, toSimpleTree(value, path = path & @[idx])))
+          result.fldPairs.add((name, toSimpleTree(
+            value, path = path & @[idx],
+            idCounter = idCounter
+          )))
           inc idx
     else:
       var idx: int = 0
       for name, value in entry.fieldPairs():
-        result.fldPairs.add((name, toSimpleTree(value, path = path & @[idx])))
+        result.fldPairs.add((name, toSimpleTree(
+          value,
+          path = path & @[idx],
+          idCounter = idCounter
+        )))
         inc idx
 
 
@@ -569,7 +593,8 @@ proc toSimpleTree*[Obj](
       kind: okConstant,
       constType: $(typeof(Obj)),
       strLit: $(typeof(Obj)),
-      path: path
+      path: path,
+      objId: idCounter()
     )
   else:
     when entry is string:
@@ -583,8 +608,10 @@ proc toSimpleTree*[Obj](
       kind: okConstant,
       constType: $typeof(Obj),
       strLit: val,
-      path: path
+      path: path,
+      objId: idCounter()
     )
+
 
 
 type
@@ -953,7 +980,14 @@ type
     f1: int
 
 proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): string =
-  let tree = toSimpleTree(obj)
+  var counter =
+    iterator(): int {.closure.} =
+      var cnt: int = 0
+      while true:
+        yield cnt
+        inc cnt
+
+  let tree = toSimpleTree(obj, counter)
   # TO whoever reading this: I had to use life support system to not
   # die of brain overload. Just saying.
   let folded = tree.mapItTreeDFS(
@@ -992,9 +1026,16 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): string =
   )
 
 proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
+  var counter =
+    iterator(): int {.closure.} =
+      var cnt: int = 0
+      while true:
+        yield cnt
+        inc cnt
+
   var conf = objectPPrintConf
   conf.maxWidth = maxWidth
-  prettyString(toSimpleTree(obj), conf, ident)
+  prettyString(toSimpleTree(obj, counter), conf, ident)
 
 proc pprint*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): void =
   echo pstring(obj, ident,  maxWidth)

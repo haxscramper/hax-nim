@@ -33,6 +33,12 @@ converter toNodeId(ids: seq[seq[int]]): seq[NodeId] =
   # defer: debugecho result
   ids.mapIt(NodeId(path: it))
 
+func quote*(input: string): string =
+  input.multiReplace([
+    ("\"", "\\\"")
+  ]).wrap(("\"", "\""))
+
+
 func isRecord(id: NodeId): bool = id.path.len > 1
 
 
