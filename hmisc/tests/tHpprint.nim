@@ -707,7 +707,10 @@ suite "Object tree to dot grap":
           yield cnt
           inc cnt
 
-    echo pstring(toSimpleTree([9, 10], idCounter = counter))
+    var its: ref seq[int]
+    new(its)
+    its[].add 12
+    echo pstring(toSimpleTree(its, idCounter = counter))
 
 import hmisc/[objdiff, htrie]
 

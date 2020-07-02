@@ -477,6 +477,9 @@ proc prettyPrintConverter(val: JsonNode, path: seq[int] = @[0]): ValObjTree =
           value: prettyPrintConverter(rhs, path = path & @[idx])
         )))
 
+template unref(val: untyped): untyped =
+  when val is ref: val[]
+  else: val
 
 proc toSimpleTree*[Obj](
   entry: Obj,
@@ -514,15 +517,21 @@ proc toSimpleTree*[Obj](
 
   elif not (
       (entry is string)
-    ) and (compiles(for i in items(entry): discard)):
+    ) and (
+    (compiles(for i in items(entry): discard)) or
+    (compiles(for i in items(entry[]): discard))
+  ):
     result = ValObjTree(
       kind: okSequence,
-      itemType: $typeof(items(entry)),
-      objId: idCounter()
+      itemType: $typeof(items(unref entry)),
+      objId: (entry is ref).tern(
+        cast[int](unsafeAddr entry),
+        idCounter()
+      )
     )
 
     var idx: int = 0
-    for it in items(entry):
+    for it in items(unref entry):
       result.valItems.add(toSimpleTree(
         it, path = path & @[idx],
         idCounter = idCounter
@@ -532,6 +541,7 @@ proc toSimpleTree*[Obj](
   elif (entry is object) or
        (entry is ref object) or
        (entry is tuple):
+    let id = when entry is ref: addr entry else: idCounter()
     when (entry is object) or (entry is ref object):
       result = ValObjTree(
         kind: okComposed,
@@ -539,7 +549,7 @@ proc toSimpleTree*[Obj](
         sectioned: false,
         namedObject: true,
         namedFields: true,
-        objId: idCounter()
+        objId: id
       )
     elif isNamedTuple(Obj):
       result = ValObjTree(
@@ -548,7 +558,7 @@ proc toSimpleTree*[Obj](
         sectioned: false,
         namedObject: false,
         namedFields: true,
-        objId: idCounter()
+        objId: id
       )
     else:
       result = ValObjTree(
@@ -556,7 +566,7 @@ proc toSimpleTree*[Obj](
         sectioned: false,
         namedFields: false,
         namedObject: false,
-        objId: idCounter()
+        objId: id
       )
 
     result.path = path
