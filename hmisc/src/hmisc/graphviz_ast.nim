@@ -15,7 +15,7 @@ type
     path: seq[int]
 
 func `$`(id: NodeId): string =
-  "_" & id.path.mapIt($it).join(":")
+  id.path.mapIt("t" & $it).join(":")
 
 converter toNodeId(id: int): NodeId =
   ## Create single node id
@@ -27,7 +27,11 @@ converter toNodeId(ids: seq[int]): seq[NodeId] =
 
 converter toNodeId(ids: seq[seq[int]]): seq[NodeId] =
   ## Create multile node ids for record nodes
+  # debugecho ids
+  # defer: debugecho result
   ids.mapIt(NodeId(path: it))
+
+func isRecord(id: NodeId): bool = id.path.len > 1
 
 
 
@@ -155,6 +159,15 @@ type
     edsBold = "bold"
     edsTapered = "tapered" # TODO NOTE
 
+  SplineStyle = enum
+    spsDefault = ""
+    spsOrtho = "ortho"
+    spsNone = "none"
+    spsLine = "line"
+    spsPolyline = "polyline"
+    spsCurved = "curved"
+    spsSplines = "spline"
+
 type
   ClusterStyles = enum
     clsDefault = ""
@@ -169,7 +182,7 @@ type
 
 type
   RecordField = object
-    id*: int ## Record field id
+    id*: NodeId ## Record field id
     text*: string ## Text in record field
     # REVIEW allow use of html directly?
     vertical*: bool ## Orientation direction
@@ -239,9 +252,11 @@ type
 
 type
   Edge = object
+    spline: SplineStyle
     arrowSpec: Arrow
     src: NodeId
     to: seq[NodeId]
+    color: Color
 
 type
   Graph = object
@@ -252,6 +267,7 @@ type
     labelOnBottom*: bool
     fontsize*: int
     fontcolor*: Color
+    splines*: SplineStyle
 
     subgraphs*: seq[Graph]
     nodes*: seq[Node]
@@ -282,7 +298,7 @@ type
 
 func toString(record: RecordField): string =
   # TODO keep track of graph direction to ensure correct rotation
-  &"<{record.id}> {record.text}"
+  &"<{record.id}>{record.text}"
 
 func toTree(node: Node, level: int = 0): DotTree =
   var attr = newStringTable()
@@ -303,22 +319,35 @@ func toTree(node: Node, level: int = 0): DotTree =
 
   case node.shape:
     of nsaRecord, nsaMRecord:
-      attr["label"] = node.flds.mapIt(toString(it)).join(" | ").quote()
+      attr["label"] = node.flds.mapIt(toString(it)).join("|").quote()
     else:
       discard
+
+  if node.shape != nsaDefault: attr["shape"] = $node.shape
 
   result.nodeAttributes = attr
 
 func toTree(edge: Edge, level: int = 0): DotTree =
   result = DotTree(kind: dtkEdgeDef)
   var attrs = newStringTable()
+
+  if edge.color != colBlack:
+    # HACK black color is omitted unconditionally. need to IMPLEMENT
+    # check whether or not this is allowed.
+    attrs["color"] = ($edge.color).quote
+
   result.origin = edge.src
   result.targets = edge.to
 
   result.edgeAttributes = attrs
 
+func toTree(attrs: StringTableRef): seq[DotTree] =
+  for key, val in attrs:
+    result.add DotTree(kind: dtkProperty, key: key, val: val)
+
 func toTree(graph: Graph, level: int = 0): DotTree =
   result = DotTree(kind: dtkSubgraph)
+  var attrs = newStringTable()
 
   if level == 0:
     if graph.isUndirected:
@@ -330,12 +359,14 @@ func toTree(graph: Graph, level: int = 0): DotTree =
   else:
     result.section.add "subgraph"
 
-  if graph.isCluster:
-    result.section.add &"cluster_{graph.name}"
+  if graph.isCluster: result.section.add &"cluster_{graph.name}"
+  if graph.splines != spsDefault: attrs["splines"] = $graph.splines
 
+  result.elements &= toTree(attrs)
   result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
   result.elements.add graph.edges.mapIt(toTree(it, level + 1))
   result.elements.add graph.subgraphs.mapIt(toTree(it, level + 1))
+
 
 
 proc join(ropes: openarray[Rope], sep: string = " "): Rope =
@@ -363,17 +394,26 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
       else:
         rope(&"{pref}{tree.nodeId}[{attrs}];")
     of dtkEdgeDef:
-      let rhs =
-        if tree.targets.len == 1:
-          $tree.targets[0]
-        else:
-          tree.targets.mapIt($it).join(", ").wrap(("{", "}"))
-
       let attrs = tree.edgeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
-      if attrs.len == 0:
-        rope(&"{pref}{tree.origin} -> {rhs};")
+      if tree.targets.anyOfIt(it.isRecord):
+        var res: Rope
+        # TODO Generate muliple edegs for record types, one edge per target
+        # TODO test of thsi works on graphviz first
+        for to in tree.targets:
+          res.add &"{pref}{tree.origin} -> {to};\n"
+
+        res
       else:
-        rope(&"{pref}{tree.origin} -> {rhs}[{attrs}];")
+        let rhs =
+          if tree.targets.len == 1:
+            $tree.targets[0]
+          else:
+            tree.targets.mapIt($it).join(", ").wrap(("{", "}"))
+
+        if attrs.len == 0:
+          rope(&"{pref}{tree.origin} -> {rhs};")
+        else:
+          rope(&"{pref}{tree.origin} -> {rhs}[{attrs}];")
 
 proc `$`(graph: Graph): string = $graph.toTree().toRope()
 
@@ -387,16 +427,19 @@ let res = Graph(
     Node(id: 25),
     Node(id: 23),
     Node(
-      id: 8,
+      id: 77,
       shape: nsaRecord,
       flds: @[
         RecordField(id: 8, text: "Hello"),
-        RecordField(id: 9, text: "world")
+        RecordField(id: 9, text: "world"),
+        RecordField(id: 10, text: "world")
       ]
     )
   ],
   edges: @[
-    Edge(src: 12, to: @[23, 25])
+    Edge(src: 12, to: @[23, 25]),
+    Edge(src: 999, to: @[@[77, 8], @[77, 9], @[77, 10], @[25]]),
+    Edge(src: 999, to: @[77, 12], color: colGreen)
   ],
   subgraphs: @[
     Graph(
