@@ -259,7 +259,7 @@ type
     ] ## Arrow shapes [1]
 
 type
-  Edge = object
+  Edge* = object
     spline: SplineStyle
     arrowSpec: Arrow
     src: NodeId
@@ -267,7 +267,7 @@ type
     color: Color
 
 type
-  Graph = object
+  Graph* = object
     isUndirected*: bool
     name*: string
     isCluster*: bool
@@ -423,7 +423,9 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
         else:
           rope(&"{pref}{tree.origin} -> {rhs}[{attrs}];")
 
-proc `$`(graph: Graph): string = $graph.toTree().toRope()
+proc `$`*(graph: Graph): string =
+  echo "codfnasdf"
+  $graph.toTree().toRope()
 
 #===============================  testing  ===============================#
 

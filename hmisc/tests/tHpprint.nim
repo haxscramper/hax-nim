@@ -2,6 +2,7 @@ import unittest, shell
 
 import hmisc/[helpers, defensive]
 import strutils
+import hmisc/graphviz_ast
 
 import hmisc/hpprint
 
@@ -695,7 +696,7 @@ suite "Large object printout":
           onMouseUp: "sun1.opacity = (sun1.opacity / 100) * 90;"""".dedent()
 
 
-suite "Object tree to dot grap":
+suite "Object tree to dot graph":
   test "Integer":
     echo toDotGraph(0)
 
@@ -710,7 +711,10 @@ suite "Object tree to dot grap":
     var its: ref seq[int]
     new(its)
     its[].add 12
-    echo pstring(toSimpleTree(its, idCounter = counter))
+    let tree = toSimpleTree(its, idCounter = counter)
+    let graph = tree.toDotGraph()
+    echo "graph"
+    echo graphviz_ast.`$`(graph)
 
 import hmisc/[objdiff, htrie]
 

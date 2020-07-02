@@ -12,6 +12,9 @@
 import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat, macros
 import typetraits, macroutils
+import hvariant
+
+import graphviz_ast
 
 import gara, with
 
@@ -989,7 +992,7 @@ type
   DotGenConfig = object
     f1: int
 
-proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): string =
+proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   var counter =
     iterator(): int {.closure.} =
       var cnt: int = 0
@@ -1001,6 +1004,8 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): string =
   # TO whoever reading this: I had to use life support system to not
   # die of brain overload. Just saying.
   let folded = tree.mapItTreeDFS(
+    outType = seq[Var2[Edge, Node]],
+    hasSubnodes = (it.kind != okConstant),
     subnodeCall =
       block:
         case it.kind:
@@ -1013,27 +1018,30 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): string =
               of true: raiseAssert(
                 "IMPLEMENT Sectioned objects are not supported RN")
     ,
-    outType = seq[string],
     op =
       block:
-        let currId = "_" & it.path.mapIt($it).join("_")
-        let edgeCode =
-          if subt.len > 0:
-            let subPaths = subt.mapPairs("_" & (path & @[idx]).join("_")).join(", ")
-            # TODO display sequences and objects as compound items
-            # (using html)
-            &"{currId} -> {{{subPaths}}}"
-          else:
-            ""
+        # let currId = "_" & it.path.mapIt($it).join("_")
+        # let edgeCode =
+        #   if subt.len > 0:
+        #     let subPaths = subt.mapPairs("_" & (path & @[idx]).join("_")).join(", ")
+        #     # TODO display sequences and objects as compound items
+        #     # (using html)
+        #     &"{currId} -> {{{subPaths}}}"
+        #   else:
+        #     ""
 
-        @[
-          &"{currId}"
-        ]
-    ,
-    hasSubnodes =
-      block:
-        (it.kind != okConstant)
+        # @[
+        #   &"{currId}"
+        # ]
+        subt.concat()
   )
+
+  result = Graph(
+    nodes: folded.filterIt(it.hasType(Node)).mapIt(it.get(Node)),
+    edges: folded.filterIt(it.hastype(Edge)).mapIt(it.get(Edge))
+  )
+
+
 
 proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
   var counter =
