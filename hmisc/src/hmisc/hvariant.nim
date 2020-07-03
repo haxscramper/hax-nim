@@ -10,34 +10,34 @@ type
   Var2*[T0, T1] = Var4[T0, T1, void, void]
 
 template get*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3], t: typed): auto =
-  var idx: int = 0
-  var res: t
-  for name, fld in v.fieldPairs():
-    when fld is t:
-      if v.idx == idx:
-        res = fld
-      else:
-        raiseAssert("Cannot get value for type `" & $typeof(t) &
-          "` - current variant index is " & $v.idx & ", but " &
-          "value with type `" & $typeof(t) & "` has index " & $idx)
+  const idx = when t is T0: 0
+              elif t is T1: 1
+              elif t is T2: 2
+              elif t is T3: 3
+              else: {.error("Wrong type for `get`").}
 
-    if name != "idx":
-      inc idx
+  if v.idx == idx:
+    when idx == 0: v.f0
+    elif idx == 1: v.f1
+    elif idx == 2: v.f2
+    else: v.f3
+  else:
+    raiseAssert("Cannot get value for type `" & $typeof(t) &
+      "` - current variant index is " & $v.idx & ", but " &
+      "value with type `" & $typeof(t) & "` has index " & $idx)
 
-  res
+
+func idx*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3]): int = v.idx
 
 template hasType*[T0, T1, T2, T3](
   invar: Var4[T0, T1, T2, T3], t: typed): bool =
-  var res: bool = false
-  var idx: int = 0
-  for name, fld in invar.fieldPairs():
-    if (fld is t) and (invar.idx == idx):
-      res = true
 
-    if name != "idx":
-      inc idx
-
-  res
+  when t is T0: invar.idx == 0
+  elif t is T1: invar.idx == 1
+  elif t is T2: invar.idx == 2
+  elif t is T3: inver.idx == 3
+  else:
+    {.error("Unexpected type").} # TODO better error
 
 func setv*[T0, T1, T2, T3](
   v: var Var4[T0, T1, T2, T3], val: T0 | T1 | T2 | T3) =
