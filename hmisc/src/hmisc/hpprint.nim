@@ -98,8 +98,25 @@ Pretty print configuration
 
 
   ObjTree*[Node] = object
+    ##[
+
+## Fields
+
+:isPrimitive: Value is primitve or not?
+
+  Primitive value will be added to graphviz node export as part of the
+  table (in regular export) as oppposed to non-primitive value (it
+  will be rendered as separate node). By default primitive values are
+  `int`, `string`, `float` etc. types, tuples/objects that are (1)
+  composed only from primitive types (`(int, int)`), (2) have four
+  fields or less. Also tables/sequences with four elements or less are
+  considered primitive if (1) both keys and values are primitive (2)
+  container has four elements or less.
+
+    ]##
     path*: seq[int] ## Path of object in original tree
     objId*: int
+    isPrimitive*: bool ## Whether or not value can be considered primitive
     case kind*: ObjKind
       of okConstant:
         constType*: string ## Type of the value
@@ -112,6 +129,10 @@ Pretty print configuration
         valType*: string ## TYpe of value key
         valPairs*: seq[tuple[key: string, val: ObjTree[Node]]] ## List of
         ## key-value pairs for table
+        # XXXX TODO TEST used `ObjTree` for key too. Non-trivial types
+        # can be used. Write unit tests for this functionality.
+
+        # NOTE REFACTOR use `value` for enum field.
       of okComposed:
         namedObject*: bool ## This object's type has a name? (tuples
         ## does not have name for a tyep)
@@ -497,6 +518,35 @@ template unref(val: untyped): untyped =
   when val is ref: val[]
   else: val
 
+func checkPrimitive(tree: ObjTree): bool =
+  ##[
+
+Check if tree can be considered primitive.
+
+NOTE: values are not checked for primitivenes recursively. Instead
+`isPrimitive` field is used.
+
+  ]##
+  case tree.kind:
+    of okConstant:
+      tree.constType in @["string", "int", "float"]
+    of okSequence:
+      (tree.valItems.len < 5) and
+      tree.valItems.allOfIt(it.isPrimitive)
+    of okTable:
+      (tree.valPairs.len < 5) and
+      tree.valPairs.allOfIt(it.val.isPrimitive)
+    of okComposed:
+      if tree.sectioned:
+        # NOTE IMPLEMENT objects with sectioned case fields are not
+        # currently supported.
+        tree.kindBlocks.len < 5 and
+        true
+      else:
+        (tree.fldPairs.len < 5) and
+        tree.valPairs.allOfIt(it.val.isPrimitive)
+
+
 proc toSimpleTree*[Obj](
   entry: Obj,
   idCounter: var iterator(): int,
@@ -507,6 +557,8 @@ proc toSimpleTree*[Obj](
   ## Generic implementation for pretty-print conveter for types not
   ## implementing dedicated `prettyPrintConverter`
   mixin prettyPrintConverter
+  defer:
+    result.isPrimitive = result.checkPrimitive()
 
   when compiles(prettyPrintConverter(entry, path = path)):
     # If dedicated implementation exists, use it
