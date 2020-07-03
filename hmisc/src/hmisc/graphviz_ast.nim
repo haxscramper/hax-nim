@@ -14,7 +14,7 @@ relevant places.
 ]##
 
 type
-  NodeId = object
+  NodeId* = object
     path: seq[int]
 
 func `$`(id: NodeId): string =
@@ -45,7 +45,7 @@ func isRecord(id: NodeId): bool = id.path.len > 1
 
 
 type
-  NodeShape = enum
+  NodeShape* = enum
     # Copied from https://graphviz.org/doc/info/shapes.html
     # (Polygon-based models) and converted using
     # `xclip -out | tr '\t' '\n' | sort | uniq | perl -pne 's/^(.*)$/nsa\u$1 = "$1"/' > /tmp/res.txt`
@@ -332,7 +332,7 @@ func toTree(node: Node, level: int = 0): DotTree =
     of nsaRecord, nsaMRecord:
       attr["label"] = node.flds.mapIt(toString(it)).join("|").quote()
     of nsaPlaintext:
-      attr["label"] = "<" & $node.htmlLabel & ">"
+      attr["label"] = " <" & $node.htmlLabel & "> "
     else:
       discard
 

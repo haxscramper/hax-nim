@@ -165,6 +165,11 @@ type
     text: string
     color: Color
 
+func makeObjElem(text: string): ObjElem =
+  ObjElem(
+    text: text
+  )
+
 type
   BlockGrid[T] = object
     case isItem: bool
@@ -173,6 +178,14 @@ type
       of false:
         grid: seq[seq[BlockGrid[T]]]
 
+func makeGrid[T](arg: seq[seq[T]]): BlockGrid[T] =
+  BlockGrid[T](isItem: false, grid: arg.mapIt(
+    it.mapIt(
+      BlockGrid[T](isItem: true, item: it)
+  )))
+
+func makeGridItem[T](arg: T): BlockGrid[T] =
+  BlockGrid[T](isItem: true, item: arg)
 
 func `==`*[Node](lhs, rhs: Field[Node]): bool
 
@@ -1057,7 +1070,27 @@ type
   DotGenConfig = object
     f1: int
 
-proc toGrid*(obj: ObjTree): BlockGrid[ObjElem] =
+proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
+  grid: BlockGrid[ObjElem],
+  edges: seq[(NodeId, NodeId)]] =
+  # If object is primitive convert it into grid. All non-primitive
+  # child objects will be converted into port nodes - no content is
+  # present, only port for connecting to external node. For each such
+  # node edge is added from current node's output port to other node.
+
+  assert obj.isPrimitive
+  case obj.kind:
+    of okConstant:
+      if obj.isPrimitive:
+        # REVIEW handle non-primitive constants
+        result.grid = makeGrid(
+          @[@[
+            makeObjElem(obj.constType), # First cellis object type
+            makeObjElem(obj.strLit) # Secon cell - object value
+          ]])
+    else:
+      discard
+
   discard
 
 # fold object into grid, export grid into html table, convert html
@@ -1078,8 +1111,12 @@ proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
       )
     of false:
       HtmlElem(
+        kind: hekTable,
         elements: grid.grid.mapIt(
-          HtmlElem(elements: it.mapIt(toTable(it)))
+          HtmlElem(
+            kind: hekRow,
+            elements: it.mapIt(toTable(it))
+          )
         )
       )
 
@@ -1092,7 +1129,19 @@ All primitive subitems are embedded into resulting node. All other
 elements as converted into edges.
 
   ]##
-  discard
+  let (grid, edges) = obj.toGrid(obj.objId)
+  result.node = Node(
+    shape: nsaPlaintext,
+    id: obj.objId,
+    htmlLabel: grid.toTable()
+  )
+
+  for (src, to) in edges:
+    result.edges.add Edge(
+      src: src,
+      to: @[ to ]
+    )
+
 
 proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   var counter =

@@ -698,23 +698,25 @@ suite "Large object printout":
 
 suite "Object tree to dot graph":
   test "Integer":
-    echo toDotGraph(0)
-
-  test "Graph":
-    var counter =
-      iterator(): int =
-        var cnt: int = 0
-        while true:
-          yield cnt
-          inc cnt
-
-    var its: ref seq[int]
-    new(its)
-    its[].add 12
-    let tree = toSimpleTree(its, idCounter = counter)
-    let graph = tree.toDotGraph()
-    echo graphviz_ast.`$`(graph)
+    let graph = toDotGraph(0)
+    echo graph
     graph.topng("/tmp/image.png")
+
+  # test "Graph":
+  #   var counter =
+  #     iterator(): int =
+  #       var cnt: int = 0
+  #       while true:
+  #         yield cnt
+  #         inc cnt
+
+  #   var its: ref seq[int]
+  #   new(its)
+  #   its[].add 12
+  #   let tree = toSimpleTree(its, idCounter = counter)
+  #   let graph = tree.toDotGraph()
+  #   echo graphviz_ast.`$`(graph)
+  #   # graph.topng("/tmp/image.png")
 
 
 import hmisc/[objdiff, htrie]
