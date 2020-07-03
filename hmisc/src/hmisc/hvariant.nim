@@ -59,6 +59,11 @@ func add*[T0, T1, T2, T3](
   elif val is T2: v.add Var4[T0, T1, T2, T3](idx: 2, f2: val)
   else:           v.add Var4[T0, T1, T2, T3](idx: 3, f3: val)
 
+template `&=`*[T0, T1, T2, T3](
+  v: var seq[Var4[T0, T1, T2, T3]], val: typed) =
+  for item in val:
+    v.add item
+
 # TODO function to concatenate two sequences
 # TODO proc to create variant instance
 

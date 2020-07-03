@@ -464,7 +464,7 @@ isKind
       let `ident(genParams.rhsObj)` = `rhsObj`
       `unrolled`
 
-  # echo result.toStrLit()
+ # echo result.toStrLit()
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
@@ -1060,6 +1060,9 @@ type
 proc toGrid*(obj: ObjTree): BlockGrid[ObjElem] =
   discard
 
+# fold object into grid, export grid into html table, convert html
+# table into graphviz object.
+
 proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
   case grid.isItem:
     of true:
@@ -1080,6 +1083,17 @@ proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
         )
       )
 
+proc foldObject(obj: ObjTree): tuple[node: Node, edges: seq[Edge]] =
+  ##[
+
+Recurisvely convert `ObjTree` into graphviz html-like node.
+
+All primitive subitems are embedded into resulting node. All other
+elements as converted into edges.
+
+  ]##
+  discard
+
 proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   var counter =
     iterator(): int {.closure.} =
@@ -1091,7 +1105,7 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   let tree = toSimpleTree(obj, counter)
   # TO whoever reading this: I had to use life support system to not
   # die of brain overload. Just saying.
-  let folded = tree.mapItTreeDFS(
+  var folded = tree.mapItTreeDFS(
     outType = seq[Var2[Edge, Node]],
     hasSubnodes = (it.kind != okConstant),
     subnodeCall =
@@ -1109,20 +1123,19 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
     op =
       block:
         var tmp: seq[Var2[Edge, Node]]
-        tmp.add Edge(src: it.objId, to: inSubt.mapIt(it.objId))
-        # tmp.add Node()
-        # let edges =
-        # let currId = "_" & it.path.mapIt($it).join("_")
-        # let edgeCode =
-        #   if subt.len > 0:
-        #     let subPaths = subt.mapPairs("_" & (path & @[idx]).join("_")).join(", ")
-        #     # TODO display sequences and objects as compound items
-        #     # (using html)
-        #     &"{currId} -> {{{subPaths}}}"
-        #   else:
-        #     ""
+
+        if not it.isPrimitive:
+          let (node, edges) = it.foldObject()
+          tmp.add node
+          tmp &= edges
+
         tmp & subt.concat()
   )
+
+  if tree.isPrimitive: # If toplevel object is primitive add
+    let (node, edges) = tree.foldObject()
+    folded.add node
+    folded &= edges
 
   result = Graph(
     nodes: folded.filterIt(it.hasType(Node)).mapIt(it.get(Node)),

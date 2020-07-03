@@ -1,6 +1,7 @@
 import colors, options, strtabs, ropes, sequtils, strutils, strformat
 import helpers, halgorithm
 
+import html_ast
 
 
 ##[
@@ -231,6 +232,8 @@ type
       of nsaRecord, nsaMRecord:
         # NOTE top-level record is always horizontal (?)
         flds*: seq[RecordField]
+      of nsaPlaintext:
+        htmlLabel*: HtmlElem
       else:
         label*: string ## Node label
 
@@ -328,6 +331,8 @@ func toTree(node: Node, level: int = 0): DotTree =
   case node.shape:
     of nsaRecord, nsaMRecord:
       attr["label"] = node.flds.mapIt(toString(it)).join("|").quote()
+    of nsaPlaintext:
+      attr["label"] = "<" & $node.htmlLabel & ">"
     else:
       discard
 
