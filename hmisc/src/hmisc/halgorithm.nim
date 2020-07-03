@@ -497,6 +497,7 @@ suite'.
 
   # TODO predicate to check if item has subnodes or not.
   # TEST predicated for subnodes checking
+  # REVIEW TODO STYLE rename `outType` into `intermediateType` ?
   let
     itIdent = ident "it"
     pathIdent = ident "path"

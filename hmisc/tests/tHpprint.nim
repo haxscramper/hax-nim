@@ -699,7 +699,17 @@ suite "Large object printout":
 suite "Object tree to dot graph":
   template testgraph(obj: untyped): untyped =
     let graph = toDotGraph(obj)
-    graph.topng("/tmp/image.png")
+    try:
+      graph.topng("/tmp/image.png")
+    except ShellExecError:
+      let e = cast[ShellExecError](getCurrentException())
+      let str = $graph
+      echo "   ----   message:"
+      echo e.msg
+      echo "   ----   error str:"
+      echo e.errstr
+      echo "   ----   graph text:"
+      echo str
 
   test "Integer":
     testgraph(12)
