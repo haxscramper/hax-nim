@@ -19,15 +19,15 @@ type
 func `$`(id: NodeId): string =
   id.path.mapIt("t" & $it).join(":")
 
-converter toNodeId(id: int): NodeId =
+converter toNodeId*(id: int): NodeId =
   ## Create single node id
   NodeId(path: @[id])
 
-converter toNodeId(ids: seq[int]): seq[NodeId] =
+converter toNodeId*(ids: seq[int]): seq[NodeId] =
   ## Create multiple node ids
   ids.mapIt(NodeId(path: @[it]))
 
-converter toNodeId(ids: seq[seq[int]]): seq[NodeId] =
+converter toNodeId*(ids: seq[seq[int]]): seq[NodeId] =
   ## Create multile node ids for record nodes
   # debugecho ids
   # defer: debugecho result
@@ -260,11 +260,11 @@ type
 
 type
   Edge* = object
-    spline: SplineStyle
-    arrowSpec: Arrow
-    src: NodeId
-    to: seq[NodeId]
-    color: Color
+    spline*: SplineStyle
+    arrowSpec*: Arrow
+    src*: NodeId
+    to*: seq[NodeId]
+    color*: Color
 
 type
   Graph* = object
@@ -389,7 +389,6 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
   let pref = "  ".repeat(level)
   case tree.kind:
     of dtkSubgraph:
-      var tmp = tree.elements[0]
       pref & tree.section.join(" ") & " {\n" &
         tree.elements.mapIt(toRope(it, level + 1)).join("\n") &
       "\n" & pref & "}"
@@ -424,7 +423,6 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
           rope(&"{pref}{tree.origin} -> {rhs}[{attrs}];")
 
 proc `$`*(graph: Graph): string =
-  echo "codfnasdf"
   $graph.toTree().toRope()
 
 #===============================  testing  ===============================#

@@ -1020,6 +1020,12 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
     ,
     op =
       block:
+        var tmp: seq[Var2[Edge, Node]]
+        tmp.add Edge(
+          src: it.objId,
+          to: inSubt.mapIt(it.objId)
+        )
+        # let edges =
         # let currId = "_" & it.path.mapIt($it).join("_")
         # let edgeCode =
         #   if subt.len > 0:
@@ -1029,11 +1035,7 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
         #     &"{currId} -> {{{subPaths}}}"
         #   else:
         #     ""
-
-        # @[
-        #   &"{currId}"
-        # ]
-        subt.concat()
+        tmp & subt.concat()
   )
 
   result = Graph(

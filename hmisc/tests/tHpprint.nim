@@ -713,7 +713,6 @@ suite "Object tree to dot graph":
     its[].add 12
     let tree = toSimpleTree(its, idCounter = counter)
     let graph = tree.toDotGraph()
-    echo "graph"
     echo graphviz_ast.`$`(graph)
 
 import hmisc/[objdiff, htrie]

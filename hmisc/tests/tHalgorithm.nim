@@ -75,7 +75,12 @@ suite "Tree mapping":
   test "{mapDFSpost} value assetions :proc:generic:value:example:":
     assert inval.mapDFSpost(
       map =
-        proc(it: InTest, path: seq[int], subt: seq[OutTest]): OutTest =
+        proc(
+          it: InTest,
+          path: seq[int],
+          subt: seq[OutTest],
+          inSubt: seq[InTest]
+        ): OutTest =
           OutTest(val: $it.val & "--" & $(subt.len()), sub: subt),
       getSubnodes =
         proc(it: InTest): seq[InTest] = it.sub

@@ -39,15 +39,30 @@ template hasType*[T0, T1, T2, T3](
 
   res
 
+func setv*[T0, T1, T2, T3](
+  v: var Var4[T0, T1, T2, T3], val: T0 | T1 | T2 | T3) =
 
-func setv*[T0, T1, T2, T3](v: var Var4[T0, T1, T2, T3], val: T0) =
-  v = Var4[T0, T1, T2, T3](idx: 0, f0: val)
+  v = when val is T0: Var4[T0, T1, T2, T3](idx: 0, f0: val)
+      elif val is T1: Var4[T0, T1, T2, T3](idx: 1, f1: val)
+      elif val is T2: Var4[T0, T1, T2, T3](idx: 2, f2: val)
+      else:           Var4[T0, T1, T2, T3](idx: 3, f3: val)
 
-func setv*[T0, T1, T2, T3](v: var Var4[T0, T1, T2, T3], val: T1) =
-  v = Var4[T0, T1, T2, T3](idx: 1, f1: val)
+var tmp: Var2[int, float]
+tmp.setv(1.2)
 
-func setv*[T0, T1, T2, T3](v: var Var4[T0, T1, T2, T3], val: T2) =
-  v = Var4[T0, T1, T2, T3](idx: 2, f2: val)
 
-func setv*[T0, T1, T2, T3](v: var Var4[T0, T1, T2, T3], val: T3) =
-  v = Var4[T0, T1, T2, T3](idx: 3, f3: val)
+func add*[T0, T1, T2, T3](
+  v: var seq[Var4[T0, T1, T2, T3]], val: T0 | T1 | T2 | T3) =
+
+  when val is T0: v.add Var4[T0, T1, T2, T3](idx: 0, f0: val)
+  elif val is T1: v.add Var4[T0, T1, T2, T3](idx: 1, f1: val)
+  elif val is T2: v.add Var4[T0, T1, T2, T3](idx: 2, f2: val)
+  else:           v.add Var4[T0, T1, T2, T3](idx: 3, f3: val)
+
+# TODO function to concatenate two sequences
+# TODO proc to create variant instance
+
+# func concat[T1, T2](
+#   s1: openarray[T1], s2: openarray[T2]): seq[Var2[T1, T2]] =
+#   for v in s1:
+#     result.add Var2[]

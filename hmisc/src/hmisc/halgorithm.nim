@@ -318,7 +318,12 @@ export options
 
 proc mapDFSpost*[InTree, OutTree, CbRes](
   tree: InTree,
-  map: proc(n: InTree, path: seq[int], subn: seq[OutTree]): CbRes,
+  map: proc(
+    n: InTree,
+    path: seq[int],
+    subn: seq[OutTree],
+    inSubn: seq[InTree]
+  ): CbRes,
   getSubnodes: proc(tree: InTree): seq[InTree],
   hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
   path: seq[int] = @[0]): CbRes =
@@ -328,11 +333,14 @@ proc mapDFSpost*[InTree, OutTree, CbRes](
   static:
     assert (CbRes is OutTree) or (CbRes is Option[OutTree])
 
+  var subnodes: seq[InTree]
   let nodeRes: seq[OutTree] =
     if hasSubnodes(tree):
       var tmp: seq[OutTree]
-      for idx, node in getSubnodes(tree):
-        var res = mapDFSpost(node, map, getSubnodes, hasSubnodes,  path & @[idx])
+      subnodes = getSubnodes(tree)
+      for idx, node in subnodes:
+        var res = mapDFSpost(
+          node, map, getSubnodes, hasSubnodes,  path & @[idx])
 
         when CbRes is Option[OutTree]:
           if res.isSome():
@@ -344,7 +352,7 @@ proc mapDFSpost*[InTree, OutTree, CbRes](
     else:
       @[]
 
-  return map(tree, path, nodeRes)
+  return map(tree, path, nodeRes, subnodes)
 
 
 proc mapDFSpost*[InTree, OutTree](
@@ -357,7 +365,12 @@ proc mapDFSpost*[InTree, OutTree](
   # TODO DOC
   mapDFSpost(
     tree,
-    proc(n: InTree, path: seq[int], subn: seq[OutTree]): OutTree = map(n, subn),
+    proc(
+      n: InTree,
+      path: seq[int],
+      subn: seq[OutTree],
+      inSubn: seq[InTree]
+    ): OutTree = map(n, subn),
     getSubnodes,
     hasSubnodes,
     path
@@ -375,7 +388,12 @@ proc mapDFSpost*[InTree, OutTree](
   # TODO DOC
   return mapDFSpost(
     tree = tree,
-    map = proc(n: InTree, path: seq[int], subn: seq[OutTree]): Option[OutTree] = map(n, subn),
+    map = proc(
+      n: InTree,
+      path: seq[int],
+      subn: seq[OutTree],
+      inSubn: seq[InTree]
+    ): Option[OutTree] = map(n, subn),
     getSubnodes = getSubnodes,
     hasSubnodes = hasSubnodes,
     path = path
@@ -400,6 +418,7 @@ supplied to parent nodes and so on.
 :it: current tree node
 :path: path of the current node in original tree
 :subt: already converted subnodes
+:inSubt: current input subnodes
 
 ## Notes
 
@@ -439,6 +458,7 @@ suite'.
     itIdent = ident "it"
     pathIdent = ident "path"
     subnIdent = ident "subt"
+    inSubnIdent = ident "inSubt"
 
 
   let pos = inTree.lineInfoObj().line.newLit()
@@ -452,6 +472,7 @@ suite'.
           var `itIdent`: typeof(`inTree`)
           var `pathIdent`: seq[int]
           var `subnIdent`: seq[`outType`]
+          var `inSubnIdent`: seq[typeof(`inTree`)]
 
           `op`))
 
@@ -470,8 +491,11 @@ suite'.
         `inTree`,
         map =
           proc(
-            `itIdent`: typeof(`inTree`), `pathIdent`: seq[int],
-            `subnIdent`: seq[`outType`]): `outType` =
+            `itIdent`: typeof(`inTree`),
+            `pathIdent`: seq[int],
+            `subnIdent`: seq[`outType`],
+            `inSubnIdent`: seq[typeof(`inTree`)]
+          ): `outType` =
               `op`
         ,
         getSubnodes = proc(`itIdent`: typeof(`inTree`)): seq[typeof(`inTree`)] =
