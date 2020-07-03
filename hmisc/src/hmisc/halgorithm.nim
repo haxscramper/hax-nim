@@ -327,7 +327,47 @@ proc mapDFSpost*[InTree, OutTree, CbRes](
   getSubnodes: proc(tree: InTree): seq[InTree],
   hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
   path: seq[int] = @[0]): CbRes =
-  ## Convert one tree type into another using post order DFS traversal
+  ##[
+
+Map one tree into another
+
+Convert one tree type into another using post-order DFS traversal.
+Tree is iterated in bottom-up manner. After leaving each node `map` is
+called to generate new result. `subn` is a result of previous.
+
+For tree like this `map` will first be executed for `IN1.1` through
+`IN1.3`. Results of the map will be passed as `subn`.
+
+.. code::
+    +-------+     +-------+     +-------+
+    | IN1.3 | <-- |  IN1  | --> | IN1.1 |
+    +-------+     +-------+     +-------+
+                    |
+                    |
+                    v
+                  +-------+
+                  | IN1.2 |
+                  +-------+
+
+
+## Parameters
+
+:tree: Input tree
+:map: Procedure for converting one tree into another.
+
+  `CbRes` can be either `OutTree` or `Option[OutTree]`. In latter case
+  `none()` results will be filtered out from the `subn`
+
+  :n: Input subtree
+  :path: Path of the current subtree in original node
+  :subn: Evaluation results from child nodes
+  :inSubn: List of child nodes for original node
+
+:getSubnodes: Get subnodes from current tree
+:hasSubnodes: Check if input node can have subnodes
+
+  ]##
+
   # IDEA if `OutTree` is a sequence perform recursive concatenation of
   # the items instead of joining them in tree.
   static:
