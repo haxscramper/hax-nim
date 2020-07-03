@@ -64,6 +64,19 @@ template `&=`*[T0, T1, T2, T3](
   for item in val:
     v.add item
 
+func toVar2*[T0, T1](val: T0 | T1): Var2[T0, T1] =
+  when val is T0: Var2[T0, T1](idx: 0, f0: val)
+  else:           Var2[T0, T1](idx: 1, f1: val)
+
+import sequtils
+
+func toVar2*[T0, T1](val: seq[T0] | seq[T1]): seq[Var2[T0, T1]] =
+  when val is seq[T0]:
+    val.mapIt(Var2[T0, T1](idx: 0, f0: it))
+  else:
+    val.mapIt(Var2[T0, T1](idx: 1, f1: it))
+
+
 # TODO function to concatenate two sequences
 # TODO proc to create variant instance
 

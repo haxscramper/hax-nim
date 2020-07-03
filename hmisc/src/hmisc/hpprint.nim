@@ -146,7 +146,7 @@ Pretty print configuration
             # fields: everything is put into single key-value
             # sequence.
 
-            # TODO Add field type
+            # XXX TODO Add field type
             fldPairs*: seq[tuple[name: string, value: ObjTree[Node]]] ## Sequence
             ## of field-value pairs for object representation
           of true:
@@ -557,7 +557,7 @@ NOTE: values are not checked for primitivenes recursively. Instead
         true
       else:
         (tree.fldPairs.len < 5) and
-        tree.valPairs.allOfIt(it.val.isPrimitive)
+        tree.fldPairs.allOfIt(it.value.isPrimitive)
 
 
 proc toSimpleTree*[Obj](
@@ -1078,7 +1078,9 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
   # present, only port for connecting to external node. For each such
   # node edge is added from current node's output port to other node.
 
-  assert obj.isPrimitive
+  # assert obj.isPrimitive
+  echo &"converting object {obj.objId} to grid"
+  # echo obj
   case obj.kind:
     of okConstant:
       if obj.isPrimitive:
@@ -1142,6 +1144,17 @@ elements as converted into edges.
       to: @[ to ]
     )
 
+func getSubnodes*(it: ObjTree): seq[ObjTree] =
+  debugecho &"get subnodes for tree id {it.objId}"
+  case it.kind:
+    of okConstant: raiseAssert("No sub for `okConstant`")
+    of okSequence: it.valItems
+    of okTable: it.valPairs.mapIt(it.val)
+    of okComposed:
+      case it.sectioned:
+        of false: it.fldPairs.mapIt(it.value)
+        of true: raiseAssert(
+          "IMPLEMENT Sectioned objects are not supported RN")
 
 proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   var counter =
@@ -1157,28 +1170,13 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   var folded = tree.mapItTreeDFS(
     outType = seq[Var2[Edge, Node]],
     hasSubnodes = (it.kind != okConstant),
-    subnodeCall =
-      block:
-        case it.kind:
-          of okConstant: raiseAssert("No sub for `okConstant`")
-          of okSequence: it.valItems
-          of okTable: it.valPairs.mapIt(it.val)
-          of okComposed:
-            case it.sectioned:
-              of false: it.fldPairs.mapIt(it.value)
-              of true: raiseAssert(
-                "IMPLEMENT Sectioned objects are not supported RN")
-    ,
+    subnodeCall = it.getSubnodes(),
     op =
       block:
-        var tmp: seq[Var2[Edge, Node]]
-
-        if not it.isPrimitive:
-          let (node, edges) = it.foldObject()
-          tmp.add node
-          tmp &= edges
-
-        tmp & subt.concat()
+        let (node, edges) = it.foldObject()
+        @[ toVar2[Edge, Node](node) ] &
+          toVar2[Edge, Node](edges) &
+          subt.concat()
   )
 
   if tree.isPrimitive: # If toplevel object is primitive add

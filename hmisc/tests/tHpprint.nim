@@ -697,26 +697,15 @@ suite "Large object printout":
 
 
 suite "Object tree to dot graph":
-  test "Integer":
-    let graph = toDotGraph(0)
-    echo graph
+  template testgraph(obj: untyped): untyped =
+    let graph = toDotGraph(obj)
     graph.topng("/tmp/image.png")
 
-  # test "Graph":
-  #   var counter =
-  #     iterator(): int =
-  #       var cnt: int = 0
-  #       while true:
-  #         yield cnt
-  #         inc cnt
+  test "Integer":
+    testgraph(12)
 
-  #   var its: ref seq[int]
-  #   new(its)
-  #   its[].add 12
-  #   let tree = toSimpleTree(its, idCounter = counter)
-  #   let graph = tree.toDotGraph()
-  #   echo graphviz_ast.`$`(graph)
-  #   # graph.topng("/tmp/image.png")
+  test "Integer sequence":
+    testgraph(@[12])
 
 
 import hmisc/[objdiff, htrie]
