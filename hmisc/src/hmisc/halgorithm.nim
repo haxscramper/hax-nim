@@ -360,8 +360,11 @@ For tree like this `map` will first be executed for `IN1.1` through
 
   :n: Input subtree
   :path: Path of the current subtree in original node
-  :subn: Evaluation results from child nodes
-  :inSubn: List of child nodes for original node
+  :subn: Evaluation results from child nodes.
+  :inSubn: List of child nodes for original node.
+
+  Elements in `subn` and `inSubn` are ordered identically: `subn[i] ==
+  map(inSubn[i], ...)`
 
 :getSubnodes: Get subnodes from current tree
 :hasSubnodes: Check if input node can have subnodes

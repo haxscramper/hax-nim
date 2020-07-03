@@ -714,6 +714,8 @@ suite "Object tree to dot graph":
     let tree = toSimpleTree(its, idCounter = counter)
     let graph = tree.toDotGraph()
     echo graphviz_ast.`$`(graph)
+    graph.topng("/tmp/image.png")
+
 
 import hmisc/[objdiff, htrie]
 

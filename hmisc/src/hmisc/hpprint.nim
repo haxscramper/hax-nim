@@ -12,9 +12,9 @@
 import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat, macros
 import typetraits, macroutils
-import hvariant
+import hvariant, colors
 
-import graphviz_ast
+import graphviz_ast, html_ast
 
 import gara, with
 
@@ -138,6 +138,19 @@ Pretty print configuration
   ValObjTree* = ObjTree[void] ## Object tree used at runtime.
   ValField* = Field[void] ## Field used at runtime
   ValFieldBranch* = FieldBranch[void] ## Field branch used at runtime
+
+type
+  ObjElem = object
+    text: string
+    color: Color
+
+type
+  BlockGrid[T] = object
+    case isItem: bool
+      of true:
+        item: T
+      of false:
+        grid: seq[seq[BlockGrid[T]]]
 
 
 func `==`*[Node](lhs, rhs: Field[Node]): bool
@@ -992,6 +1005,29 @@ type
   DotGenConfig = object
     f1: int
 
+proc toGrid*(obj: ObjTree): BlockGrid[ObjElem] =
+  discard
+
+proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
+  case grid.isItem:
+    of true:
+      HtmlElem(
+        kind: hekCell,
+        cellBgColor: grid.item.color,
+        elements: @[
+          HtmlElem(
+            kind: hekText,
+            textStr: grid.item.text
+          )
+        ]
+      )
+    of false:
+      HtmlElem(
+        elements: grid.grid.mapIt(
+          HtmlElem(elements: it.mapIt(toTable(it)))
+        )
+      )
+
 proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   var counter =
     iterator(): int {.closure.} =
@@ -1021,10 +1057,8 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
     op =
       block:
         var tmp: seq[Var2[Edge, Node]]
-        tmp.add Edge(
-          src: it.objId,
-          to: inSubt.mapIt(it.objId)
-        )
+        tmp.add Edge(src: it.objId, to: inSubt.mapIt(it.objId))
+        # tmp.add Node()
         # let edges =
         # let currId = "_" & it.path.mapIt($it).join("_")
         # let edgeCode =
