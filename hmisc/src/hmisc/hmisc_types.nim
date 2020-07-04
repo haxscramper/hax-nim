@@ -1,9 +1,25 @@
 import sugar, sequtils
+import sorta
+export sorta
+
+type
+  Map*[K, V] = SortedTable[K, V]
 
 type
   Size* = object
     width: int
     height: int
+
+func initMap*[K, V](): Map[K, V] = initSortedTable[K, V]()
+func `[]=`*[K, V](map: var Map[K, V], key: K, val: V): void =
+  sorta.`[]=`(map, key, val)
+# func `[]`*[K, V](map: Map[K, V], key: K): V =
+#   map.getOrDefault(K)
+
+func toMap*[K, V](its: seq[(K, V)]): Map[K, V] =
+  result = initMap[K, V]()
+  for (key, val) in its:
+    result[key] = val
 
 func width*(size: Size): int = size.width
 func height*(size: Size): int = size.height
@@ -31,7 +47,7 @@ func rowNum*[T](s: Seq2D[T]): int =
 
 func rowAppend*[T](s: var Seq2D[T], elem: T, idx: int): void =
   ## Add element to `idx` row
-  elems[idx].add elem
+  s.elems[idx].add elem
 
 func newRow*[T](s: var Seq2D[T]): void =
   ## Add new row
@@ -78,7 +94,7 @@ import tables
 
 type
   SparseGrid*[T] = object
-    elems: Table[int, Table[int, T]]
+    elems: Map[int, Map[int, T]]
 
 func maxRow*[T](s: SparseGrid[T]): int =
   toSeq(s.elems.keys()).max()
@@ -90,15 +106,19 @@ func add*[T](s: var SparseGrid[T], row: seq[T]): void =
   s.elems[s.elems.keys().max() + 1] row
 
 func prepend*[T](s: var SparseGrid[T], row: seq[T]): void =
-  var newRow: Table[int, T]
+  var newRow = initMap[int, T]()
   for idx, item in row:
     newRow[idx] = item
 
   s.elems[s.minRow() - 1] = newRow
 
-  s.elems = collect(initTable(2)):
-    for idx, v in s.elems:
-      {idx + 1 : v}
+  s.elems =
+    block:
+      var tmp = initMap[int, Map[int, T]]()
+      for idx, v in s.elems:
+        tmp[idx + 1] = v
+
+      tmp
 
 func rowAppend*[T](s: var SparseGrid[T], elem: T, idx: int): void =
   ## Add element to `idx` row
@@ -112,17 +132,20 @@ converter toSparseGrid*[T](s: seq[seq[T]]): SparseGrid[T] =
   SparseGrid[T](
     elems:
       block:
-        collect(initTable(2)):
-          for rowIdx, row in s:
-            let cells: Table[int, T] = collect(initTable(2)):
+        var elems = initMap[int, Map[int, T]]()
+        for rowIdx, row in s:
+          elems[rowIdx] =
+            block:
+              var cells = initMap[int, T]()
               for colIdx, cell in row:
-                {colIdx : cell}
+                cells[colIdx] = cell
+              cells
 
-            {rowIdx : cells}
+        elems
   )
 
 iterator rows*[T](s: SparseGrid[T]): tuple[
-  idx: int, row: Table[int, T]] =
+  idx: int, row: Map[int, T]] =
   for key in toSeq(s.elems.keys()).sorted():
     yield (idx: key, row: s.elems[key])
 
@@ -142,9 +165,10 @@ func `[]`*[T](grid: SparseGrid[T], cell: (int, int)): T =
 
 func `[]=`*[T](grid: var SparseGrid[T], pos: (int, int), val: T): void =
   if pos[0] notin grid.elems:
-    grid.elems[pos[0]] = initTable[int, T]()
+    grid.elems[pos[0]] = initMap[int, T]()
 
-  grid.elems[pos[0]][pos[1]] = val
+  var gr = grid.elems[pos[0]]
+  gr[pos[1]] = val
 
 template mapIt2d*[T](inseq: SparseGrid[T], op: untyped): untyped =
   type ResT = typeof((

@@ -224,12 +224,12 @@ type
 
   BlockGrid*[T] = object
     grid*: SparseGrid[GridCell[T]] ## row[col[cell]]
-    maxH: Table[int, int] ## Max height in each row
-    maxW: Table[int, int] ## Max width in each column
+    maxH: Map[int, int] ## Max height in each row
+    maxW: Map[int, int] ## Max width in each column
 
   Range* = object
-    a: int
-    b: int
+    a*: int
+    b*: int
 
   Pos* = object
     row*: int
@@ -240,7 +240,10 @@ func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 func columns*[T](grid: BlockGrid[T]): seq[int] =
-  grid.maxH.mapPairs(rhs).sorted()
+  grid.maxH.mapPairs(lhs)
+
+func colSizes*[T](grid: BlockGrid[T]): Map[int, int] = grid.maxW
+func rowSizes*[T](grid: BlockGrid[T]): Map[int, int] = grid.maxH
 
 func rows*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxW.mapPairs(rhs).sorted()
@@ -273,8 +276,12 @@ func setMax[T](a: var T, b: T): void =
   if a < b:
     a = b
 
-func maxOrSet[K, V](tbl: var Table[K, V], key: K, val: V): void =
-  tbl.mgetOrPut(key, val).setMax(val)
+func maxOrSet[K, V](tbl: var Map[K, V], key: K, val: V): void =
+  if not tbl.hasKey(key):
+    tbl[key] = val
+  else:
+    if tbl[key] < val:
+      tbl[key] = val
 
 func `[]=`*[T](
   grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
@@ -292,6 +299,9 @@ func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
 func middles*(r: Range): int = (r.b - r.a - 1)
 
 func isPoint*(r: Range): bool = (r.a == r.b)
+func point*(r: Range): int =
+  assert r.isPoint()
+  r.a
 
   # for idx, cell in grid.grid.columns(pos.row):
   #   if idx > pos.col:
@@ -335,8 +345,8 @@ func makeGrid*[T](arg: SparseGrid[GridCell[T]]): BlockGrid[T] =
 
   result = BlockGrid[T](
     grid: arg,
-    maxW: maxColw.mapPairs((lhs, rhs)).toTable(),
-    maxH: toTable(arg.mapItRows(
+    maxW: maxColw.mapPairs((lhs, rhs)).toMap(),
+    maxH: toMap(arg.mapItRows(
       it.mapPairs(rhs.height).max(0)
     ))
   )

@@ -56,52 +56,56 @@ func toString*(grid: BlockGrid[StrSeq]): string =
     it.occupied.width + it.occupied.height
   )
 
-  var colSizes: Table[Range, int]
-  var rowSizes: Table[Range, int]
   let hSpacer: string = "-"
   let vSpacer: string = "|"
 
-  for cell in sortedCells:
-    block:
-      let colRange = grid.colRange(cell.pos)
-      if colRange.isPoint(): # Single column
-        if colRange in colSizes:
-          if cell.internal.width > colSizes[colRange]:
-            colSizes[colRange] = cell.internal.width
-        else:
-          colSizes[colRange] = cell.internal.width
-      else: # Multiple columns
-        let sepWidth = colRange.middles * hSpacer.len
+  # for cell in sortedCells:
+  #   block:
+  #     let colRange = grid.colRange(cell.pos)
+  #     if colRange.isPoint(): # Single column
+  #       if colRange.point() in grid.colSizes():
+  #         if cell.internal.width > grid.colSizes()[colRange.point()]:
+  #           colSizes[colRange] = cell.internal.width
+  #       else:
+  #         colSizes[colRange] = cell.internal.width
+  #     else: # Multiple columns
+  #       let sepWidth = colRange.middles * hSpacer.len
 
-    block:
-     let rowRange = grid.rowRange(cell.pos)
-     if rowRange.isPoint(): # Single rowumn
-       if rowRange in rowSizes:
-         if cell.internal.width > rowSizes[rowRange]:
-           rowSizes[rowRange] = cell.internal.width
-       else:
-         rowSizes[rowRange] = cell.internal.width
-     else: # Multiple rowumns
-       let sepWidth = rowRange.middles * hSpacer.len
+  #   block:
+  #    let rowRange = grid.rowRange(cell.pos)
+  #    if rowRange.isPoint(): # Single rowumn
+  #      if rowRange in rowSizes:
+  #        if cell.internal.width > rowSizes[rowRange]:
+  #          rowSizes[rowRange] = cell.internal.width
+  #      else:
+  #        rowSizes[rowRange] = cell.internal.width
+  #    else: # Multiple rowumns
+  #      let sepWidth = rowRange.middles * hSpacer.len
+
+  for idx, size in grid.colSizes():
+    debugecho &"col: {idx}, {size}"
+
+  for idx, size in grid.rowSizes():
+    debugecho &"row: {idx}, {size}"
 
   var res: seq[string]
   for (rowIdx, row) in grid.grid.rows():
     let rowH = grid.rowHeight(rowIdx)
     var linesBuf: seq[string] = newSeqWith(rowH, "")
     let startCol = grid.grid.firstColumn(rowIdx)
-    let padWidth = grid.columns
-      .filterIt(it < startCol)
-      .mapIt(colSizes[toRange(it, it #[HACK: assuming width 1 cols]#)]).sum()
+    let padWidth = toSeq(
+      grid.colSizes().valuesBetween(0, startCol - 1)
+    ).sum()
 
-    debugecho &"Text on row {rowIdx} starts with column {startCol}"
-    debugecho "Previous columns: ", grid.columns()
-    for idx in 0 ..< rowH:
-      debugecho &"Padding {idx} with {padWidth} characters"
-      linesBuf[idx] &= " ".repeat(padWidth)
+    for i in 0 ..< rowH:
+      linesBuf[i] &= "_".repeat(padWidth)
 
     for (colIdx, cell) in grid.grid.columns(rowIdx):
       let colRange = grid.colRange(toPos(rowIdx, colIdx))
-      let cellW = colSizes[colRange]
+      let cellW = toSeq(
+        grid.colSizes().valuesBetween(colRange.a, colRange.b)
+      ).sum()
+
       let spacer = hSpacer.repeat(cellW)
 
       for idx, line in cell.item:
