@@ -218,7 +218,7 @@ type
     case isItem*: bool
       of true:
         item*: T
-        size*: Size ## Item size
+        size: Size ## Item size
       of false:
         grid*: BlockGrid[T]
 
@@ -231,6 +231,9 @@ type
     a: int
     b: int
 
+  Pos* = object
+    row*: int
+    col*: int
 
 import hashes
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
@@ -238,12 +241,20 @@ func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 func width*[T](grid: BlockGrid[T]): int = grid.maxW.sum()
 func height*[T](grid: BlockGrid[T]): int = grid.maxH.sum()
+func occupied*[T](cell: GridCell[T]): Size =
+  makeSize(w = cell.cols, h = cell.rows)
+
+func internal*[T](cell: GridCell[T]): Size = cell.size
+
 func toRange*(elems: (int, int)): Range = Range(a: elems[0], b: elems[1])
 func colRange*[T](
   grid: BlockGrid[T],
-  pos: tuple[row, col: int]): Range =
+  pos: tuple[row, col: int] | Pos): Range =
   let start = pos.col
   var finish = pos.col
+
+
+func middles*(r: Range): int = (r.b - r.a - 1)
 
 func isPoint*(r: Range): bool = (r.a == r.b)
 

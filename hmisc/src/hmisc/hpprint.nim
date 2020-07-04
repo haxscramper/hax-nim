@@ -21,6 +21,7 @@ import obj_field_macros
 
 export tables, halgorithm
 import hpprint_types
+import algorithm
 
 # func makeGridItem[T](arg: T): BlockGrid[T] =
 #   BlockGrid[T](isItem: true, item: arg)
@@ -32,16 +33,50 @@ func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
   )
 
 func toString*(grid: BlockGrid[StrSeq]): string =
-  var colSizes: Table[Range, int]
-  var rowSizes: Table[Range, int]
+  var cellSizes: seq[tuple[
+    occupied: Size,
+    internal: Size,
+    pos: Pos
+  ]]
 
   for (rowIdx, row) in grid.grid.rows():
     for colIdx, cell in row:
-      let colRange = grid.colRange((rowIdx, colIdx))
-      if colRange in colSizes:
-        if colRange.isPoint():
-          if cell.width > colSizes[colRange]:
-            colSizes[colRange] = cell.width
+      cellSizes.add((
+        occupied: cell.occupied(),
+        internal: cell.internal(),
+        pos: Pos(row: rowIdx, col: colIdx)
+      ))
+
+  let sortedCells = cellSizes.sortedByIt(
+    it.occupied.width + it.occupied.height
+  )
+
+  var colSizes: Table[Range, int]
+  var rowSizes: Table[Range, int]
+  let hSpacer: string = "-"
+  let vSpacer: string = "|"
+
+  # for cell in sortedCells:
+  #   let colRange = grid.colRange(cell.pos)
+  #   if colRange.isPoint(): # Single column
+  #     if colRange in colSizes:
+  #       if cell.internal.width > colSizes[colRange]:
+  #         colSizes[colRange] = cell.internal.width
+  #     else:
+  #       colSizes[colRange] = cell.internal.width
+  #   else: # Multiple columns
+  #     let sepWidth = colRange.middles * hSpacer.len
+
+
+  var res: string
+  # for (rowIdx, row) in grid.grid.rows():
+  #   var linesBuf: seq[string] = newSeqWith(rowSizes())
+  #   for colIdx, cell in row:
+  #     let colRange = grid.colRange((rowIdx, colIdx))
+  #     let spacer = hSpacer.repeat(colSizes[colRange])
+
+
+  result = res
 
 
 
