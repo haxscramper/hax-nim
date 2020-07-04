@@ -340,10 +340,32 @@ func rows*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxW.mapPairs(rhs).sorted()
 
 func width*[T](grid: BlockGrid[T]): int =
-  grid.maxW.mapPairs(rhs).sum()
+  grid.maxW.mapPairs(rhs).sumjoin(
+    grid[gpoHorizontalGap].len()
+  ) +
+  max([ # Size of left edge
+    grid[gpoRightBorder].len(),
+    grid[gpoRightIntersection].len()
+  ]) +
+  max([ # Size of right edge
+    grid[gpoLeftBorder].len(),
+    grid[gpoLeftIntersection].len()
+  ])
 
 func height*[T](grid: BlockGrid[T]): int =
-  grid.maxH.mapPairs(rhs).sum()
+  grid.maxH.mapPairs(rhs).sumjoin(
+    grid[gpoVerticalGap].len()
+  ) +
+  max([ # Size of bottom spacer
+    grid[gpoBottomBorder].len(),
+    grid[gpoBottomLeft].len(),
+    grid[gpoBottomRight].len()
+  ]) +
+  max([ # Size of top spacer
+    grid[gpoTopBorder].len(),
+    grid[gpoTopLeft].len(),
+    grid[gpoTopRight].len()
+  ])
 
 func rowHeight*[T](grid: BlockGrid[T], row: int): int = grid.maxH[row]
 func occupied*[T](cell: GridCell[T]): Size =
@@ -480,3 +502,21 @@ func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
   cell.horizPolicy = spExpanding
 
   grid.grid.prepend(@[cell])
+
+func toStrings*(str: string): seq[string] =
+  str.toSeq().mapIt($it)
+
+# func toSeq
+
+# type
+#   TermStr* = object
+#     case isStr: bool
+#       of false:
+#         c: char
+#       of true:
+#         value: string
+
+# func set(str: var TermStr, val: string): void =
+#   str = TermStr(isStr: true, value: string)
+
+# func set(str: var TermStr, val)

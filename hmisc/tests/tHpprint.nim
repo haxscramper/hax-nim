@@ -39,6 +39,8 @@ suite "Block grid":
 
     echo grid.toStringGrid().toString()
 
+    quit 0
+
 
 suite "Block labeling":
   template test(

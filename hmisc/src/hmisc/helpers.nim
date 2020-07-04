@@ -60,6 +60,9 @@ template orElse*(
   if predicate: value
   else: fallback
 
+template setIf*(lhs: untyped, predicate: bool, value: untyped): untyped =
+  if predicate: lhs = value
+
 macro quoteDoInterpolStmt*(body: untyped): untyped =
   ## Allows to interpolate function call into `quote do` body. Literal
   ## strings surrounded by backticks will be replaced by function calls.
