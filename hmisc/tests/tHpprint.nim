@@ -4,9 +4,8 @@ import hmisc/[helpers, defensive]
 import strutils
 import hmisc/graphviz_ast
 
-import hmisc/hpprint
-
-import hmisc/hmisc_types
+import hmisc/[
+  hpprint, hmisc_types, hpprint_types, obj_field_macros]
 
 suite "Block grid":
   test "{makeCell}":
