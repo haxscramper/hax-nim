@@ -1,3 +1,5 @@
+import sugar, sequtils
+
 type
   Size* = object
     width: int
@@ -75,9 +77,14 @@ template mapIt2d*[T](inseq: Seq2d[T], op: untyped): untyped =
 import tables
 
 type
-  SparseGrid[T] = object
+  SparseGrid*[T] = object
     elems: Table[int, Table[int, T]]
 
+func maxRow*[T](s: SparseGrid[T]): int =
+  toSeq(s.elems.keys()).max()
+
+func minRow*[T](s: SparseGrid[T]): int =
+  toSeq(s.elems.keys()).min()
 
 func add*[T](s: var SparseGrid[T], row: seq[T]): void =
   s.elems[s.elems.keys().max() + 1] row
@@ -87,36 +94,31 @@ func prepend*[T](s: var SparseGrid[T], row: seq[T]): void =
   for idx, item in row:
     newRow[idx] = item
 
-  s.elems[s.elems.keys().min() - 1] = newRow()
-
-func rowlen*[T](s: SparseGrid[T], row: int): void =
-  s.elems[row].len
-
-func rowNum*[T](s: SparseGrid[T]): int =
-  ## Get number or rows in 2d sequence
-  s.elems.len
+  s.elems[s.minRow() - 1] = newRow
 
 func rowAppend*[T](s: var SparseGrid[T], elem: T, idx: int): void =
   ## Add element to `idx` row
-  if s.keys().min() <= idx and idx <= s.keys().max():
+  if s.minRow() <= idx and idx <= s.maxRow():
     let row = s.elems.mgetOrPut(idx, newTable[int, T]())
-    row[row.keys().max() + 1] = elem
+    row[s.maxRow() + 1] = elem
   else:
     raiseAssert("Sdfasdfasdf")
 
-func newRow*[T](s: var SparseGrid[T]): void =
-  ## Add new row
-  var tmp: seq[T]
-  s.elems.add tmp
-
-func addLast*[T](s: var SparseGrid[T], elem: T): void =
-  ## Add new element to last row
-  s.elems[^1].add elem
-
 converter toSparseGrid*[T](s: seq[seq[T]]): SparseGrid[T] =
-  SparseGrid[T](elems: s)
+  SparseGrid[T](
+    elems:
+      block:
+        collect(initTable(2)):
+          for rowIdx, row in s:
+            let cells: Table[int, T] = collect(initTable(2)):
+              for colIdx, cell in row:
+                {colIdx : cell}
 
-iterator items*[T](s: SparseGrid[T]): seq[tuple[idx: int, row: T]] =
+            {rowIdx : cells}
+  )
+
+iterator rows*[T](s: SparseGrid[T]): tuple[
+  idx: int, row: Table[int, T]] =
   for idx, row in s.elems:
     yield (idx: idx, row: row)
 
@@ -131,17 +133,41 @@ func `[]`*[T](grid: SparseGrid[T], row, col: int): T =
 func `[]`*[T](grid: SparseGrid[T], cell: (int, int)): T =
   grid.elems[cell[0]][cell[1]]
 
+func `[]=`*[T](grid: var SparseGrid[T], pos: (int, int), val: T): void =
+  if pos[0] notin grid.elems:
+    grid.elems[pos[0]] = initTable[int, T]()
+
+  grid.elems[pos[0]][pos[1]] = val
+
 template mapIt2d*[T](inseq: SparseGrid[T], op: untyped): untyped =
   type ResT = typeof((
     block:
-      var it {.inject.}: tuple[row, col: int, val: T]
+      var it {.inject.}: T
+      var rowIdx {.inject.}: int
+      var colIdx {.inject.}: int
       op))
 
   var result: SparseGrid[ResT]
-  for rowIdx, row in inseq.elems:
-    result.newRow
-    for colIdx, cell in row:
-      let it {.inject.} = (row: rowIdx, col: colIdx, val: col)
-      result.addLast op
+  for rowId, row in inseq.elems:
+    for colId, cell in row:
+      let it {.inject.} = cell
+      let rowIdx {.inject.}: int = rowId
+      let colIdx {.inject.}: int = colId
+      result[(rowIdx, colIdx)] = op
+
+  result
+
+template mapItRows*[T](inseq: SparseGrid[T], op: untyped): untyped =
+  type ResT = typeof((
+    block:
+      var it {.inject.}: Table[int, T]
+      var rowIdx {.inject.}: int
+      op))
+
+  var result: seq[tuple[idx: int, val: ResT]]
+  for rowId, row in inseq.elems:
+    let it {.inject.} = row
+    let rowIdx {.inject.}: int = rowId
+    result.add (idx: rowIdx, val: op)
 
   result

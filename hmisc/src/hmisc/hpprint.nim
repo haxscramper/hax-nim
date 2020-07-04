@@ -190,7 +190,7 @@ type
         grid: BlockGrid[T]
 
   BlockGrid[T] = object
-    grid: Seq2d[GridCell[T]] ## row[col[cell]]
+    grid: SparseGrid[GridCell[T]] ## row[col[cell]]
     maxH: seq[int] ## Max height in each row
     maxW: seq[int] ## Max width in each column
 
@@ -233,30 +233,32 @@ func makeCell*(text: StrSeq): GridCell[StrSeq] =
     h = text.len
   )
 
-func makeGrid*[T](arg: Seq2d[GridCell[T]]): BlockGrid[T] =
+func makeGrid*[T](arg: SparseGrid[GridCell[T]]): BlockGrid[T] =
   var maxColw: CountTable[int]
   var maxIdx: int = 0
-  for row in arg:
-    for idx, cell in row:
-      if maxColw[idx] < cell.width:
-        maxColw[idx] = cell.width
+  for (rowIdx, row) in arg.rows:
+    for colIdx, cell in row:
+      if maxColw[colIdx] < cell.width:
+        maxColw[colIdx] = cell.width
 
-      if idx > maxIdx:
-        maxIdx = idx
+      if colIdx > maxIdx:
+        maxIdx = colIdx
 
   result = BlockGrid[T](
     grid: arg,
     maxW: (0 .. maxIdx).mapIt(maxColw[it]),
-    maxH: arg.mapIt(it.mapIt(it.height).max(0))
+    maxH: arg.mapItRows(it.mapPairs(rhs.height).max(0)).mapIt(
+      it.val
+    )
   )
 
-func makeGrid*[T](arg: Seq2d[tuple[item: T, w, h: int]]): BlockGrid[T] =
+func makeGrid*[T](arg: SparseGrid[tuple[item: T, w, h: int]]): BlockGrid[T] =
   makeGrid(mapIt2d(arg, it.item.makeCell(it.w, it.h)))
 
-func makeGrid*(arg: Seq2d[string]): BlockGrid[string] =
+func makeGrid*(arg: SparseGrid[string]): BlockGrid[string] =
   makeGrid(arg.mapIt2d(makeCell(it, it.len, 1)))
 
-func makeGrid*(arg: Seq2d[seq[string]]): BlockGrid[seq[string]] =
+func makeGrid*(arg: SparseGrid[seq[string]]): BlockGrid[seq[string]] =
   makeGrid(arg.mapIt2d(makeCell(
     it, it.mapIt(it.len).max(0), it.len
   )))
@@ -279,10 +281,10 @@ func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
 
 func toString*(grid: BlockGrid[StrSeq]): string =
   var colSizes: Table[(int, int), int]
-  for row in grid.grid:
-    for col in row:
-      # if (col.)
-      discard
+  # for row in grid.grid:
+  #   for col in row:
+  #     # if (col.)
+  #     discard
 
   discard
 
@@ -1206,6 +1208,8 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
 # table into graphviz object.
 
 
+proc toHtml*(grid: SparseGrid[GridCell[ObjElem]]): HtmlElem =
+  discard
 
 proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem
 proc toHtml*(cell: GridCell[ObjElem]): HtmlElem =
@@ -1222,15 +1226,7 @@ proc toHtml*(cell: GridCell[ObjElem]): HtmlElem =
       cell.grid.toTable()
 
 proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
-  HtmlElem(
-    kind: hekTable,
-    elements: grid.grid.mapIt(
-      HtmlElem(
-        kind: hekRow,
-        elements: it.mapIt(toHtml(it))
-      )
-    )
-  )
+  grid.grid.toHtml()
 
 proc foldObject(obj: ObjTree): tuple[node: Node, edges: seq[Edge]] =
   ##[
