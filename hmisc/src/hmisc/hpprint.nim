@@ -12,7 +12,7 @@
 import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat, macros
 import typetraits, macroutils
-import hvariant, colors
+import hvariant, colors, hmisc_types
 
 import graphviz_ast, html_ast
 
@@ -171,18 +171,48 @@ func makeObjElem(text: string): ObjElem =
   )
 
 type
-  BlockGrid[T] = object
+  GridCell[T] = object
     case isItem: bool
       of true:
         item: T
+        size: Size ## Item size
       of false:
-        grid: seq[seq[BlockGrid[T]]]
+        grid: BlockGrid[T]
 
-func makeGrid[T](arg: seq[seq[T]]): BlockGrid[T] =
-  BlockGrid[T](isItem: false, grid: arg.mapIt(
-    it.mapIt(
-      BlockGrid[T](isItem: true, item: it)
-  )))
+  BlockGrid[T] = object
+    grid: seq[seq[GridCell[T]]] ## row[col[cell]]
+    maxH: seq[int] ## Max height in each row
+    maxW: seq[int] ## Max width in each column
+
+func makeCell[T](arg: T, w, h: int): GridCell[T] =
+  GridCell[T](isItem: true, item: arg, size: makeSize(w, h))
+
+func makeGrid*[T](arg: seq[seq[tuple[item: T, w, h: int]]]): BlockGrid[T] =
+  var maxColw: CountTable[int]
+  var maxIdx: int = 0
+  for row in arg:
+    for idx, col in row:
+      if maxColw[idx] < col.w:
+        maxColw[idx] = col.w
+
+      if idx > maxIdx:
+        maxIdx = idx
+
+  BlockGrid[T](
+    grid: arg.mapIt(it.mapIt(makeCell(it[0], it[1], it[2]))),
+    maxW: (0 .. maxIdx).mapIt(maxColw[it]),
+    maxH: arg.mapIt(it.mapIt(it.h).max(0))
+  )
+
+func makeGrid*(arg: seq[seq[string]]): BlockGrid[string] =
+  makeGrid(arg.mapIt(it.mapIt((item: it, w: it.len, h: 1))))
+
+func makeGrid*(arg: seq[seq[seq[string]]]): BlockGrid[seq[string]] =
+  makeGrid(arg.mapIt(it.mapIt((
+    item: it,
+    w: it.mapIt(it.len).max(0),
+    h: it.len
+  ))))
 
 func makeGridItem[T](arg: T): BlockGrid[T] =
   BlockGrid[T](isItem: true, item: arg)
@@ -1087,8 +1117,16 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
         # REVIEW handle non-primitive constants
         result.grid = makeGrid(
           @[@[
-            makeObjElem(obj.constType), # First cellis object type
-            makeObjElem(obj.strLit) # Secon cell - object value
+            (
+              item: makeObjElem(obj.constType),
+              w: obj.constType.len,
+              h: 1
+            ), # First cell - object type
+            (
+              item: makeObjElem(obj.strLit),
+              w: obj.strLit.len,
+              h: 1
+            ) # Secon cell - object value
           ]])
     else:
       discard
@@ -1098,29 +1136,32 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
 # fold object into grid, export grid into html table, convert html
 # table into graphviz object.
 
-proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
-  case grid.isItem:
+
+
+proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem
+proc toHtml*(cell: GridCell[ObjElem]): HtmlElem =
+  case cell.isItem:
     of true:
       HtmlElem(
         kind: hekCell,
-        cellBgColor: grid.item.color,
+        cellBgColor: cell.item.color,
         elements: @[
           HtmlElem(
             kind: hekText,
-            textStr: grid.item.text
-          )
-        ]
-      )
+            textStr: cell.item.text)])
     of false:
+      cell.grid.toTable()
+
+proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem =
+  HtmlElem(
+    kind: hekTable,
+    elements: grid.grid.mapIt(
       HtmlElem(
-        kind: hekTable,
-        elements: grid.grid.mapIt(
-          HtmlElem(
-            kind: hekRow,
-            elements: it.mapIt(toTable(it))
-          )
-        )
+        kind: hekRow,
+        elements: it.mapIt(toHtml(it))
       )
+    )
+  )
 
 proc foldObject(obj: ObjTree): tuple[node: Node, edges: seq[Edge]] =
   ##[

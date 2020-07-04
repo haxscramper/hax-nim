@@ -6,6 +6,16 @@ import hmisc/graphviz_ast
 
 import hmisc/hpprint
 
+suite "Block grid":
+  test "T":
+    let grid = makeGrid(
+      @[
+        @["HHHHE", "@##@"],
+        @["123112", "3333"]
+      ]
+    )
+
+
 suite "Block labeling":
   template test(
     labels: untyped, chunkLines: seq[string] = @["[|||]"]): untyped =
@@ -90,6 +100,7 @@ suite "Block labeling":
       assert getCurrentExceptionMsg().startsWith("Incompatible chunk labels")
     except:
       fail("Wrong exception")
+
 
 suite "Compile-time object passthrough":
   test "Regular const value":
@@ -697,6 +708,14 @@ suite "Large object printout":
 
 
 suite "Object tree to dot graph":
+  # TODO generate html page with original object, it's pretty-printed
+  # tree and resulting graph. It is not possible to adequately assert
+  # generated. NOTE `unittest` has support for `setup` and `teardown`
+  # sections: it can be used to generate report files.
+
+  # TODO genrate images and html files only when
+  # `-d:haxTestGenerateFiles` is enabled to avoid pollution of the
+  # filesystem.
   template testgraph(obj: untyped): untyped =
     let graph = toDotGraph(obj)
     try:
