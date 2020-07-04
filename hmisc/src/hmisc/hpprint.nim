@@ -180,42 +180,62 @@ type
         grid: BlockGrid[T]
 
   BlockGrid[T] = object
-    grid: seq[seq[GridCell[T]]] ## row[col[cell]]
+    grid: Seq2d[GridCell[T]] ## row[col[cell]]
     maxH: seq[int] ## Max height in each row
     maxW: seq[int] ## Max width in each column
 
-func makeCell[T](arg: T, w, h: int): GridCell[T] =
+func width*[T](cell: GridCell[T]): int = cell.size.width
+func height*[T](cell: GridCell[T]): int = cell.size.height
+func width*[T](grid: BlockGrid[T]): int = grid.maxW.sum()
+func height*[T](grid: BlockGrid[T]): int = grid.maxH.sum()
+
+func makeCell*[T](
+  arg: T, w, h: int, cols: int = 1, rows: int = 1): GridCell[T] =
   GridCell[T](isItem: true, item: arg, size: makeSize(w, h))
 
-func makeGrid*[T](arg: seq[seq[tuple[item: T, w, h: int]]]): BlockGrid[T] =
+func makeGrid*[T](arg: Seq2d[GridCell[T]]): BlockGrid[T] =
   var maxColw: CountTable[int]
   var maxIdx: int = 0
   for row in arg:
-    for idx, col in row:
-      if maxColw[idx] < col.w:
-        maxColw[idx] = col.w
+    for idx, cell in row:
+      if maxColw[idx] < cell.width:
+        maxColw[idx] = cell.width
 
       if idx > maxIdx:
         maxIdx = idx
 
-  BlockGrid[T](
-    grid: arg.mapIt(it.mapIt(makeCell(it[0], it[1], it[2]))),
+  result = BlockGrid[T](
+    grid: arg,
     maxW: (0 .. maxIdx).mapIt(maxColw[it]),
-    maxH: arg.mapIt(it.mapIt(it.h).max(0))
+    maxH: arg.mapIt(it.mapIt(it.height).max(0))
   )
 
-func makeGrid*(arg: seq[seq[string]]): BlockGrid[string] =
-  makeGrid(arg.mapIt(it.mapIt((item: it, w: it.len, h: 1))))
+func makeGrid*[T](arg: Seq2d[tuple[item: T, w, h: int]]): BlockGrid[T] =
+  makeGrid(mapIt2d(arg, it.item.makeCell(it.w, it.h)))
 
-func makeGrid*(arg: seq[seq[seq[string]]]): BlockGrid[seq[string]] =
-  makeGrid(arg.mapIt(it.mapIt((
-    item: it,
-    w: it.mapIt(it.len).max(0),
-    h: it.len
-  ))))
+func makeGrid*(arg: Seq2d[string]): BlockGrid[string] =
+  debugecho "Making grid from string sequeice"
+  makeGrid(arg.mapIt2d(makeCell(it, it.len, 1)))
 
-func makeGridItem[T](arg: T): BlockGrid[T] =
-  BlockGrid[T](isItem: true, item: arg)
+func makeGrid*(arg: Seq2d[seq[string]]): BlockGrid[seq[string]] =
+  makeGrid(arg.mapIt2d(makeCell(
+    it, it.mapIt(it.len).max(0), it.len
+  )))
+
+# func makeGridItem[T](arg: T): BlockGrid[T] =
+#   BlockGrid[T](isItem: true, item: arg)
+
+func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
+  # let newgrid: Seq2d[StrSeq] =
+  debugecho grid
+  discard grid.grid.mapIt2d(
+    block:
+      debugecho "sfd"
+      12
+  )
+
+func toString*(grid: BlockGrid[StrSeq]): string =
+  discard
 
 func `==`*[Node](lhs, rhs: Field[Node]): bool
 

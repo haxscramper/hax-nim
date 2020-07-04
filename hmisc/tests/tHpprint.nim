@@ -6,14 +6,28 @@ import hmisc/graphviz_ast
 
 import hmisc/hpprint
 
+import hmisc/hmisc_types
+
 suite "Block grid":
-  test "T":
+  test "{makeCell}":
+    let cell = makeCell("Hello", 5, 1)
+    assert cell.width == 5
+    assert cell.height == 1
+
+  test "{makeGrid}":
     let grid = makeGrid(
-      @[
-        @["HHHHE", "@##@"],
-        @["123112", "3333"]
-      ]
+      @[@[makeCell("#", 1, 1), makeCell("@", 1, 1)]]
     )
+
+    assert grid.width == 2
+    assert grid.height == 1
+
+  test "{makeGrid} make string grid":
+    let grid = makeGrid(
+      @[@["#"]]
+    )
+
+    echo grid.toStringGrid().toString()
 
 
 suite "Block labeling":
