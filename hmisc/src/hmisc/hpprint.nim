@@ -171,7 +171,17 @@ func makeObjElem(text: string): ObjElem =
   )
 
 type
+  SizePolicy = enum
+    spExpanding
+    spFixed
+
   GridCell[T] = object
+    valid: bool
+    rows: int
+    cols: int
+    vertPolicy: SizePolicy
+    horizPolicy: SizePolicy
+
     case isItem: bool
       of true:
         item: T
@@ -188,10 +198,40 @@ func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 func width*[T](grid: BlockGrid[T]): int = grid.maxW.sum()
 func height*[T](grid: BlockGrid[T]): int = grid.maxH.sum()
+func colRange*[T](
+  grid: BlockGrid[T],
+  pos: tuple[row, col: int]): (int, int) =
+  let start = pos.col
+  var finish = pos.col
+
+  # for idx, cell in grid.grid.columns(pos.row):
+  #   if idx > pos.col:
+  #     if cell.valid:
+  #       finish =
 
 func makeCell*[T](
-  arg: T, w, h: int, cols: int = 1, rows: int = 1): GridCell[T] =
-  GridCell[T](isItem: true, item: arg, size: makeSize(w, h))
+  arg: T, w, h: int,
+  sizes: (int, int) = (1, 1),
+  policies: (SizePolicy, SizePolicy) = (spExpanding, spExpanding)
+                ): GridCell[T] =
+  GridCell[T](
+    isItem: true,
+    item: arg, size: makeSize(w, h),
+    rows: sizes[0],
+    cols: sizes[1],
+    vertPolicy: policies[0],
+    horizPolicy: policies[1]
+  )
+
+func makeCell*(text: string): GridCell[string] =
+  makeCell(arg = text, w = text.len, h = 1)
+
+func makeCell*(text: StrSeq): GridCell[StrSeq] =
+  makeCell(
+    text,
+    w = text.mapIt(it.len).max(),
+    h = text.len
+  )
 
 func makeGrid*[T](arg: Seq2d[GridCell[T]]): BlockGrid[T] =
   var maxColw: CountTable[int]
@@ -214,7 +254,6 @@ func makeGrid*[T](arg: Seq2d[tuple[item: T, w, h: int]]): BlockGrid[T] =
   makeGrid(mapIt2d(arg, it.item.makeCell(it.w, it.h)))
 
 func makeGrid*(arg: Seq2d[string]): BlockGrid[string] =
-  debugecho "Making grid from string sequeice"
   makeGrid(arg.mapIt2d(makeCell(it, it.len, 1)))
 
 func makeGrid*(arg: Seq2d[seq[string]]): BlockGrid[seq[string]] =
@@ -222,19 +261,29 @@ func makeGrid*(arg: Seq2d[seq[string]]): BlockGrid[seq[string]] =
     it, it.mapIt(it.len).max(0), it.len
   )))
 
+func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
+  var cell = cell
+  cell.vertPolicy = spExpanding
+  cell.horizPolicy = spExpanding
+
+  grid.grid.prepend(@[cell])
+
 # func makeGridItem[T](arg: T): BlockGrid[T] =
 #   BlockGrid[T](isItem: true, item: arg)
 
 func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
   # let newgrid: Seq2d[StrSeq] =
-  debugecho grid
-  discard grid.grid.mapIt2d(
-    block:
-      debugecho "sfd"
-      12
+  makeGrid(
+    grid.grid.mapIt2d(makeCell(($it).split("\n")))
   )
 
 func toString*(grid: BlockGrid[StrSeq]): string =
+  var colSizes: Table[(int, int), int]
+  for row in grid.grid:
+    for col in row:
+      # if (col.)
+      discard
+
   discard
 
 func `==`*[Node](lhs, rhs: Field[Node]): bool

@@ -23,9 +23,14 @@ suite "Block grid":
     assert grid.height == 1
 
   test "{makeGrid} make string grid":
-    let grid = makeGrid(
-      @[@["#"]]
+    var grid = makeGrid(
+      @[
+        @["Hello", "world"],
+        @["EEEE", "#####"]
+      ]
     )
+
+    grid.addHeader(makeCell("Hello"))
 
     echo grid.toStringGrid().toString()
 
