@@ -194,15 +194,24 @@ type
     maxH: seq[int] ## Max height in each row
     maxW: seq[int] ## Max width in each column
 
+  Range = object
+    a: int
+    b: int
+
+import hashes
+func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 func width*[T](grid: BlockGrid[T]): int = grid.maxW.sum()
 func height*[T](grid: BlockGrid[T]): int = grid.maxH.sum()
+func toRange*(elems: (int, int)): Range = Range(a: elems[0], b: elems[1])
 func colRange*[T](
   grid: BlockGrid[T],
-  pos: tuple[row, col: int]): (int, int) =
+  pos: tuple[row, col: int]): Range =
   let start = pos.col
   var finish = pos.col
+
+func isPoint(r: Range): bool = (r.a == r.b)
 
   # for idx, cell in grid.grid.columns(pos.row):
   #   if idx > pos.col:
@@ -280,13 +289,18 @@ func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
   )
 
 func toString*(grid: BlockGrid[StrSeq]): string =
-  var colSizes: Table[(int, int), int]
-  # for row in grid.grid:
-  #   for col in row:
-  #     # if (col.)
-  #     discard
+  var colSizes: Table[Range, int]
+  var rowSizes: Table[Range, int]
 
-  discard
+  for (rowIdx, row) in grid.grid.rows():
+    for colIdx, cell in row:
+      let colRange = grid.colRange((rowIdx, colIdx))
+      if colRange in colSizes:
+        if colRange.isPoint():
+          if cell.width > colSizes[colRange]:
+            colSizes[colRange] = cell.width
+
+
 
 func `==`*[Node](lhs, rhs: Field[Node]): bool
 
