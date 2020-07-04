@@ -96,6 +96,10 @@ func prepend*[T](s: var SparseGrid[T], row: seq[T]): void =
 
   s.elems[s.minRow() - 1] = newRow
 
+  s.elems = collect(initTable(2)):
+    for idx, v in s.elems:
+      {idx + 1 : v}
+
 func rowAppend*[T](s: var SparseGrid[T], elem: T, idx: int): void =
   ## Add element to `idx` row
   if s.minRow() <= idx and idx <= s.maxRow():
@@ -119,13 +123,16 @@ converter toSparseGrid*[T](s: seq[seq[T]]): SparseGrid[T] =
 
 iterator rows*[T](s: SparseGrid[T]): tuple[
   idx: int, row: Table[int, T]] =
-  for idx, row in s.elems:
-    yield (idx: idx, row: row)
+  for key in toSeq(s.elems.keys()).sorted():
+    yield (idx: key, row: s.elems[key])
 
 iterator columns*[T](s: SparseGrid[T], row: int
-                    ): seq[tuple[idx: int, cell: T]] =
-  for idx, cell in s.elems[row]:
-    yield (idx: idx, cell: cell)
+                    ): tuple[idx: int, cell: T] =
+  for idx in toSeq(s.elems[row].keys()).sorted():
+    yield (idx: idx, cell: s.elems[row][idx])
+
+func firstColumn*[T](grid: SparseGrid[T], row: int): int =
+  toSeq(grid.elems[row].keys()).sorted()[0]
 
 func `[]`*[T](grid: SparseGrid[T], row, col: int): T =
   grid.elems[row][col]

@@ -24,10 +24,13 @@ suite "Block grid":
   test "{makeGrid} make string grid":
     var grid = makeGrid(
       @[
-        @["Hello", "world"],
-        @["EEEE", "#####"]
+        @["Hello    ", "world"],
+        @["EEEE", "#####"],
+        @["eee"]
       ]
     )
+
+    grid[3, 3] = makeCell("&3333")
 
     grid.addHeader(makeCell("!!!!"))
 

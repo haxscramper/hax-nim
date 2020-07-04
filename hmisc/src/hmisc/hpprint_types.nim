@@ -239,6 +239,11 @@ import hashes
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
+func columns*[T](grid: BlockGrid[T]): seq[int] =
+  grid.maxH.mapPairs(rhs).sorted()
+
+func rows*[T](grid: BlockGrid[T]): seq[int] =
+  grid.maxW.mapPairs(rhs).sorted()
 
 func width*[T](grid: BlockGrid[T]): int =
   grid.maxW.mapPairs(rhs).sum()
@@ -263,6 +268,19 @@ func colRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
   var finish = pos.col
 
   return toRange((start, finish))
+
+func setMax[T](a: var T, b: T): void =
+  if a < b:
+    a = b
+
+func maxOrSet[K, V](tbl: var Table[K, V], key: K, val: V): void =
+  tbl.mgetOrPut(key, val).setMax(val)
+
+func `[]=`*[T](
+  grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
+    grid.grid[(row, col)] = cell
+    grid.maxW.maxOrSet(col, cell.width)
+    grid.maxH.maxOrSet(row, cell.height)
 
 func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
   let start = pos.row

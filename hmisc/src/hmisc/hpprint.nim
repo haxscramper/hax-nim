@@ -88,7 +88,18 @@ func toString*(grid: BlockGrid[StrSeq]): string =
   for (rowIdx, row) in grid.grid.rows():
     let rowH = grid.rowHeight(rowIdx)
     var linesBuf: seq[string] = newSeqWith(rowH, "")
-    for colIdx, cell in row:
+    let startCol = grid.grid.firstColumn(rowIdx)
+    let padWidth = grid.columns
+      .filterIt(it < startCol)
+      .mapIt(colSizes[toRange(it, it #[HACK: assuming width 1 cols]#)]).sum()
+
+    debugecho &"Text on row {rowIdx} starts with column {startCol}"
+    debugecho "Previous columns: ", grid.columns()
+    for idx in 0 ..< rowH:
+      debugecho &"Padding {idx} with {padWidth} characters"
+      linesBuf[idx] &= " ".repeat(padWidth)
+
+    for (colIdx, cell) in grid.grid.columns(rowIdx):
       let colRange = grid.colRange(toPos(rowIdx, colIdx))
       let cellW = colSizes[colRange]
       let spacer = hSpacer.repeat(cellW)
