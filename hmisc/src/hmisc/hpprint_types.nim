@@ -204,6 +204,35 @@ func makeObjElem*(text: string): ObjElem =
   ObjElem(text: text)
 
 type
+  RectPoint* = enum
+    rpoLeftEdge
+    rpoRightEdge
+    rpoBottomEdge
+    rpoTopEdge
+    rpoTopLeft
+    rpoTopRight
+    rpoBottomLeft
+    rpoBottomRight
+
+  GridPoint* = enum
+    gpoIntersection
+    gpoTopLeft
+    gpoTopRight
+    gpoBottomLeft
+    gpoBottomRight
+    gpoLeftBorder
+    gpoLeftIntersection
+    gpoRightBorder
+    gpoRightIntersection
+    gpoTopBorder
+    gpoTopIntersection
+    gpoBottomBorder
+    gpoBottomIntersection
+    gpoHorizontalGap
+    gpoVerticalGap
+
+
+type
   SizePolicy* = enum
     spExpanding
     spFixed
@@ -214,6 +243,7 @@ type
     cols: int
     vertPolicy: SizePolicy
     horizPolicy: SizePolicy
+    borders*: Table[RectPoint, string]
 
     case isItem*: bool
       of true:
@@ -223,6 +253,7 @@ type
         grid*: BlockGrid[T]
 
   BlockGrid*[T] = object
+    borders*: Table[GridPoint, string]
     grid*: SparseGrid[GridCell[T]] ## row[col[cell]]
     maxH: Map[int, int] ## Max height in each row
     maxW: Map[int, int] ## Max width in each column
@@ -236,9 +267,30 @@ type
     col*: int
 
 import hashes
+func `[]`*[T](
+  cell: GridCell[T], pos: RectPoint, default: string = ""): string =
+  cell.borders.getOrDefault(pos, default)
+
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
+func sumjoin*(a: openarray[int], sep: int): int =
+  a.sum() + (a.len - 1) * sep
+
+func totalWidth*[T](grid: BlockGrid[T], colRange: Range): int =
+  ## Get total width of columns in `colRange`, including horisontal
+  ## grid gap
+  toSeq(grid.maxW.valuesBetween(colRange.a, colRange.b)).sumjoin(
+    grid.borders.getOrDefault(gpoHorizontalGap, "").len()
+  )
+
+func totalHeight*[T](grid: BlockGrid[T], rowRange: Range): int =
+  ## Get total height of the rows in `rowRange`, including vertical
+  ## grid gap.
+  toSeq(grid.maxH.valuesBetween(rowRange.a, rowRange.b)).sumjoin(
+    grid.borders.getOrDefault(gpoVerticalGap, "").len()
+  )
+
 func columns*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxH.mapPairs(lhs)
 
@@ -296,9 +348,13 @@ func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
 
   return toRange((start, finish))
 
-func middles*(r: Range): int = (r.b - r.a - 1)
+func middles*(r: Range): int =
+  ## Number of gaps in between range points
+  (r.b - r.a - 1)
 
-func isPoint*(r: Range): bool = (r.a == r.b)
+func isPoint*(r: Range): bool =
+  ## If range starts is equal to end
+  (r.a == r.b)
 func point*(r: Range): int =
   assert r.isPoint()
   r.a
@@ -321,6 +377,23 @@ func makeCell*[T](
     vertPolicy: policies[0],
     horizPolicy: policies[1]
   )
+
+func makeUnicodeCell*[T](
+  arg: T, w, h: int,
+  sizes: (int, int) = (1, 1)): GridCell[T] =
+  let borderTable = {
+    rpoLeftEdge : "║",
+    rpoRightEdge : "║",
+    rpoBottomEdge : "═",
+    rpoTopEdge : "═",
+    rpoTopLeft : "╔",
+    rpoTopRight : "╗",
+    rpoBottomLeft : "╚",
+    rpoBottomRight : "╝",
+  }.toTable()
+
+  result = makeCell(arg, w + 2, h + 2, sizes)
+  result.borders = borderTable
 
 func makeCell*(text: string): GridCell[string] =
   makeCell(arg = text, w = text.len, h = 1)

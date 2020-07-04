@@ -27,15 +27,59 @@ import algorithm
 #   BlockGrid[T](isItem: true, item: arg)
 
 func toString*(grid: BlockGrid[StrSeq]): string
+func toString*[T](cell: GridCell[T]): seq[string] =
+  let content: seq[string] =
+    case cell.isItem:
+      of true: ($cell.item).split("\n")
+      of false:
+        cell.grid
+          .toStringGrid()
+          .toString()
+          .split("\n")
+
+  # IMPLEMENT TODO implement proper handling of all cases
+  # let hasTop = (rpoTopEdge in cell.borders) or
+  #   (rpoTopLeft in cell.borders) or
+  #   (rpoTopRight in cell.borders)
+
+  # let hasBottom = (rpoBottomEdge in cell.borders) or
+  #   (rpoBottomLeft in cell.borders) or
+  #   (rpoBottomRight in cell.borders)
+
+  # let hasLeft = (rpoLeftEdge in cell.borders) or
+  #   (rpoTopLeft in cell.borders) or
+  #   (rpoBottomLeft in cell.borders)
+
+  # let hasRight = (rpoRightEdge in cell.borders) or
+  #   (rpoTopRight in cell.borders) or
+  #   (rpoBottomRight in cell.borders)
+  let topSpacer =
+    cell[rpoTopLeft] &
+    cell[rpoTopEdge].repeat(cell.width) &
+    cell[rpoTopRight]
+
+  if topSpacer.len > 0:
+    result.add topSpacer
+
+  for line in content:
+    result.add(cell[rpoLeftEdge] &
+      alignLeft(line, cell.width) & # NOTE defaultint to left padding,
+                                    # TODO: add more configuration
+                                    # options
+      cell[rpoRightEdge])
+
+  let bottomSpacer =
+    cell[rpoBottomLeft] &
+    cell[rpoBottomEdge].repeat(cell.width) &
+    cell[rpoBottomRight]
+
+  if bottomSpacer.len > 0:
+    result.add bottomSpacer
+
+
+
 func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
-  # let newgrid: Seq2d[StrSeq] =
-  makeGrid(
-    grid.grid.mapIt2d(makeCell((
-      case it.isItem:
-        of true: $it.item
-        of false: it.grid.toStringGrid().toString()
-    ).split("\n")))
-  )
+  makeGrid(grid.grid.mapIt2d(makeCell((it.toString()))))
 
 func toString*(grid: BlockGrid[StrSeq]): string =
   var cellSizes: seq[tuple[
@@ -58,54 +102,19 @@ func toString*(grid: BlockGrid[StrSeq]): string =
 
   let hSpacer: string = "-"
   let vSpacer: string = "|"
-
-  # for cell in sortedCells:
-  #   block:
-  #     let colRange = grid.colRange(cell.pos)
-  #     if colRange.isPoint(): # Single column
-  #       if colRange.point() in grid.colSizes():
-  #         if cell.internal.width > grid.colSizes()[colRange.point()]:
-  #           colSizes[colRange] = cell.internal.width
-  #       else:
-  #         colSizes[colRange] = cell.internal.width
-  #     else: # Multiple columns
-  #       let sepWidth = colRange.middles * hSpacer.len
-
-  #   block:
-  #    let rowRange = grid.rowRange(cell.pos)
-  #    if rowRange.isPoint(): # Single rowumn
-  #      if rowRange in rowSizes:
-  #        if cell.internal.width > rowSizes[rowRange]:
-  #          rowSizes[rowRange] = cell.internal.width
-  #      else:
-  #        rowSizes[rowRange] = cell.internal.width
-  #    else: # Multiple rowumns
-  #      let sepWidth = rowRange.middles * hSpacer.len
-
-  for idx, size in grid.colSizes():
-    debugecho &"col: {idx}, {size}"
-
-  for idx, size in grid.rowSizes():
-    debugecho &"row: {idx}, {size}"
-
   var res: seq[string]
   for (rowIdx, row) in grid.grid.rows():
     let rowH = grid.rowHeight(rowIdx)
     var linesBuf: seq[string] = newSeqWith(rowH, "")
     let startCol = grid.grid.firstColumn(rowIdx)
-    let padWidth = toSeq(
-      grid.colSizes().valuesBetween(0, startCol - 1)
-    ).sum()
+    let padWidth = grid.totalWidth(toRange(0, startCol - 1))
 
     for i in 0 ..< rowH:
-      linesBuf[i] &= "_".repeat(padWidth)
+      linesBuf[i] &= "-".repeat(padWidth)
 
     for (colIdx, cell) in grid.grid.columns(rowIdx):
       let colRange = grid.colRange(toPos(rowIdx, colIdx))
-      let cellW = toSeq(
-        grid.colSizes().valuesBetween(colRange.a, colRange.b)
-      ).sum()
-
+      let cellW = grid.totalWidth(colRange)
       let spacer = hSpacer.repeat(cellW)
 
       for idx, line in cell.item:
