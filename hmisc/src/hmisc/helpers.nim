@@ -55,6 +55,11 @@ template tern*(
     if predicate: tBranch
     else: fBranch
 
+template orElse*(
+  value: untyped, predicate: bool, fallback: untyped): untyped =
+  if predicate: value
+  else: fallback
+
 macro quoteDoInterpolStmt*(body: untyped): untyped =
   ## Allows to interpolate function call into `quote do` body. Literal
   ## strings surrounded by backticks will be replaced by function calls.
@@ -376,6 +381,12 @@ func escapeHTML*(input: string): string =
 
 func enclosedIn*(s: string, delim: string): bool =
   s.enclosedIn((delim, delim))
+
+func d*(text: varargs[string, `$`]): void =
+  debugecho text.join(" ")
+
+template de*(expr: untyped, text: varargs[string, `$`]): void =
+  debugecho astToStr(expr), ": ", expr, " ", text.join(" ")
 
 proc getRandomBase64*(length: int): string =
   ## Return random base 64 string with `length` characters

@@ -24,16 +24,18 @@ suite "Block grid":
   test "{makeGrid} make string grid":
     var grid = makeGrid(
       @[
-        @["Hello    ", "world"],
+        @["[|||||]", "world"],
         @["EEEE", "#####"],
         @["eee"]
       ]
     )
 
+
     grid[3, 3] = makeUnicodeCell("&3333", 7, 1)
-    grid[4, 4] = makeUnicodeCell("&###33", 7, 1)
+    # grid[4, 4] = makeUnicodeCell("&###33", 7, 1)
 
     grid.addHeader(makeCell("!!!!"))
+    grid.borders = makeUnicodeGridBorders()
 
     echo grid.toStringGrid().toString()
 

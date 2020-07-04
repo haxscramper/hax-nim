@@ -271,24 +271,47 @@ func `[]`*[T](
   cell: GridCell[T], pos: RectPoint, default: string = ""): string =
   cell.borders.getOrDefault(pos, default)
 
+func `[]`*[T](
+  grid: BlockGrid[T], pos: GridPoint, default: string = ""): string =
+  grid.borders.getOrDefault(pos, default)
+
+func makeUnicodeGridBorders*(): Table[GridPoint, string] =
+  {
+    gpoIntersection : "┼",
+    gpoTopLeft : "┌",
+    gpoTopRight : "┐",
+    gpoBottomLeft : "└",
+    gpoBottomRight : "┘",
+    gpoLeftBorder : "│",
+    gpoLeftIntersection : "├",
+    gpoRightBorder : "│",
+    gpoRightIntersection : "┤",
+    gpoTopBorder : "─",
+    gpoTopIntersection : "┬",
+    gpoBottomBorder : "─",
+    gpoBottomIntersection : "┴",
+    gpoHorizontalGap : "─",
+    gpoVerticalGap : "│",
+  }.toTable()
+
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 func sumjoin*(a: openarray[int], sep: int): int =
-  a.sum() + (a.len - 1) * sep
+  a.sum() + (a.len > 0).tern((a.len() - 1) * sep, 0)
 
 func totalWidth*[T](grid: BlockGrid[T], colRange: Range): int =
   ## Get total width of columns in `colRange`, including horisontal
   ## grid gap
   toSeq(grid.maxW.valuesBetween(colRange.a, colRange.b)).sumjoin(
-    grid.borders.getOrDefault(gpoHorizontalGap, "").len()
+    grid[gpoHorizontalGap].len()
   )
 
 func totalHeight*[T](grid: BlockGrid[T], rowRange: Range): int =
   ## Get total height of the rows in `rowRange`, including vertical
   ## grid gap.
   toSeq(grid.maxH.valuesBetween(rowRange.a, rowRange.b)).sumjoin(
-    grid.borders.getOrDefault(gpoVerticalGap, "").len()
+    grid[gpoVerticalGap].len()
   )
 
 func columns*[T](grid: BlockGrid[T]): seq[int] =
@@ -296,6 +319,22 @@ func columns*[T](grid: BlockGrid[T]): seq[int] =
 
 func colSizes*[T](grid: BlockGrid[T]): Map[int, int] = grid.maxW
 func rowSizes*[T](grid: BlockGrid[T]): Map[int, int] = grid.maxH
+
+func colSizes*[T](grid: BlockGrid[T], a, b: int): seq[int] =
+  toSeq(grid.maxW.valuesBetween(a, b))
+
+func colAfter*[T](grid: BlockGrid[T], b: int): seq[int] =
+  toSeq(grid.maxW.valuesFrom(b))
+
+func lastCol*[T](grid: BlockGrid[T], row: int): int =
+  ## Index of last column for row
+  # toSeq(grid.maxH.keys()).max()
+  toSeq(grid.grid.columns(row)).mapIt(it.idx).max()
+
+func lastRow*[T](grid: BlockGrid[T]): int =
+  ## Index of last row for grid
+  toSeq(grid.maxW.keys()).max()
+  # toSeq(grid.grid.rows(row)).mapIt(it.idx).max()
 
 func rows*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxW.mapPairs(rhs).sorted()

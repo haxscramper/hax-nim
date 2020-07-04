@@ -79,7 +79,8 @@ func toString*[T](cell: GridCell[T]): seq[string] =
 
 
 func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
-  makeGrid(grid.grid.mapIt2d(makeCell((it.toString()))))
+  result = makeGrid(grid.grid.mapIt2d(makeCell((it.toString()))))
+  result.borders = grid.borders
 
 func toString*(grid: BlockGrid[StrSeq]): string =
   var cellSizes: seq[tuple[
@@ -100,32 +101,69 @@ func toString*(grid: BlockGrid[StrSeq]): string =
     it.occupied.width + it.occupied.height
   )
 
-  let hSpacer: string = "-"
-  let vSpacer: string = "|"
+  # d grid[gpoTopLeft]
+  let topSpacer =
+    grid[gpoTopLeft] & grid.colSizes().mapPairs(
+      grid[gpoTopBorder].repeat(rhs)
+    ).join(grid[gpoTopIntersection]) &
+    grid[gpoTopRight]
+
+  let middleSpacer =
+    grid[gpoLeftIntersection] & grid.colSizes().mapPairs(
+      grid[gpoHorizontalGap].repeat(rhs)
+    ).join(grid[gpoIntersection]) &
+    grid[gpoRightIntersection]
+
   var res: seq[string]
+  # debugecho "top spacer is: ", topSpacer
+  if topSpacer.len > 0:
+    res.add topSpacer
+
   for (rowIdx, row) in grid.grid.rows():
     let rowH = grid.rowHeight(rowIdx)
     var linesBuf: seq[string] = newSeqWith(rowH, "")
     let startCol = grid.grid.firstColumn(rowIdx)
     let padWidth = grid.totalWidth(toRange(0, startCol - 1))
 
-    for i in 0 ..< rowH:
-      linesBuf[i] &= "-".repeat(padWidth)
+    for i in 0 ..< rowH: # Add left border for first cell
+      linesBuf[i] &= (startCol != 0).tern(grid[gpoLeftBorder], "")
+
+    block: # Add horizontal padding for empty cells
+      let sizes = grid.colSizes(0, startCol - 1)
+      for i in 0 ..< rowH:
+        linesBuf[i] &= sizes.mapIt(" ".repeat(it)).join(grid[gpoVerticalGap]) &
+          grid[gpoVerticalGap]
 
     for (colIdx, cell) in grid.grid.columns(rowIdx):
       let colRange = grid.colRange(toPos(rowIdx, colIdx))
       let cellW = grid.totalWidth(colRange)
-      let spacer = hSpacer.repeat(cellW)
 
       for idx, line in cell.item:
-        linesBuf[idx] &= alignLeft(line, cellW)
+        linesBuf[idx] &= grid[gpoVerticalGap].orElse(
+          colIdx != startCol, "") & alignLeft(line, cellW)
 
-      for idx in cell.item.len() ..< rowH:
-        linesBuf[idx] &= "?".repeat(cellW)
+      # for idx in cell.item.len() ..< rowH:
+      #   linesBuf[idx] &= "?".repeat(cellW)
 
+    # for col in grid.colSizes().valuesFrom(grid.lastCol(rowIdx)):
+    #   for idx in 0 ..< rowH:
+    #     linesBuf[idx] &= "#".repeat(col) & grid[gpoVerticalGap]
 
     res.add linesBuf.join("\n")
+    # de grid.lastRow()
+    # if middleSpacer.len > 0 and rowIdx != grid.lastRow():
+    #   de rowIdx
+    res.add middleSpacer
 
+
+  let botSpacer =
+    grid[gpoBottomLeft] & grid.colSizes().mapPairs(
+      grid[gpoBottomBorder].repeat(rhs)
+    ).join(grid[gpoBottomIntersection]) &
+    grid[gpoBottomRight]
+
+  if botSpacer.len > 0:
+    res.add botSpacer
 
   result = res.join("\n")
 
