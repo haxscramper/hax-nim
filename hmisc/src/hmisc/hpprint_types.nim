@@ -224,8 +224,8 @@ type
 
   BlockGrid*[T] = object
     grid*: SparseGrid[GridCell[T]] ## row[col[cell]]
-    maxH: seq[int] ## Max height in each row
-    maxW: seq[int] ## Max width in each column
+    maxH: Table[int, int] ## Max height in each row
+    maxW: Table[int, int] ## Max width in each column
 
   Range* = object
     a: int
@@ -239,20 +239,37 @@ import hashes
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
-func width*[T](grid: BlockGrid[T]): int = grid.maxW.sum()
-func height*[T](grid: BlockGrid[T]): int = grid.maxH.sum()
+
+func width*[T](grid: BlockGrid[T]): int =
+  grid.maxW.mapPairs(rhs).sum()
+
+func height*[T](grid: BlockGrid[T]): int =
+  grid.maxH.mapPairs(rhs).sum()
+
+func rowHeight*[T](grid: BlockGrid[T], row: int): int = grid.maxH[row]
 func occupied*[T](cell: GridCell[T]): Size =
   makeSize(w = cell.cols, h = cell.rows)
 
 func internal*[T](cell: GridCell[T]): Size = cell.size
 
-func toRange*(elems: (int, int)): Range = Range(a: elems[0], b: elems[1])
-func colRange*[T](
-  grid: BlockGrid[T],
-  pos: tuple[row, col: int] | Pos): Range =
+converter toRange*(elems: (int, int)): Range =
+  Range(a: elems[0], b: elems[1])
+
+func toRange*(a, b: int): Range = Range(a: a, b: b)
+func toPos*(row, col: int): Pos = Pos(row: row, col: col)
+
+func colRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
   let start = pos.col
   var finish = pos.col
 
+  return toRange((start, finish))
+
+func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
+  let start = pos.row
+  var finish = pos.row
+
+
+  return toRange((start, finish))
 
 func middles*(r: Range): int = (r.b - r.a - 1)
 
@@ -300,10 +317,10 @@ func makeGrid*[T](arg: SparseGrid[GridCell[T]]): BlockGrid[T] =
 
   result = BlockGrid[T](
     grid: arg,
-    maxW: (0 .. maxIdx).mapIt(maxColw[it]),
-    maxH: arg.mapItRows(it.mapPairs(rhs.height).max(0)).mapIt(
-      it.val
-    )
+    maxW: maxColw.mapPairs((lhs, rhs)).toTable(),
+    maxH: toTable(arg.mapItRows(
+      it.mapPairs(rhs.height).max(0)
+    ))
   )
 
 func makeGrid*[T](arg: SparseGrid[tuple[item: T, w, h: int]]): BlockGrid[T] =

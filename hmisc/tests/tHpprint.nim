@@ -29,7 +29,7 @@ suite "Block grid":
       ]
     )
 
-    grid.addHeader(makeCell("Hello"))
+    grid.addHeader(makeCell("!!!!"))
 
     echo grid.toStringGrid().toString()
 

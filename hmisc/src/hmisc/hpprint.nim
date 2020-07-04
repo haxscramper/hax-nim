@@ -11,7 +11,7 @@
 
 import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat, macros
-import typetraits
+import typetraits, strutils
 import hvariant, colors, hmisc_types
 
 import graphviz_ast, html_ast
@@ -26,10 +26,15 @@ import algorithm
 # func makeGridItem[T](arg: T): BlockGrid[T] =
 #   BlockGrid[T](isItem: true, item: arg)
 
+func toString*(grid: BlockGrid[StrSeq]): string
 func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
   # let newgrid: Seq2d[StrSeq] =
   makeGrid(
-    grid.grid.mapIt2d(makeCell(($it).split("\n")))
+    grid.grid.mapIt2d(makeCell((
+      case it.isItem:
+        of true: $it.item
+        of false: it.grid.toStringGrid().toString()
+    ).split("\n")))
   )
 
 func toString*(grid: BlockGrid[StrSeq]): string =
@@ -56,27 +61,49 @@ func toString*(grid: BlockGrid[StrSeq]): string =
   let hSpacer: string = "-"
   let vSpacer: string = "|"
 
-  # for cell in sortedCells:
-  #   let colRange = grid.colRange(cell.pos)
-  #   if colRange.isPoint(): # Single column
-  #     if colRange in colSizes:
-  #       if cell.internal.width > colSizes[colRange]:
-  #         colSizes[colRange] = cell.internal.width
-  #     else:
-  #       colSizes[colRange] = cell.internal.width
-  #   else: # Multiple columns
-  #     let sepWidth = colRange.middles * hSpacer.len
+  for cell in sortedCells:
+    block:
+      let colRange = grid.colRange(cell.pos)
+      if colRange.isPoint(): # Single column
+        if colRange in colSizes:
+          if cell.internal.width > colSizes[colRange]:
+            colSizes[colRange] = cell.internal.width
+        else:
+          colSizes[colRange] = cell.internal.width
+      else: # Multiple columns
+        let sepWidth = colRange.middles * hSpacer.len
+
+    block:
+     let rowRange = grid.rowRange(cell.pos)
+     if rowRange.isPoint(): # Single rowumn
+       if rowRange in rowSizes:
+         if cell.internal.width > rowSizes[rowRange]:
+           rowSizes[rowRange] = cell.internal.width
+       else:
+         rowSizes[rowRange] = cell.internal.width
+     else: # Multiple rowumns
+       let sepWidth = rowRange.middles * hSpacer.len
+
+  var res: seq[string]
+  for (rowIdx, row) in grid.grid.rows():
+    let rowH = grid.rowHeight(rowIdx)
+    var linesBuf: seq[string] = newSeqWith(rowH, "")
+    for colIdx, cell in row:
+      let colRange = grid.colRange(toPos(rowIdx, colIdx))
+      let cellW = colSizes[colRange]
+      let spacer = hSpacer.repeat(cellW)
+
+      for idx, line in cell.item:
+        linesBuf[idx] &= alignLeft(line, cellW)
+
+      for idx in cell.item.len() ..< rowH:
+        linesBuf[idx] &= "?".repeat(cellW)
 
 
-  var res: string
-  # for (rowIdx, row) in grid.grid.rows():
-  #   var linesBuf: seq[string] = newSeqWith(rowSizes())
-  #   for colIdx, cell in row:
-  #     let colRange = grid.colRange((rowIdx, colIdx))
-  #     let spacer = hSpacer.repeat(colSizes[colRange])
+    res.add linesBuf.join("\n")
 
 
-  result = res
+  result = res.join("\n")
 
 
 
