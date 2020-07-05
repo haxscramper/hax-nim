@@ -204,16 +204,6 @@ func makeObjElem*(text: string): ObjElem =
   ObjElem(text: text)
 
 type
-  RectPoint* = enum
-    rpoLeftEdge
-    rpoRightEdge
-    rpoBottomEdge
-    rpoTopEdge
-    rpoTopLeft
-    rpoTopRight
-    rpoBottomLeft
-    rpoBottomRight
-
   GridPoint* = enum
     gpoIntersection
     gpoTopLeft
