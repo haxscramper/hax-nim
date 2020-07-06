@@ -22,7 +22,7 @@ type
     case tkind*: TermKind
       of tkFunctor:
         functor: F
-        sons: seq[Term[V, F]]
+        subterms: seq[Term[V, F]]
       of tkConstant:
         value: V
       of tkVariable:
@@ -32,7 +32,9 @@ type
 
 
   TermImpl*[V, F] = object
-
+    getFSym*: proc(val: V): F
+    isFunctor*: proc(val: V): bool
+    getSubt*: proc(val: V): seq[V]
     # getKind*: proc(self: Obj): TermKind ## Get term kind
     # setNth*: proc(self: var Obj, idx: int, value: Obj): void
     # getNth*: proc(self: Obj, idx: int): Obj
@@ -100,7 +102,7 @@ func makeVariable*[V, F](name: VarSym): Term[V, F] =
 
 func makeFunctor*[V, F](
   sym: F, subt: seq[Term[V, F]]): Term[V, F] =
-  Term[V, F](tkind: tkFunctor, functor: sym, sons: subt)
+  Term[V, F](tkind: tkFunctor, functor: sym, subterms: subt)
 
 #======================  accessing term internals  =======================#
 
@@ -118,22 +120,22 @@ func getFSym*[V, F](t: Term[V, F]): F =
 func getNth*[V, F](
   t: Term[V, F], idx: int): Term[V, F]=
   assert t.getKind() == tkFunctor
-  t.sons[idx]
+  t.subterms[idx]
 
 func getNthMod*[V, F](
   t: var Term[V, F], idx: int): var Term[V, F]=
   assert t.getKind() == tkFunctor
-  t.sons[idx]
+  t.subterms[idx]
 
 func getSubt*[V, F](
   t: Term[V, F]): seq[Term[V, F]] =
   assert t.getKind() == tkFunctor
-  t.sons
+  t.subterms
 
 func setSubt*[V, F](
   t: var Term[V, F], subt: seq[Term[V, F]]): void =
   assert t.getKind() == tkFunctor
-  t.sons = subt
+  t.subterms = subt
 
 func getValue*[V, F](self: Term[V, F]): V =
   assert self.getKind() == tkConstant
