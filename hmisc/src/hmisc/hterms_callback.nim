@@ -52,19 +52,22 @@ type
   TermMatcher*[V, F] = object
     case isPattern*: bool
     of true:
-      patt*: seq[Term[V, F]]
-      first: set[F]
+      patt*: Term[V, F]
     of false:
       matcher*: MatchProc[V, F]
 
 
   RulePair*[V, F] = object
-    rule*: TermMatcher[V, F]
-    gen*: GenProc[V, F]
+    rules: seq[TermMatcher[V, F]] # List of patterns/matchers
+    first: Table[F, seq[int8]] # Functor -> Possible pattern
+    matchers: seq[int8] # List of matchers
+    gen: GenProc[V, F] # Proc to generate final result
 
   RuleId = int16
   RedSystem*[V, F] = object
-    rules*: seq[RulePair[V, F]]
+    first: Table[F, seq[RuleId]]
+    matchers: set[RuleId] # Matcher procs - always have to try
+    rules: seq[RulePair[V, F]]
 
 
 #==========================  making new terms  ===========================#
@@ -147,26 +150,28 @@ proc assertCorrect*[V, F](impl: TermImpl[V, F]): void =
     assert (not value.isNil()), name & " cannot be nil"
 
 func makeRulePair*[V, F](
+  rules: seq[TermMatcher[V, F]], gen: GenProc[V, F]): RulePair[V, F] =
+  result.rules = rules
+  result.gen = gen
+
+  for id, rule in rules:
+    case rule.isPattern:
+      of true:
+        result.first.mgetOrPut(rule.patt.getFSym(), @[]).add id.int8
+      of false: result.matchers.add id.int8
+
+
+func makeRulePair*[V, F](
   rule: TermMatcher[V, F], gen: GenProc[V, F]): RulePair[V, F] =
   ## Create rule pair insance
-  RulePair[V, F](rule: rule, gen: gen)
+  makeRulePair(@[rule], gen)
 
 func makeMatcher*[V, F](matcher: MatchProc[V, F]): TermMatcher[V, F] =
   ## Create term matcher instance for matching procs
   TermMatcher[V, F](isPattern: false, matcher: matcher)
 
 func makeMatcher*[V, F](patt: Term[V, F]): TermMatcher[V, F] =
-  result = TermMatcher[V, F](isPattern: true, patt: @[ patt ])
-
-  if patt.getKind() == tkFunctor:
-    result.first = { patt.functor }
-
-func makeFunctor*[V, F](patts: seq[Term[V, F]]): TermMatcher[V, F] =
-  result = TermMatcher[V, F](isPattern: true, patt: patts)
-  for patt in patts:
-    if patt.getKind() == tkFunctor:
-      result.first.incl patt.functor
-
+  result = TermMatcher[V, F](isPattern: true, patt: patt)
 
 func makeGenerator*[V, F](obj: Term[V, F]): GenProc[V, F] =
   ## Create closure proc that will output `obj` as value
@@ -178,8 +183,21 @@ func makeEnvironment*[V, F](values: seq[(VarSym, Term[V, F])] = @[]): TermEnv[V,
   TermEnv[V, F](values: values.toTable())
 
 func makeReductionSystem*[V, F](
-  values: seq[RulePair[V, F]]): RedSystem[V, F] =
-  RedSystem[V, F](rules: values)
+  rules: seq[RulePair[V, F]]): RedSystem[V, F] =
+  result.rules = rules
+  for id, rule in rules:
+    for fsym, _ in rule.first:
+      # Try pattern only if first functor matches
+      result.first.mgetOrPut(fsym, @[]).add RuleId(id)
+
+    if rule.matchers.len > 0:
+      # Always call matcher procs
+      result.matchers.incl RuleId(id)
+
+  for fsym, rules in result.first:
+    result.first[fsym] = rules.deduplicate()
+
+
 
 func isBound*[V, F](env: TermEnv[V, F], term: VarSym): bool =
   ## Check if variable is bound to somethin in `env`
@@ -225,6 +243,14 @@ iterator pairs*[V, F](system: RedSystem[V, F]): (RuleId, RulePair[V, F]) =
   for idx, pair in system.rules:
     yield (RuleId(idx), pair)
 
+iterator findApplicable*[V, F](
+  system: RedSystem[V, F], redex: Term[V, F]): (RuleId, RulePair[V, F]) =
+  let fsym = redex.getFSym()
+  for pattId in system.first.getOrDefault(fsym, @[]):
+    yield (pattId, system.rules[pattId])
+
+  for pattId in system.matchers:
+    yield (pattId, system.rules[pattId])
 
 iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
   ## Iterate over all variables and values in evnironment
@@ -385,6 +411,19 @@ proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
     if env.isBound(getVName(v)):
       result.setAtPath(path, v.dereference(env))
 
+proc apply*[V, F](
+  redex: Term[V, F], rule: RulePair[V, F]): Option[TermEnv[V, F]] =
+  for id in rule.first[redex.getFSym()] & rule.matchers:
+    let unifRes = if rule.rules[id].isPattern: unif(rule.rules[id].patt, redex)
+                  else: rule.rules[id].matcher(redex)
+
+    if unifRes.isSome():
+      return unifRes
+
+proc generate*[V, F](
+  rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
+  rule.gen(env)
+
 proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
   let ind = "  ".repeat(depth)
   case getKind(term):
@@ -413,7 +452,6 @@ type
     constr: ReduceConstraints
     maxDepth: int
 
-
 proc registerUse(rs: var ReductionState, path: TermPath, id: RuleId): void =
   case rs.constr:
     of rcApplyOnce:
@@ -435,6 +473,7 @@ proc canRewrite(rs: ReductionState, path: TermPath): bool =
     rs.constr == rcRewriteOnce and
     rs.rewPaths.prefixHasValue(path)
   )
+
 
 proc cannotUse(rs: ReductionState, path: TermPath, rule: RuleId): bool =
     # Avoid using this rule again on the same path
@@ -479,7 +518,6 @@ rule value generator.
   ]##
   var tmpTerm = term
   var rs = ReductionState(constr: reduceConstraints, maxDepth: maxDepth)
-  # var rewPaths: Trie[int, IntSet]
   defer:
     result.rewPaths = rs.rewPaths
 
@@ -489,31 +527,19 @@ rule value generator.
       var canReduce = false
       for (redex, path) in tmpTerm.redexes():
         if rs.canRewrite(path):
-          for idx, rule in system:
-            if rs.cannotUse(path, idx):
-              continue
-
-            let lhs: TermMatcher[V, F] = rule.rule
-            let gen: GenProc[V, F] = rule.gen
-            # Reached max iteration count
-            if iterIdx > maxIterations:
-              break outerLoop
-
+          for idx, rule in system.findApplicable(redex):
             inc iterIdx
-            var unifRes: Option[TermEnv[V, F]]
-            case lhs.isPattern:
-              of true:
-                unifRes = unif(lhs.patt[0] #[ IMPLEMENT HACK ]#, redex)
-              of false:
-                unifRes = lhs.matcher(redex)
+            if iterIdx > maxIterations: break outerLoop
+            if rs.cannotUse(path, idx): continue
 
+            var unifRes: Option[TermEnv[V, F]] = redex.apply(rule)
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
               rs.registerUse(path, idx)
               let newEnv = unifRes.get()
 
               # New value from generator
-              let tmpNew = (gen(newEnv)).substitute(newEnv)
+              let tmpNew = rule.generate(newEnv).substitute(newEnv)
               setAtPath(tmpTerm, path, tmpNew)
 
               if getKind(tmpTerm) notin {tkVariable, tkConstant}:
