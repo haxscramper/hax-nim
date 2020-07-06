@@ -7,47 +7,48 @@ import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
 
 export hterms_callback, hterms_tree, macros, halgorithm
 
-const constantNodes =
-  {
-    nnkNone, nnkEmpty, nnkNilLit, # Empty node
-    nnkCharLit..nnkUInt64Lit, # Int literal
-    nnkFloatLit..nnkFloat64Lit, # Float literal
-    nnkStrLit..nnkTripleStrLit, nnkCommentStmt, nnkIdent, nnkSym # Str lit
-  }
-
-const functorNodes = { low(NimNodeKind) .. high(NimNodeKind) } - constantNodes
-proc subnodes(node: NimNode): seq[NimNode] = toSeq(node.children())
-
-proc makeNimNode(kind: NimNodeKind, sons: seq[NimNode]): NimNode =
-  return newTree(kind, sons)
-
 type
-  NodeTerm = CaseTerm[NimNode, NimNodeKind]
-  NodeReduction* = RedSystem[string, NodeTerm]
-  NodeMatcher* = TermMatcher[string, NodeTerm]
-  NodeEnv* = TermEnv[string, NodeTerm]
+  NodeTerm = Term[NimNode, NimNodeKind]
+  NodeReduction* = RedSystem[NimNode, NimNodeKind]
+  NodeMatcher* = TermMatcher[NimNode, NimNodeKind]
+  NodeEnv* = TermEnv[NimNode, NimNodeKind]
 
-defineTermSystemFor(
-  treeType = NimNode, # Use `NimNode` for case term value type
-  enumType = NimNodeKind, # Use `NimNodeKind` as functor
-  kindField = kind, # Use `kind` command for accessing node fields
-  sonsField = children, # Use `children` command for accessing noe fields
-  implName = nimAstImpl, # Implementation const will be called `nimAstImpl`
+func isFunctor*(nnk: NimNodeKind): bool =
+  nnk notin {nnkNone .. nnkSym}
 
-  # To avoid exceptions for non-strlit nodes use this proc to get
-  # string for nim node
-  val2String = (proc(n: NimNode): string = n.treeRepr()),
-
-  # Procedure to create new instance of nim node
-  treeMaker = makeNimNode,
-
-  # Node kinds that should be considered functors
-  functorKinds = functorNodes,
-
-  # Node kinds that should be considered 'constants'
-  constantKinds = constantNodes,
+const nimAstImpl* = TermImpl[NimNode, NimNodeKind](
+  getFsym: (proc(n: NimNode): NimNodeKind = n.kind),
+  isFunctor: (proc(n: NimNode): bool = n.kind.isFunctor()),
+  isFunctorSym: (proc(kind: NimNodeKind): bool = kind.isFunctor()),
+  makeFunctor: (
+    proc(op: NimNodeKind, sub: seq[NimNode]): NimNode =
+      if sub.len == 0: newNimNode(op)
+      else: newTree(op, sub)
+  ),
+  getSubt: (proc(n: NimNode): seq[NimNode] = toSeq(n.children)),
+  valStrGen: (proc(n: NimNode): string = $n.toStrLit()),
 )
 
+func makeNimNodeVariable*(name: VarSym): NodeTerm =
+  makeVariable[NimNode, NimNodeKind](name)
+
+func makeNimNodePlaceholder*(name: VarSym): NodeTerm =
+  makePlaceholder[NimNode, NimNodeKind]()
+
+func makeNimNodeFunctor*(sym: NimNodeKind, subt: seq[NodeTerm]): NodeTerm =
+  makeFunctor[NimNode, NimNodeKind](sym, subt)
+
+func makeNimNodeConstant*(val: NimNode): NodeTerm =
+  makeConstant[NimNode, NimNodeKind](val)
+
+proc toTerm*(nt: NimNode): NodeTerm =
+  nt.toTerm(nimAstImpl)
+
+proc fromTerm*(nt: NodeTerm): NimNode =
+  nt.fromTerm(nimAstImpl)
+
+proc treeRepr*(nt: NodeTerm): string =
+  treeRepr(nt, nimAstImpl)
 
 proc buildPatternDecl(
   node: NimNode, path: seq[int],
@@ -71,12 +72,12 @@ proc buildPatternDecl(
     let varStr = newStrLitNode($content[0])
     vars.add $content[0]
     return quote do:
-      NodeTerm(tkind: tkVariable, name: `varStr`)
+      makeNimNodeVariable(`varStr`)
 
   elif node.kind == nnkIdent and node.strVal == "_":
     # Placeholder variable
     return quote do:
-      NodeTerm(tkind: tkPlaceholder)
+      makeNimNodePlaceholder()
   else:
     # not placeholder, not variable => regular term or functor
     if node.kind == nnkCall and ($node[0])[0].isUpperAscii():
@@ -84,14 +85,13 @@ proc buildPatternDecl(
       let funcName = ident("nnk" & callSym)
       let funcEnum: NimNodeKind = parseEnum[NimNodeKind]("nnk" & callSym)
 
-      if funcEnum in functorNodes:
+      if nimAstImpl.isFunctorSym(funcEnum): # funcEnum in functorNodes
         # Genreate matcher for functor
         let subtMatchers = newTree(nnkBracket, subt.filterIt(not it.isNil))
         return quote do:
-          NodeTerm(
-            tkind: tkFunctor, # Will match functor nodes in tree
-            functor: `funcName`, # Literal value for functor kind
-            sons: @`subtMatchers` # Wrap all subnode matchers into sequence
+          makeNimNodeFunctor(
+            `funcName`, # Literal value for functor kind
+            @`subtMatchers` # Wrap all subnode matchers into sequence
           )
       else:
         # Literal value. It is necessary to implement two-level hop
@@ -113,7 +113,7 @@ proc buildPatternDecl(
             ((let valueSym = `strLit`; `nodeMaker`(`strLit`)))
 
         return quote do:
-          NodeTerm(tkind: tkConstant, value: `termValue`)
+          makeNimNodeConstant(`termValue`)
     else:
       assert (node.kind notin {nnkStmtList}),
             "Unexpected element kind: " &
@@ -125,7 +125,7 @@ proc makePatternDecl(
   ## Declare pattern matcher for section body
   var vars: seq[string]
   let ruleMatcherDef = sectBody.mapItTreeDFS(
-    toSeq(it.subnodes),
+    toSeq(it.children),
     NimNode,
     buildPatternDecl(it, path, subt, vars))
 
@@ -139,7 +139,7 @@ proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
       let id = ident(v)
       let strl = newLit(v)
       quote do:
-        let `id`: NimNode = env[`strl`].fromTerm()
+        let `id`: NimNode = env[`strl`].fromTerm(nimAstImpl)
 
   let varStmts = varDecls.newStmtList()
 
@@ -152,7 +152,7 @@ proc makeGeneratorDecl(sectBody: NimNode, vars: seq[string]): NimNode =
           block:
             `sectBody`
 
-        res.toTerm()
+        res.toTerm(nimAstImpl)
 
       tmp
 
@@ -178,32 +178,13 @@ macro makeNodeRewriteSystem*(body: untyped): untyped =
     let generator = makeGeneratorDecl(genSection, varList)
 
     matcherTuples.add quote do:
-      makeRulePair[string, NodeTerm](
-        NodeMatcher(patt: `matcherDecl`, isPattern: true),
+      makeRulePair(
+        makeMatcher(`matcherDecl`),
         `generator`
       )
 
   result = newTree(nnkBracket, matcherTuples)
   result = quote do:
-    RedSystem[string, NodeTerm](rules: @`result`)
+    makeReductionSystem(@`result`)
 
-  # echo result.toStrLit()
-
-
-proc treeRepr*[Tree, Enum](
-  term: CaseTerm[Tree, Enum],
-  treeStr: proc(tree: Tree): string,
-  depth: int = 0): string =
-  ## Generate tree representation for `CaseTerm`
-
-  let ind = "  ".repeat(depth)
-  case term.tkind:
-    of tkConstant:
-      return treeStr(term.value).split("\n").mapIt(ind & "cst " & it).join("\n")
-    of tkPlaceholder:
-      return ind & "plh _"
-    of tkVariable:
-      return ind & "var " & term.name
-    of tkFunctor:
-      return ind & "fun " & $term.functor & "\n" &
-        term.sons.mapIt(it.treeRepr(treeStr, depth + 1)).join("\n")
+  echo result.toStrLit()

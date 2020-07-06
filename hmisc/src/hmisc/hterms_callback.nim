@@ -34,9 +34,10 @@ type
   TermImpl*[V, F] = object
     getFSym*: proc(val: V): F
     isFunctor*: proc(val: V): bool
+    isFunctorSym*: proc(val: F): bool
     getSubt*: proc(val: V): seq[V]
-    setSubt*: proc(val: var V, subt: seq[V])
-    makeFunctor*: proc(sym: F): V
+    # setSubt*: proc(val: var V, subt: seq[V])
+    makeFunctor*: proc(sym: F, subt: seq[V]): V
     valStrGen*: proc(val: V): string ## Conver value to string.
 
   TermEnv*[V, F] = object
@@ -131,8 +132,10 @@ proc fromTerm*[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
      $term.getKind() & " has to be replaced with value"
 
   if term.getKind() == tkFunctor:
-    result = cb.makeFunctor(term.getFSym())
-    cb.setSubt(result, term.getSubt().mapIt(it.fromTerm(cb)))
+    result = cb.makeFunctor(
+      term.getFSym(),
+      term.getSubt().mapIt(it.fromTerm(cb)))
+    # cb.setSubt(result, )
   else:
     result = term.getValue()
 
@@ -155,6 +158,9 @@ func makeMatcher*[V, F](matcher: MatchProc[V, F]): TermMatcher[V, F] =
   ## Create term matcher instance for matching procs
   TermMatcher[V, F](isPattern: false, matcher: matcher)
 
+func makeMatcher*[V, F](patt: Term[V, F]): TermMatcher[V, F] =
+  TermMatcher[V, F](isPattern: true, patt: patt)
+
 func makeGenerator*[V, F](obj: Term[V, F]): GenProc[V, F] =
   ## Create closure proc that will output `obj` as value
   return proc(env: TermEnv[V, F]): Term[V, F] =
@@ -163,6 +169,10 @@ func makeGenerator*[V, F](obj: Term[V, F]): GenProc[V, F] =
 func makeEnvironment*[V, F](values: seq[(VarSym, Term[V, F])] = @[]): TermEnv[V, F] =
   ## Create new environment using `values` as initial binding values
   TermEnv[V, F](values: values.toTable())
+
+func makeReductionSystem*[V, F](
+  values: seq[RulePair[V, F]]): RedSystem[V, F] =
+  RedSystem[V, F](rules: values)
 
 func isBound*[V, F](env: TermEnv[V, F], term: VarSym): bool =
   ## Check if variable is bound to somethin in `env`
@@ -344,9 +354,7 @@ func varlist*[V, F](term: Term[V, F], path: TermPath = @[0]): seq[(Term[V, F], T
         result &= sub.varlist(path & @[idx])
 
 
-func setAtPath*[V, F](
-  term: var Term[V, F], path: TermPath,
-  value: Term[V, F], ): void =
+proc setAtPath*[V, F](term: var Term[V, F], path: TermPath, value: Term[V, F]): void =
   case getKind(term):
     of tkFunctor:
       if path.len == 1:
@@ -363,14 +371,14 @@ func setAtPath*[V, F](
     of tkConstant:
       assert false, "Cannot assign to constant: " & $term & " = " & $value
 
-func substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
+proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
   ## Substitute all variables in term with their values from environment
   result = term
   for (v, path) in term.varlist():
     if env.isBound(getVName(v)):
       result.setAtPath(path, v.dereference(env))
 
-func treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
+proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
   let ind = "  ".repeat(depth)
   case getKind(term):
     of tkConstant:
@@ -381,8 +389,10 @@ func treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): stri
     of tkVariable:
       return ind & "var " & getVName(term)
     of tkFunctor:
-      return ind & "fun " & $(getFSym(term)) & "\n" &
-        getSubt(term).mapIt(treeRepr(it, cb, depth + 1)).join("\n")
+      return (
+        @[ ind & "fun " & $(getFSym(term)) ] &
+        getSubt(term).mapIt(treeRepr(it, cb, depth + 1))
+      ).join("\n")
 
 type
   ReduceConstraints* = enum

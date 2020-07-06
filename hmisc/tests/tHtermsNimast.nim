@@ -1,27 +1,30 @@
 import hmisc/hterms_nimast
 
-macro rewriteTest(body: untyped): untyped =
-  let rewrite = makeNodeRewriteSystem:
-    rule:
-      patt: Call(Ident("hello"), [[other]])
-      outp:
-        let exprStr = ($other.toStrLit()).newLit()
-        quote do:
-          echo "calling proc hello with one argument"
-          echo "expr: ", `exprStr`
-          echo "argument value: ", `other`
-          hello(`other`)
+import unittest
 
-  let term = body.toTerm()
-  let nodeTree = proc(n: NimNode): string = n.treeRepr()
+suite "Hterms nim ast":
+  test "DSL to declare rewriting system":
+    macro rewriteTest(body: untyped): untyped =
+      let rewrite = makeNodeRewriteSystem:
+        rule:
+          patt: Call(Ident("hello"), [[other]])
+          outp:
+            let exprStr = ($other.toStrLit()).newLit()
+            quote do:
+              echo "calling proc hello with one argument"
+              echo "expr: ", `exprStr`
+              echo "argument value: ", `other`
+              hello(`other`)
 
-  let reduced = reduce(
-    term, rewrite, nimAstImpl
-  )
-  if reduced.ok:
-    result = reduced.term.fromTerm()
+      let term = body.toTerm()
+      let nodeTree = proc(n: NimNode): string = n.treeRepr()
 
-proc hello(param: int) = echo param
+      let reduced = reduce(term, rewrite)
+      if reduced.ok:
+        echo reduced.term.treeRepr()
+        result = reduced.term.fromTerm()
 
-rewriteTest:
-  hello(12 + 999)
+    proc hello(param: int) = echo param
+
+    rewriteTest:
+      hello(12 + 999)

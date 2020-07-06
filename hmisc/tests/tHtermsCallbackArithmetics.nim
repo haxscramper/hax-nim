@@ -73,9 +73,13 @@ suite "Hterms callback/arithmetic":
     let cb = TermImpl[Arithm, ArithmOp](
       getFsym: (proc(n: Arithm): ArithmOp = n.tsym),
       isFunctor: (proc(n: Arithm): bool = n.operator),
-      makeFunctor: (proc(op: ArithmOp): Arithm = Arithm(operator: true, tsym: op)),
+      isFunctorSym: (proc(n: ArithmOp): bool = true),
+      makeFunctor: (
+        proc(op: ArithmOp, sub: seq[Arithm]): Arithm =
+          Arithm(operator: true, tsym: op, tsubt: sub)
+      ),
       getSubt: (proc(n: Arithm): seq[Arithm] = n.tsubt),
-      setSubt: (proc(n: var Arithm, sub: seq[Arithm]) = n.tsubt = sub),
+      # setSubt: (proc(n: var Arithm, sub: seq[Arithm]) = n.tsubt = sub),
       valStrGen: (proc(n: Arithm): string = "[[ TODO ]]"),
     )
 
