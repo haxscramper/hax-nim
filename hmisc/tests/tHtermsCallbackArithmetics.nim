@@ -100,7 +100,7 @@ suite "Hterms callback/arithmetic":
       rules: @[
         # A + 0 -> A
         makeRulePair(
-          makePattern[string, Arithm](
+          makePattern[Arithm, ArithmOp](
             Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
               Arithm(tkind: tkConstant, tval: 0)

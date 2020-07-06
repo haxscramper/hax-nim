@@ -18,20 +18,20 @@ type
   TermPath = seq[int]
   VarSym* = string
 
-  Term*[T, E] = object
+  Term*[V, F] = object
     case tkind*: TermKind
       of tkFunctor:
-        functor: E
-        sons: seq[Term[T, E]]
+        functor: F
+        sons: seq[Term[V, F]]
       of tkConstant:
-        value: T
+        value: V
       of tkVariable:
         name: VarSym
       of tkPlaceholder:
         nil
 
 
-  TermImpl*[T, E] = object
+  TermImpl*[V, F] = object
 
     # getKind*: proc(self: Obj): TermKind ## Get term kind
     # setNth*: proc(self: var Obj, idx: int, value: Obj): void
@@ -50,92 +50,92 @@ type
     # unifCheck*: proc(self, other: Obj): bool
     # ## Procedure to quickly check if two objects can be unified at all
 
-    # makePlaceholder*: proc(): Term[T, E]
+    # makePlaceholder*: proc(): Term[V, F]
     # ## Generate instance of `tkPlaceholder` term
-    # makeConstant*: proc(val: Val): Term[T, E]
+    # makeConstant*: proc(val: Val): Term[V, F]
     # ## Generate instance of `tkConstant` term
-    # makeVariable*: proc(name: VarSym): Term[T, E]
+    # makeVariable*: proc(name: VarSym): Term[V, F]
     # ## Generate instance of `tkVariable` term
-    # makeFunctor*: proc(sym: FunSym, subt: seq[Term[T, E]]): Term[T, E]
+    # makeFunctor*: proc(sym: FunSym, subt: seq[Term[V, F]]): Term[V, F]
     # ## Generate instance of `tkFunctor` term using `subt` as subterms
-    valStrGen*: proc(val: T): string
+    valStrGen*: proc(val: V): string
     ## Conver value to string.
 
-  TermEnv*[T, E] = object
+  TermEnv*[V, F] = object
     ## Mapping between varuable symbols and values
-    values*: Table[VarSym, Term[T, E]]
+    values*: Table[VarSym, Term[V, F]]
 
-  GenProc*[T, E] = proc(env: TermEnv[T, E]): Term[T, E] ## Proc
+  GenProc*[V, F] = proc(env: TermEnv[V, F]): Term[V, F] ## Proc
   ## for generaing Values during rewriting.
 
-  MatchProc*[T, E] = proc(test: Term[T, E]): Option[TermEnv[T, E]]
+  MatchProc*[V, F] = proc(test: Term[V, F]): Option[TermEnv[V, F]]
 
-  TermMatcher*[T, E] = object
+  TermMatcher*[V, F] = object
     case isPattern*: bool
     of true:
-      patt*: Term[T, E]
+      patt*: Term[V, F]
     of false:
-      matcher*: MatchProc[T, E]
+      matcher*: MatchProc[V, F]
 
 
-  RulePair*[T, E] = object
-    rule*: TermMatcher[T, E]
-    gen*: GenProc[T, E]
+  RulePair*[V, F] = object
+    rule*: TermMatcher[V, F]
+    gen*: GenProc[V, F]
 
-  RedSystem*[T, E] = object
-    rules*: seq[RulePair[T, E]]
+  RedSystem*[V, F] = object
+    rules*: seq[RulePair[V, F]]
 
 
 #==========================  making new terms  ===========================#
 
 
-func makePlaceholder*[T, E](): Term[T, E] =
-  Term[T, E](tkind: tkPlaceholder)
+func makePlaceholder*[V, F](): Term[V, F] =
+  Term[V, F](tkind: tkPlaceholder)
 
-func makeConstant*[T, E](val: T): Term[T, E] =
-  Term[T, E](tkind: tkConstant, value: val)
+func makeConstant*[V, F](val: V): Term[V, F] =
+  Term[V, F](tkind: tkConstant, value: val)
 
-func makeVariable*[T, E](name: VarSym): Term[T, E] =
-  Term[T, E](tkind: tkVariable, name: name)
+func makeVariable*[V, F](name: VarSym): Term[V, F] =
+  Term[V, F](tkind: tkVariable, name: name)
 
-func makeFunctor*[T, E](
-  sym: E, subt: seq[Term[T, E]]): Term[T, E] =
-  Term[T, E](tkind: tkFunctor, functor: sym, sons: subt)
+func makeFunctor*[V, F](
+  sym: F, subt: seq[Term[V, F]]): Term[V, F] =
+  Term[V, F](tkind: tkFunctor, functor: sym, sons: subt)
 
 #======================  accessing term internals  =======================#
 
-func getKind*[T, E](t: Term[T, E]): TermKind =
+func getKind*[V, F](t: Term[V, F]): TermKind =
   t.kind
 
-func getVName*[T, E](t: Term[T, E]): VarSym =
+func getVName*[V, F](t: Term[V, F]): VarSym =
   assert t.getKind() == tkVariable
   t.name
 
-func getFSym*[T, E](t: Term[T, E]): E =
+func getFSym*[V, F](t: Term[V, F]): F =
   assert t.getKind() == tkFunctor
   t.functor
 
-func getNth*[T, E](
-  t: Term[T, E], idx: int): Term[T, E]=
+func getNth*[V, F](
+  t: Term[V, F], idx: int): Term[V, F]=
   assert t.getKind() == tkFunctor
   t.sons[idx]
 
-func getNthMod*[T, E](
-  t: var Term[T, E], idx: int): var Term[T, E]=
+func getNthMod*[V, F](
+  t: var Term[V, F], idx: int): var Term[V, F]=
   assert t.getKind() == tkFunctor
   t.sons[idx]
 
-func getSubt*[T, E](
-  t: Term[T, E]): seq[Term[T, E]] =
+func getSubt*[V, F](
+  t: Term[V, F]): seq[Term[V, F]] =
   assert t.getKind() == tkFunctor
   t.sons
 
-func setSubt*[T, E](
-  t: var Term[T, E], subt: seq[Term[T, E]]): void =
+func setSubt*[V, F](
+  t: var Term[V, F], subt: seq[Term[V, F]]): void =
   assert t.getKind() == tkFunctor
   t.sons = subt
 
-func getValue*[T, E](self: Term[T, E]): T =
+func getValue*[V, F](self: Term[V, F]): V =
   assert self.getKind() == tkConstant
   self.value
 
@@ -144,38 +144,38 @@ func getValue*[T, E](self: Term[T, E]): T =
 #==================================  2  ==================================#
 
 # REFACTOR remove (make TermImple fields `not nil` ?)
-proc assertCorrect*[T, E](impl: TermImpl[T, E]): void =
+proc assertCorrect*[V, F](impl: TermImpl[V, F]): void =
   ## Check if all fields in `impl` have been correctly initalized
   for name, value in impl.fieldPairs():
     assert (not value.isNil()), name & " cannot be nil"
 
-proc makeRulePair*[T, E](
-  rule: TermMatcher[T, E], gen: GenProc[T, E]): RulePair[T, E] =
+func makeRulePair*[V, F](
+  rule: TermMatcher[V, F], gen: GenProc[V, F]): RulePair[V, F] =
   ## Create rule pair insance
-  RulePair[T, E](rule: rule, gen: gen)
+  RulePair[V, F](rule: rule, gen: gen)
 
-proc makePattern*[T, E](obj: Term[T, E]): TermMatcher[T, E] =
+func makePattern*[V, F](obj: Term[V, F]): TermMatcher[V, F] =
   ## Create term matcher instance with for patterns
-  TermMatcher[T, E](patt: obj, isPattern: true)
+  TermMatcher[V, F](patt: obj, isPattern: true)
 
-proc makeMatcher*[T, E](matcher: MatchProc[T, E]): TermMatcher[T, E] =
+func makeMatcher*[V, F](matcher: MatchProc[V, F]): TermMatcher[V, F] =
   ## Create term matcher instance for matching procs
-  TermMatcher[T, E](isPattern: false, matcher: matcher)
+  TermMatcher[V, F](isPattern: false, matcher: matcher)
 
-proc makeGenerator*[T, E](obj: Term[T, E]): GenProc[T, E] =
+func makeGenerator*[V, F](obj: Term[V, F]): GenProc[V, F] =
   ## Create closure proc that will output `obj` as value
-  return proc(env: TermEnv[T, E]): Term[T, E] =
+  return proc(env: TermEnv[V, F]): Term[V, F] =
     return obj
 
-proc makeEnvironment*[T, E](values: seq[(VarSym, Term[T, E])] = @[]): TermEnv[T, E] =
+func makeEnvironment*[V, F](values: seq[(VarSym, Term[V, F])] = @[]): TermEnv[V, F] =
   ## Create new environment using `values` as initial binding values
-  TermEnv[T, E](values: values.toTable())
+  TermEnv[V, F](values: values.toTable())
 
-proc isBound*[T, E](env: TermEnv[T, E], term: VarSym): bool =
+func isBound*[V, F](env: TermEnv[V, F], term: VarSym): bool =
   ## Check if variable is bound to somethin in `env`
   (term in env.values) # and env[term] != term
 
-proc `[]`*[T, E](e: TermEnv[T, E], t: VarSym): Term[T, E] =
+func `[]`*[V, F](e: TermEnv[V, F], t: VarSym): Term[V, F] =
   ## Access value from environment.
   try:
     e.values[t]
@@ -187,12 +187,12 @@ proc `[]`*[T, E](e: TermEnv[T, E], t: VarSym): Term[T, E] =
       KeyError,
       &"Missing variable `{t}` in environment. Have vars: {vars}")
 
-proc `[]=`*[VarSym, Obj](
+func `[]=`*[VarSym, Obj](
   system: var RedSystem[VarSym, Obj], lhs, rhs: Obj): void =
   ## Add rule to environment
   system.rules[lhs] = rhs
 
-proc `[]=`*[VarSym, Obj](
+func `[]=`*[VarSym, Obj](
   env: var TermEnv[VarSym, Obj], variable: VarSym, value: Obj): void =
   ## Set value for variable in environemt
 
@@ -221,12 +221,12 @@ proc len*[VarSym, Obj](env: TermEnv[VarSym, Obj]): int =
   ## Get number of itesm in enviroenmt
   env.values.len()
 
-proc bindTerm[T, E](
-  variable, value: Term[T, E], env: TermEnv[T, E], cb: TermImpl[T, E]): TermEnv[T, E]
+proc bindTerm[V, F](
+  variable, value: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): TermEnv[V, F]
 
-proc copy*[T, E](
-  term: Term[T, E], env: TermEnv[T, E],
-  cb: TermImpl[T, E]): (Term[T, E], TermEnv[T, E]) =
+proc copy*[V, F](
+  term: Term[V, F], env: TermEnv[V, F],
+  cb: TermImpl[V, F]): (Term[V, F], TermEnv[V, F]) =
   ## Create copy of a term. All variables are replaced with new ones.
   # DOC what is returned?
   let inputEnv = env
@@ -245,7 +245,7 @@ proc copy*[T, E](
 
     of tkFunctor:
       var resEnv = env
-      var subterms: seq[Term[T, E]]
+      var subterms: seq[Term[V, F]]
       for arg in cb.getSubt(term):
         let (tmpArg, tmpEnv) = arg.copy(resEnv, cb)
         resEnv = tmpEnv
@@ -256,9 +256,9 @@ proc copy*[T, E](
     of tkPlaceholder:
       return (term, inputEnv)
 
-proc bindTerm[T, E](
-  variable, value: Term[T, E], env: TermEnv[T, E] ,
-  cb: TermImpl[T, E]): TermEnv[T, E] =
+proc bindTerm[V, F](
+  variable, value: Term[V, F], env: TermEnv[V, F] ,
+  cb: TermImpl[V, F]): TermEnv[V, F] =
   ## Create environment where `variable` is bound to `value`
   result = env
   case cb.getKind(value):
@@ -269,8 +269,8 @@ proc bindTerm[T, E](
       result = newEnv
       result[cb.getVName(variable)] = newTerm
 
-proc dereference*[T, E](
-  term: Term[T, E], env: TermEnv[T, E], cb: TermImpl[T, E]): Term[T, E]=
+proc dereference*[V, F](
+  term: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): Term[V, F]=
   ## Traverse binding chain in environment `env` and return value of
   ## the `term`
   result = term
@@ -283,11 +283,11 @@ proc dereference*[T, E](
 
     result = value
 
-proc unif*[T, E](
-  t1, t2: Term[T, E],
-  cb: TermImpl[T, E],
-  env: TermEnv[T, E] = makeEnvironment[T, E]()
-    ): Option[TermEnv[T, E]] =
+proc unif*[V, F](
+  t1, t2: Term[V, F],
+  cb: TermImpl[V, F],
+  env: TermEnv[V, F] = makeEnvironment[V, F]()
+    ): Option[TermEnv[V, F]] =
   ## Attempt to unify two terms. On success substitution (environment)
   ## is return for which two terms `t1` and `t2` could be considered
   ## equal.
@@ -301,36 +301,36 @@ proc unif*[T, E](
     if val1 == val2:
       return some(env)
     else:
-      return none(TermEnv[T, E])
+      return none(TermEnv[V, F])
   elif k1 == tkVariable:
     return some(bindTerm(val1, val2, env, cb))
   elif k2 == tkVariable:
     return some(bindTerm(val2, val1, env, cb))
   elif (k1, k2) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
-    return none(TermEnv[T, E])
+    return none(TermEnv[V, F])
   else:
     var tmpRes = env
     if cb.getFSym(val1) != cb.getFSym(val2):
-      return none(TermEnv[T, E])
+      return none(TermEnv[V, F])
 
     if cb.getSubt(val1).len != cb.getSubt(val2).len:
       # TEST with different-sized term unification
       # TODO provide `reason` for failure
-      return none(TermEnv[T, E])
+      return none(TermEnv[V, F])
 
     for idx, (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
       let res = unif(arg1, arg2, cb, tmpRes)
       if res.isSome():
         tmpRes = res.get()
       else:
-        return none(TermEnv[T, E])
+        return none(TermEnv[V, F])
 
     return some(tmpRes)
 
-iterator redexes*[T, E](
-  term: Term[T, E], cb: TermImpl[T, E]): tuple[red: Term[T, E], path: TermPath] =
+iterator redexes*[V, F](
+  term: Term[V, F], cb: TermImpl[V, F]): tuple[red: Term[V, F], path: TermPath] =
   ## Iterate over all redex in term
-  var que: Deque[(Term[T, E], TermPath)]
+  var que: Deque[(Term[V, F], TermPath)]
   que.addLast((term, @[0]))
   while que.len > 0:
     let (nowTerm, path) = que.popFirst()
@@ -341,8 +341,8 @@ iterator redexes*[T, E](
     yield (red: nowTerm, path: path)
 
 
-proc varlist*[T, E](
-  term: Term[T, E], cb: TermImpl[T, E], path: TermPath = @[0]): seq[(Term[T, E], TermPath)] =
+proc varlist*[V, F](
+  term: Term[V, F], cb: TermImpl[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
   ## Output list of all variables in term
   case cb.getKind(term):
     of tkConstant, tkPlaceholder:
@@ -354,9 +354,9 @@ proc varlist*[T, E](
         result &= sub.varlist(cb, path & @[idx])
 
 
-proc setAtPath*[T, E](
-  term: var Term[T, E], path: TermPath,
-  value: Term[T, E], cb: TermImpl[T, E]): void =
+proc setAtPath*[V, F](
+  term: var Term[V, F], path: TermPath,
+  value: Term[V, F], cb: TermImpl[V, F]): void =
   case cb.getKind(term):
     of tkFunctor:
       if path.len == 1:
@@ -375,17 +375,17 @@ proc setAtPath*[T, E](
     of tkConstant:
       assert false, "Cannot assign to constant: " & $term & " = " & $value
 
-proc substitute*[T, E](
-  term: Term[T, E], env: TermEnv[T, E], cb: TermImpl[T, E]): Term[T, E] =
+proc substitute*[V, F](
+  term: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): Term[V, F] =
   ## Substitute all variables in term with their values from environment
   result = term
   for (v, path) in term.varlist(cb):
     if env.isBound(cb.getVName(v)):
       result.setAtPath(path, v.dereference(env, cb), cb)
 
-proc treeRepr*[T, E](
-  term: Term[T, E],
-  cb: TermImpl[T, E],
+proc treeRepr*[V, F](
+  term: Term[V, F],
+  cb: TermImpl[V, F],
   depth: int = 0): string =
 
   let ind = "  ".repeat(depth)
@@ -407,14 +407,14 @@ type
     rcRewriteOnce
     rcApplyOnce
 
-proc reduce*[T, E](
-  term: Term[T, E],
-  system: RedSystem[T, E],
-  cb: TermImpl[T, E],
+proc reduce*[V, F](
+  term: Term[V, F],
+  system: RedSystem[V, F],
+  cb: TermImpl[V, F],
   maxDepth: int = 40,
   maxIterations: int = 4000,
   reduceConstraints: ReduceConstraints = rcApplyOnce
-                ): tuple[term: Term[T, E], ok: bool, rewPaths: Trie[int, IntSet]] =
+                ): tuple[term: Term[V, F], ok: bool, rewPaths: Trie[int, IntSet]] =
   ## Perform reduction of `term` using `system` rules.
   ##
   ## Iterate over all subterms (redexes) in `term` and try each reduction
@@ -464,14 +464,14 @@ proc reduce*[T, E](
               # echo &"Skipping rule {idx} at path {path}"
               continue
 
-            let lhs: TermMatcher[T, E] = rule.rule
-            let gen: GenProc[T, E] = rule.gen
+            let lhs: TermMatcher[V, F] = rule.rule
+            let gen: GenProc[V, F] = rule.gen
             # Reached max iteration count
             if iterIdx > maxIterations:
               break outerLoop
 
             inc iterIdx
-            var unifRes: Option[TermEnv[T, E]]
+            var unifRes: Option[TermEnv[V, F]]
             case lhs.isPattern:
               of true:
                 unifRes = unif(lhs.patt, redex, cb)
