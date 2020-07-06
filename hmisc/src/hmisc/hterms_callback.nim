@@ -62,6 +62,7 @@ type
     rule*: TermMatcher[V, F]
     gen*: GenProc[V, F]
 
+  RuleId = int16
   RedSystem*[V, F] = object
     rules*: seq[RulePair[V, F]]
 
@@ -219,10 +220,10 @@ iterator items*[V, F](system: RedSystem[V, F]): RulePair[V, F] =
   for pair in system.rules:
     yield pair
 
-iterator pairs*[V, F](system: RedSystem[V, F]): (int, RulePair[V, F]) =
+iterator pairs*[V, F](system: RedSystem[V, F]): (RuleId, RulePair[V, F]) =
   ## Iterate over all rules with their indices in rewriting system
   for idx, pair in system.rules:
-    yield (idx, pair)
+    yield (RuleId(idx), pair)
 
 
 iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
@@ -406,57 +407,90 @@ type
     rcRewriteOnce
     rcApplyOnce
 
+
+  ReductionState = object
+    rewPaths: Trie[int, set[RuleId]]
+    constr: ReduceConstraints
+    maxDepth: int
+
+
+proc registerUse(rs: var ReductionState, path: TermPath, id: RuleId): void =
+  case rs.constr:
+    of rcApplyOnce:
+      if path notin rs.rewPaths:
+        var tmp: set[RuleId]
+        rs.rewPaths[path] = tmp
+
+      rs.rewPaths[path].incl id
+    of rcRewriteOnce:
+      var tmp: set[RuleId]
+      rs.rewPaths[path] = tmp
+
+    else:
+      discard
+
+proc canRewrite(rs: ReductionState, path: TermPath): bool =
+  path.len < rs.maxDepth and not (
+    # Avoid rewriting anyting on this path
+    rs.constr == rcRewriteOnce and
+    rs.rewPaths.prefixHasValue(path)
+  )
+
+proc cannotUse(rs: ReductionState, path: TermPath, rule: RuleId): bool =
+    # Avoid using this rule again on the same path
+    (rs.constr == rcApplyOnce) and
+    (rs.rewPaths.prefixHasValue(path)) and
+    toSeq(rs.rewPaths.prefixedValues(path)).anyOfIt(rule in it)
+
+
 proc reduce*[V, F](
   term: Term[V, F],
   system: RedSystem[V, F],
   maxDepth: int = 40,
   maxIterations: int = 4000,
   reduceConstraints: ReduceConstraints = rcApplyOnce
-                ): tuple[term: Term[V, F], ok: bool, rewPaths: Trie[int, IntSet]] =
-  ## Perform reduction of `term` using `system` rules.
-  ##
-  ## Iterate over all subterms (redexes) in `term` and try each reduction
-  ## rule in `system`. If rule matches, replace subterm with output of
-  ## the rule value generator.
-  ##
-  ## :params:
-  ##    :term: term to reduce
-  ##    :system: collection of rules (matcher - generator pairs)
-  ##    :cb: implementation callbacks for term
-  ##    :maxDepth: do not reduce terms deeper than this value
-  ##    :maxIterations: stop reduction attempts after reaching this value
-  ##    :reduceConstaints: Configuration for continous application of
-  ##                       reduction rules on the same paths.
-  ##       - **rcNoConstaints** Reduce as long as reduction can take
-  ##         place
-  ##       - **rcRewriteOnce** do not rewrite subterm or any of it's
-  ##         descendants after it has been reduced once
-  ##       - **rcApplyOnce** do not use the same rule on term or any of
-  ##         it's descendants after rule has been applied once. Reduction
-  ##         of the term (or descendants) might still take place but
-  ##         using different rules.
+                ): tuple[term: Term[V, F], ok: bool, rewPaths: Trie[int, set[RuleId]]] =
+  ##[
+
+Perform reduction of `term` using `system` rules.
+
+Iterate over all subterms (redexes) in `term` and try each reduction
+rule in `system`. If rule matches, replace subterm with output of the
+rule value generator.
+
+## Parameters
+
+:term: term to reduce
+:system: collection of rules (matcher - generator pairs)
+:cb: implementation callbacks for term
+:maxDepth: do not reduce terms deeper than this value
+:maxIterations: stop reduction attempts after reaching this value
+:reduceConstaints: Configuration for continous application of
+                   reduction rules on the same paths.
+   - **rcNoConstaints** Reduce as long as reduction can take
+     place
+   - **rcRewriteOnce** do not rewrite subterm or any of it's
+     descendants after it has been reduced once
+   - **rcApplyOnce** do not use the same rule on term or any of
+     it's descendants after rule has been applied once. Reduction
+     of the term (or descendants) might still take place but
+     using different rules.
+
+  ]##
   var tmpTerm = term
-  var rewPaths: Trie[int, IntSet]
+  var rs = ReductionState(constr: reduceConstraints, maxDepth: maxDepth)
+  # var rewPaths: Trie[int, IntSet]
   defer:
-    result.rewPaths = rewPaths
+    result.rewPaths = rs.rewPaths
 
   block outerLoop:
-    var iterIdx: int = 0
+    var iterIdx: RuleId = 0
     while true:
       var canReduce = false
       for (redex, path) in tmpTerm.redexes():
-        if path.len < maxDepth and not (
-          # Avoid rewriting anyting on this path
-          reduceConstraints == rcRewriteOnce and
-          rewPaths.prefixHasValue(path)
-        ):
+        if rs.canRewrite(path):
           for idx, rule in system:
-            if (
-              # Avoid using this rule again on the same path
-              (reduceConstraints == rcApplyOnce) and
-              (rewPaths.prefixHasValue(path)) and
-              toSeq(rewPaths.prefixedValues(path)).anyOfIt(idx in it)
-            ):
+            if rs.cannotUse(path, idx):
               continue
 
             let lhs: TermMatcher[V, F] = rule.rule
@@ -475,18 +509,7 @@ proc reduce*[V, F](
 
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
-              case reduceConstraints:
-                of rcApplyOnce:
-                  if path notin rewPaths:
-                    rewPaths[path] = IntSet()
-
-                  rewPaths[path].incl idx
-                of rcRewriteOnce:
-                  rewPaths[path] = IntSet()
-
-                else:
-                  discard
-
+              rs.registerUse(path, idx)
               let newEnv = unifRes.get()
 
               # New value from generator
@@ -497,7 +520,7 @@ proc reduce*[V, F](
                 canReduce = true
                 result.ok = true
               else:
-                return (tmpTerm, true, rewPaths)
+                return (tmpTerm, true, rs.rewPaths)
 
       if not canReduce:
         result.term = tmpTerm
