@@ -52,7 +52,8 @@ type
   TermMatcher*[V, F] = object
     case isPattern*: bool
     of true:
-      patt*: Term[V, F]
+      patt*: seq[Term[V, F]]
+      first: set[F]
     of false:
       matcher*: MatchProc[V, F]
 
@@ -149,16 +150,22 @@ func makeRulePair*[V, F](
   ## Create rule pair insance
   RulePair[V, F](rule: rule, gen: gen)
 
-func makePattern*[V, F](obj: Term[V, F]): TermMatcher[V, F] =
-  ## Create term matcher instance with for patterns
-  TermMatcher[V, F](patt: obj, isPattern: true)
-
 func makeMatcher*[V, F](matcher: MatchProc[V, F]): TermMatcher[V, F] =
   ## Create term matcher instance for matching procs
   TermMatcher[V, F](isPattern: false, matcher: matcher)
 
 func makeMatcher*[V, F](patt: Term[V, F]): TermMatcher[V, F] =
-  TermMatcher[V, F](isPattern: true, patt: patt)
+  result = TermMatcher[V, F](isPattern: true, patt: @[ patt ])
+
+  if patt.getKind() == tkFunctor:
+    result.first = { patt.functor }
+
+func makeFunctor*[V, F](patts: seq[Term[V, F]]): TermMatcher[V, F] =
+  result = TermMatcher[V, F](isPattern: true, patt: patts)
+  for patt in patts:
+    if patt.getKind() == tkFunctor:
+      result.first.incl patt.functor
+
 
 func makeGenerator*[V, F](obj: Term[V, F]): GenProc[V, F] =
   ## Create closure proc that will output `obj` as value
@@ -443,7 +450,6 @@ proc reduce*[V, F](
           reduceConstraints == rcRewriteOnce and
           rewPaths.prefixHasValue(path)
         ):
-          # echo "Testing path ", path
           for idx, rule in system:
             if (
               # Avoid using this rule again on the same path
@@ -451,8 +457,6 @@ proc reduce*[V, F](
               (rewPaths.prefixHasValue(path)) and
               toSeq(rewPaths.prefixedValues(path)).anyOfIt(idx in it)
             ):
-              # echo "===="
-              # echo &"Skipping rule {idx} at path {path}"
               continue
 
             let lhs: TermMatcher[V, F] = rule.rule
@@ -465,24 +469,12 @@ proc reduce*[V, F](
             var unifRes: Option[TermEnv[V, F]]
             case lhs.isPattern:
               of true:
-                unifRes = unif(lhs.patt, redex)
+                unifRes = unif(lhs.patt[0] #[ IMPLEMENT HACK ]#, redex)
               of false:
                 unifRes = lhs.matcher(redex)
 
             # Unification ok, calling generator proc to get replacement
             if unifRes.isSome():
-              # echo "===="
-              # echo &"Using rule {idx} at path {path}"
-              # echo &"Reduction constraints: {reduceConstraints}"
-              # echo "has prefix - ", rewPaths.prefixHasValue(path)
-              # echo &"Known paths: "
-              # for path in rewPaths.paths():
-              #   echo &"Path: {path}, value: ", toSeq(rewPaths[path])
-
-              # echo "(reduceConstraints == rcApplyOnce) and", (reduceConstraints == rcApplyOnce)
-              # echo "(rewPaths.prefixHasValue(path)) and", (rewPaths.prefixHasValue(path))
-              # echo "toSeq(rewPaths.parentValues(path)).anyOfIt(idx in it)", toSeq(rewPaths.prefixedValues(path)).anyOfIt(idx in it)
-
               case reduceConstraints:
                 of rcApplyOnce:
                   if path notin rewPaths:
@@ -495,7 +487,6 @@ proc reduce*[V, F](
                 else:
                   discard
 
-              # echo "^^^^^^^^"
               let newEnv = unifRes.get()
 
               # New value from generator

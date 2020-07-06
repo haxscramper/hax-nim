@@ -91,26 +91,31 @@ suite "Hterms callback/arithmetic":
       rules: @[
         # A + 0 -> A
         makeRulePair(
-          nOp(aopAdd, @[nVar("A"), nConst(0)]).makePattern(),
+          nOp(aopAdd, @[nVar("A"), nConst(0)]).makeMatcher(),
           nVar("A").makeGenerator()
         ),
 
         # A + S(B) -> S(A + B)
         makeRulePair(
-          nOp(aopAdd, @[ nVar("A"), nOp(aopSucc, @[ nVar("B") ]) ]).makePattern(),
-          nOp(aopSucc, @[ nOp(aopAdd, @[ nVar("A"), nVar("B") ]) ]).makeGenerator()
+          nOp(aopAdd, @[
+            nVar("A"), nOp(aopSucc, @[ nVar("B") ]) ]).makeMatcher(),
+          nOp(aopSucc, @[
+            nOp(aopAdd, @[ nVar("A"), nVar("B") ]) ]).makeGenerator()
         ),
 
         # A * 0 -> 0
         makeRulePair(
-          nOp(aopMult, @[ nVar("A"), nConst(0) ]).makePattern(),
+          nOp(aopMult, @[ nVar("A"), nConst(0) ]).makeMatcher(),
           nConst(0).makeGenerator()
         ),
 
         # A * S(B) -> A + (A * B)
         makeRulePair(
-          nOp(aopMult, @[ nVar("A"), nOp(aopSucc, @[ nVar("B") ])]).makePattern(),
-          nOp(aopAdd, @[ nVar("A"), nOp(aopMult, @[ nVar("A"), nVar("B") ])]).makeGenerator()
+          nOp(aopMult, @[
+            nVar("A"), nOp(aopSucc, @[ nVar("B") ])]).makeMatcher(),
+          nOp(aopAdd, @[
+            nVar("A"),
+            nOp(aopMult, @[ nVar("A"), nVar("B") ])]).makeGenerator()
         )
       ]
     )
