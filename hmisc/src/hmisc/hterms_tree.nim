@@ -5,18 +5,6 @@ import halgorithm
 
 export sequtils
 
-type
-  CaseTerm*[Tree, Enum] = object
-    case tkind*: TermKind
-      of tkFunctor:
-        functor*: Enum
-        sons*: seq[CaseTerm[Tree, Enum]]
-      of tkConstant:
-        value*: Tree
-      of tkVariable:
-        name*: string
-      of tkPlaceholder:
-        nil
 
 proc hash*[Tree, Enum](a: CaseTerm[Tree, Enum]): Hash =
   var h: Hash = 0
@@ -124,7 +112,7 @@ macro defineTermSystemFor*(
   doExport: bool = true
       ): untyped  =
   ## Horrible boilerplate automation setup
-  ## 
+  ##
   ## :params:
   ##    :treeType: Type that will be used as value for `CaseTerm`
   ##               constants
@@ -148,8 +136,8 @@ macro defineTermSystemFor*(
   ##    :doExport: Whether or not to mark generated procs/consts as
   ##               exported. `true` by default, should be used only for
   ##               unit testing.
-  ## 
-  ## For application see `hterms_nimast.nim`  
+  ##
+  ## For application see `hterms_nimast.nim`
 
   let trueSym = quote do: true
   let falseSym = quote do: false
@@ -242,7 +230,3 @@ macro defineTermSystemFor*(
 #=================================  end  =================================#
   else:
     assert false, "Expeced either `true` or `false` for `doExport`"
-
-
-
-

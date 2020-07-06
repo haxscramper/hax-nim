@@ -61,138 +61,138 @@ proc `$`*(term: Arithm): string =
       "_"
 
 
+suite "Hterms callback/arithmetic":
+  test "Arithmetic addition":
+    let s1 = Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+      Arithm(tkind: tkConstant, tval: 0)
+    ])
 
-test "Arithmetic addition":
-  let s1 = Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-    Arithm(tkind: tkConstant, tval: 0)
-  ])
 
+    let s2 = Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+      Arithm(tkind: tkConstant, tval: 0)
+    ])
 
-  let s2 = Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-    Arithm(tkind: tkConstant, tval: 0)
-  ])
+    let cb = TermImpl[Arithm, ArithmOp](
+      # getVName: (t: Arithm) => t.tname,
+      # getKind: (t: Arithm) => t.tkind,
+      # setNth: (t: var Arithm, idx: int, val: Arithm) => (t.tsubt[idx] = val),
+      # getNth: (t: Arithm, idx: int) => (t.tsubt[idx]),
+      # getNthMod: proc(t: var Arithm, idx: int): var Arithm = t.tsubt[idx],
+      # getFsym: (t: Arithm) => t.tsym,
+      # getSubt: (t: Arithm) => t.tsubt,
+      # setSubt: (t: var Arithm, subt: seq[Arithm]) => (t.tsubt = subt),
+      # getValue: (t: Arithm) => t.tval,
+      # unifCheck: (t1: Arithm, t2: Arithm) => true,
+      # makePlaceholder: () => Arithm(tkind: tkPlaceholder),
+      # makeConstant: (v: int) => Arithm(tkind: tkConstant, tval: v),
+      # makeVariable: (n: string) => Arithm(tkind: tkVariable, tname: n),
+      # makeFunctor: (sym: ArithmOp, subt: seq[Arithm]) => Arithm(
+      #   tkind: tkFunctor, tsym: sym, tsubt: subt
+      # ),
+      valStrGen: (proc(n: Arithm): string = "[[ TODO ]]")
+    )
 
-  let cb = TermImpl[Arithm, string, ArithmOp, int](
-    getVName: (t: Arithm) => t.tname,
-    getKind: (t: Arithm) => t.tkind,
-    setNth: (t: var Arithm, idx: int, val: Arithm) => (t.tsubt[idx] = val),
-    getNth: (t: Arithm, idx: int) => (t.tsubt[idx]),
-    getNthMod: proc(t: var Arithm, idx: int): var Arithm = t.tsubt[idx],
-    getFsym: (t: Arithm) => t.tsym,
-    getSubt: (t: Arithm) => t.tsubt,
-    setSubt: (t: var Arithm, subt: seq[Arithm]) => (t.tsubt = subt),
-    getValue: (t: Arithm) => t.tval,
-    unifCheck: (t1: Arithm, t2: Arithm) => true,
-    makePlaceholder: () => Arithm(tkind: tkPlaceholder),
-    makeConstant: (v: int) => Arithm(tkind: tkConstant, tval: v),
-    makeVariable: (n: string) => Arithm(tkind: tkVariable, tname: n),
-    makeFunctor: (sym: ArithmOp, subt: seq[Arithm]) => Arithm(
-      tkind: tkFunctor, tsym: sym, tsubt: subt
-    ),
-    valStrGen: (proc(n: int): string = $n)
-  )
+    assertCorrect(cb)
 
-  assertCorrect(cb)
-
-  let rSystem = RedSystem[string, Arithm](
-    # NOTE this madness is intended to be generated from some kind of
-    # DSL, not written by hand.
-    rules: @[
-      # A + 0 -> A
-      makeRulePair(
-        makePattern[string, Arithm](
-          Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
-            Arithm(tkind: tkVariable, tname: "A"),
-            Arithm(tkind: tkConstant, tval: 0)
-          ])
-        ) , (
-          makeGenerator[string, Arithm](
-            Arithm(tkind: tkVariable, tname: "A"))
-        )
-      ),
-
-      makeRulePair(
-        makeMatcher[string, Arithm](
-          proc(t: Arithm): Option[TermEnv[string, Arithm]] =
-            discard
-            # echo "testing ", t
-        ) , (
-          proc(env: TermEnv[string, Arithm]): Arithm {.closure.} = discard
-        )
-      ),
-
-      # A + S(B) -> S(A + B)
-      makeRulePair(
-        makePattern[string, Arithm](
-          Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
-            Arithm(tkind: tkVariable, tname: "A"),
-            Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-              Arithm(tkind: tkVariable, tname: "B")
-            ])
-          ])
-        ) , makeGenerator[string, Arithm](
-          Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+    let rSystem = RedSystem[string, Arithm](
+      # NOTE this madness is intended to be generated from some kind of
+      # DSL, not written by hand.
+      rules: @[
+        # A + 0 -> A
+        makeRulePair(
+          makePattern[string, Arithm](
             Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
-              Arithm(tkind: tkVariable, tname: "B")
+              Arithm(tkind: tkConstant, tval: 0)
             ])
-          ])
-        )
-      ),
+          ) , (
+            makeGenerator[string, Arithm](
+              Arithm(tkind: tkVariable, tname: "A"))
+          )
+        ),
 
-      # A * 0 -> 0
-      makeRulePair(
-        makePattern[string, Arithm](
-          Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
-            Arithm(tkind: tkVariable, tname: "A"),
-            Arithm(tkind: tkConstant, tval: 0)
-          ])
-        ) , (
-          makeGenerator[string, Arithm](
-            Arithm(tkind: tkConstant, tval: 0))
-        )
-      ),
+        makeRulePair(
+          makeMatcher[string, Arithm](
+            proc(t: Arithm): Option[TermEnv[string, Arithm]] =
+              discard
+              # echo "testing ", t
+          ) , (
+            proc(env: TermEnv[string, Arithm]): Arithm {.closure.} = discard
+          )
+        ),
 
-      # A * S(B) -> A + (A * B)
-      makeRulePair(
-        makePattern[string, Arithm](
-          Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
-            Arithm(tkind: tkVariable, tname: "A"),
+        # A + S(B) -> S(A + B)
+        makeRulePair(
+          makePattern[string, Arithm](
+            Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
+              Arithm(tkind: tkVariable, tname: "A"),
+              Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+                Arithm(tkind: tkVariable, tname: "B")
+              ])
+            ])
+          ) , makeGenerator[string, Arithm](
             Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-              Arithm(tkind: tkVariable, tname: "B")
+              Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
+                Arithm(tkind: tkVariable, tname: "A"),
+                Arithm(tkind: tkVariable, tname: "B")
+              ])
             ])
-          ])
-        ) , makeGenerator[string, Arithm](
-          Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
-            Arithm(tkind: tkVariable, tname: "A"),
+          )
+        ),
+
+        # A * 0 -> 0
+        makeRulePair(
+          makePattern[string, Arithm](
             Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
               Arithm(tkind: tkVariable, tname: "A"),
-              Arithm(tkind: tkVariable, tname: "B")
+              Arithm(tkind: tkConstant, tval: 0)
             ])
-          ])
+          ) , (
+            makeGenerator[string, Arithm](
+              Arithm(tkind: tkConstant, tval: 0))
+          )
+        ),
+
+        # A * S(B) -> A + (A * B)
+        makeRulePair(
+          makePattern[string, Arithm](
+            Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
+              Arithm(tkind: tkVariable, tname: "A"),
+              Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+                Arithm(tkind: tkVariable, tname: "B")
+              ])
+            ])
+          ) , makeGenerator[string, Arithm](
+            Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
+              Arithm(tkind: tkVariable, tname: "A"),
+              Arithm(tkind: tkFunctor, tsym: aopMult, tsubt: @[
+                Arithm(tkind: tkVariable, tname: "A"),
+                Arithm(tkind: tkVariable, tname: "B")
+              ])
+            ])
+          )
         )
-      )
-    ]
-  )
+      ]
+    )
 
-  let res = reduce(
-    # S(0) + S(0)
-    Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
-      Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+    let res = reduce(
+      # S(0) + S(0)
+      Arithm(tkind: tkFunctor, tsym: aopAdd, tsubt: @[
         Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-          Arithm(tkind: tkConstant, tval: 0)
+          Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+            Arithm(tkind: tkConstant, tval: 0)
+          ]),
         ]),
+        Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+          Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
+            Arithm(tkind: tkConstant, tval: 0)
+          ]),
+        ])
       ]),
-      Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-        Arithm(tkind: tkFunctor, tsym: aopSucc, tsubt: @[
-          Arithm(tkind: tkConstant, tval: 0)
-        ]),
-      ])
-    ]),
-    rSystem,
-    cb,
-    reduceConstraints = rcNoConstraints
-  )
+      rSystem,
+      cb,
+      reduceConstraints = rcNoConstraints
+    )
 
-  echo $res[0]
-  assert "S(S(S(S('0'))))" == $res[0]
+    echo $res[0]
+    assert "S(S(S(S('0'))))" == $res[0]
