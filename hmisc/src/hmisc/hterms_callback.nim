@@ -37,33 +37,7 @@ type
     getSubt*: proc(val: V): seq[V]
     setSubt*: proc(val: var V, subt: seq[V])
     makeFunctor*: proc(sym: F): V
-    # getKind*: proc(self: Obj): TermKind ## Get term kind
-    # setNth*: proc(self: var Obj, idx: int, value: Obj): void
-    # getNth*: proc(self: Obj, idx: int): Obj
-    # getNthMod*: proc(self: var Obj, idx: int): var Obj
-
-    # getVName*: proc(self: Tree): VarSym
-    # getFSym*: proc(self: Obj): FunSym
-    # getSubt*: proc(self: Obj): seq[Obj]
-    # setSubt*: proc(self: var Obj, subt: seq[Obj]): void
-
-    # getValue*: proc(self: Obj): Val
-    # ## Get value for term `self`
-
-    # REFACTOR - absolete with new algorithm/implementation
-    # unifCheck*: proc(self, other: Obj): bool
-    # ## Procedure to quickly check if two objects can be unified at all
-
-    # makePlaceholder*: proc(): Term[V, F]
-    # ## Generate instance of `tkPlaceholder` term
-    # makeConstant*: proc(val: Val): Term[V, F]
-    # ## Generate instance of `tkConstant` term
-    # makeVariable*: proc(name: VarSym): Term[V, F]
-    # ## Generate instance of `tkVariable` term
-    # makeFunctor*: proc(sym: FunSym, subt: seq[Term[V, F]]): Term[V, F]
-    # ## Generate instance of `tkFunctor` term using `subt` as subterms
-    valStrGen*: proc(val: V): string
-    ## Conver value to string.
+    valStrGen*: proc(val: V): string ## Conver value to string.
 
   TermEnv*[V, F] = object
     ## Mapping between varuable symbols and values
@@ -143,7 +117,24 @@ func getValue*[V, F](self: Term[V, F]): V =
   assert self.getKind() == tkConstant
   self.value
 
-# func unifChec
+#=======================  converting to/from term  =======================#
+
+proc toTerm*[V, F](val: V, cb: TermImpl[V, F]): Term[V, F] =
+  if cb.isFunctor(val):
+    return makeFunctor[V, F](cb.getFSym(val), cb.getSubt(val).mapIt(it.toTerm(cb)))
+  else:
+    return makeConstant[V, F](val)
+
+proc fromTerm*[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
+  assert term.getKind() in {tkFunctor, tkConstant},
+   "Cannot convert under-substituted term back to tree. " &
+     $term.getKind() & " has to be replaced with value"
+
+  if term.getKind() == tkFunctor:
+    result = cb.makeFunctor(term.getFSym())
+    cb.setSubt(result, term.getSubt().mapIt(it.fromTerm(cb)))
+  else:
+    result = term.getValue()
 
 #==================================  2  ==================================#
 
@@ -230,11 +221,9 @@ proc len*[V, F](env: TermEnv[V, F]): int =
   env.values.len()
 
 proc bindTerm[V, F](
-  variable, value: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): TermEnv[V, F]
+  variable, value: Term[V, F], env: TermEnv[V, F], ): TermEnv[V, F]
 
-proc copy*[V, F](
-  term: Term[V, F], env: TermEnv[V, F],
-  cb: TermImpl[V, F]): (Term[V, F], TermEnv[V, F]) =
+proc copy*[V, F](term: Term[V, F], env: TermEnv[V, F]): (Term[V, F], TermEnv[V, F]) =
   ## Create copy of a term. All variables are replaced with new ones.
   # DOC what is returned?
   let inputEnv = env
@@ -242,11 +231,11 @@ proc copy*[V, F](
     of tkConstant:
       return (term, inputEnv)
     of tkVariable:
-      let deref = term.dereference(env, cb)
+      let deref = term.dereference(env)
       if getKind(deref) == tkVariable:
         var newVar = term
         # inc newVar.genIdx
-        var resEnv = bindTerm(deref, newVar, env, cb)
+        var resEnv = bindTerm(deref, newVar, env)
         return (newVar, resEnv)
       else:
         return (deref, inputEnv)
@@ -255,7 +244,7 @@ proc copy*[V, F](
       var resEnv = env
       var subterms: seq[Term[V, F]]
       for arg in getSubt(term):
-        let (tmpArg, tmpEnv) = arg.copy(resEnv, cb)
+        let (tmpArg, tmpEnv) = arg.copy(resEnv)
         resEnv = tmpEnv
         subterms.add tmpArg
 
@@ -264,21 +253,19 @@ proc copy*[V, F](
     of tkPlaceholder:
       return (term, inputEnv)
 
-proc bindTerm[V, F](
-  variable, value: Term[V, F], env: TermEnv[V, F] ,
-  cb: TermImpl[V, F]): TermEnv[V, F] =
+proc bindTerm[V, F](variable, value: Term[V, F], env: TermEnv[V, F]): TermEnv[V, F] =
   ## Create environment where `variable` is bound to `value`
   result = env
   case getKind(value):
     of tkConstant, tkVariable, tkPlaceholder:
       result[getVName(variable)] = value
     of tkFunctor:
-      let (newTerm, newEnv) = value.copy(env, cb)
+      let (newTerm, newEnv) = value.copy(env)
       result = newEnv
       result[getVName(variable)] = newTerm
 
 proc dereference*[V, F](
-  term: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): Term[V, F]=
+  term: Term[V, F], env: TermEnv[V, F], ): Term[V, F]=
   ## Traverse binding chain in environment `env` and return value of
   ## the `term`
   result = term
@@ -293,15 +280,13 @@ proc dereference*[V, F](
 
 proc unif*[V, F](
   t1, t2: Term[V, F],
-  cb: TermImpl[V, F],
-  env: TermEnv[V, F] = makeEnvironment[V, F]()
-    ): Option[TermEnv[V, F]] =
+  env: TermEnv[V, F] = makeEnvironment[V, F]()): Option[TermEnv[V, F]] =
   ## Attempt to unify two terms. On success substitution (environment)
   ## is return for which two terms `t1` and `t2` could be considered
   ## equal.
   let
-    val1 = dereference(t1, env, cb)
-    val2 = dereference(t2, env, cb)
+    val1 = dereference(t1, env)
+    val2 = dereference(t2, env)
     k1 = getKind(val1)
     k2 = getKind(val2)
 
@@ -311,9 +296,9 @@ proc unif*[V, F](
     else:
       return none(TermEnv[V, F])
   elif k1 == tkVariable:
-    return some(bindTerm(val1, val2, env, cb))
+    return some(bindTerm(val1, val2, env))
   elif k2 == tkVariable:
-    return some(bindTerm(val2, val1, env, cb))
+    return some(bindTerm(val2, val1, env))
   elif (k1, k2) in @[(tkConstant, tkFunctor), (tkFunctor, tkConstant)]:
     return none(TermEnv[V, F])
   else:
@@ -327,7 +312,7 @@ proc unif*[V, F](
       return none(TermEnv[V, F])
 
     for idx, (arg1, arg2) in zip(getSubt(val1), getSubt(val2)):
-      let res = unif(arg1, arg2, cb, tmpRes)
+      let res = unif(arg1, arg2, tmpRes)
       if res.isSome():
         tmpRes = res.get()
       else:
@@ -336,7 +321,7 @@ proc unif*[V, F](
     return some(tmpRes)
 
 iterator redexes*[V, F](
-  term: Term[V, F], cb: TermImpl[V, F]): tuple[red: Term[V, F], path: TermPath] =
+  term: Term[V, F], ): tuple[red: Term[V, F], path: TermPath] =
   ## Iterate over all redex in term
   var que: Deque[(Term[V, F], TermPath)]
   que.addLast((term, @[0]))
@@ -349,8 +334,7 @@ iterator redexes*[V, F](
     yield (red: nowTerm, path: path)
 
 
-proc varlist*[V, F](
-  term: Term[V, F], cb: TermImpl[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
+proc varlist*[V, F](term: Term[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
   ## Output list of all variables in term
   case getKind(term):
     of tkConstant, tkPlaceholder:
@@ -359,12 +343,12 @@ proc varlist*[V, F](
       return @[(term, path)]
     of tkFunctor:
       for idx, sub in getSubt(term):
-        result &= sub.varlist(cb, path & @[idx])
+        result &= sub.varlist(path & @[idx])
 
 
 proc setAtPath*[V, F](
   term: var Term[V, F], path: TermPath,
-  value: Term[V, F], cb: TermImpl[V, F]): void =
+  value: Term[V, F], ): void =
   case getKind(term):
     of tkFunctor:
       if path.len == 1:
@@ -373,9 +357,7 @@ proc setAtPath*[V, F](
         setAtPath(
           term = getNthMod(term, path[1]),
           path = path[1 .. ^1],
-          value = value,
-          cb
-        )
+          value = value)
     of tkVariable:
       term = value
     of tkPlaceholder:
@@ -383,19 +365,14 @@ proc setAtPath*[V, F](
     of tkConstant:
       assert false, "Cannot assign to constant: " & $term & " = " & $value
 
-proc substitute*[V, F](
-  term: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): Term[V, F] =
+proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
   ## Substitute all variables in term with their values from environment
   result = term
-  for (v, path) in term.varlist(cb):
+  for (v, path) in term.varlist():
     if env.isBound(getVName(v)):
-      result.setAtPath(path, v.dereference(env, cb), cb)
+      result.setAtPath(path, v.dereference(env))
 
-proc treeRepr*[V, F](
-  term: Term[V, F],
-  cb: TermImpl[V, F],
-  depth: int = 0): string =
-
+proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
   let ind = "  ".repeat(depth)
   case getKind(term):
     of tkConstant:
@@ -418,7 +395,6 @@ type
 proc reduce*[V, F](
   term: Term[V, F],
   system: RedSystem[V, F],
-  cb: TermImpl[V, F],
   maxDepth: int = 40,
   maxIterations: int = 4000,
   reduceConstraints: ReduceConstraints = rcApplyOnce
@@ -454,7 +430,7 @@ proc reduce*[V, F](
     var iterIdx: int = 0
     while true:
       var canReduce = false
-      for (redex, path) in tmpTerm.redexes(cb):
+      for (redex, path) in tmpTerm.redexes():
         if path.len < maxDepth and not (
           # Avoid rewriting anyting on this path
           reduceConstraints == rcRewriteOnce and
@@ -482,7 +458,7 @@ proc reduce*[V, F](
             var unifRes: Option[TermEnv[V, F]]
             case lhs.isPattern:
               of true:
-                unifRes = unif(lhs.patt, redex, cb)
+                unifRes = unif(lhs.patt, redex)
               of false:
                 unifRes = lhs.matcher(redex)
 
@@ -516,8 +492,8 @@ proc reduce*[V, F](
               let newEnv = unifRes.get()
 
               # New value from generator
-              let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
-              setAtPath(tmpTerm, path, tmpNew, cb)
+              let tmpNew = (gen(newEnv)).substitute(newEnv)
+              setAtPath(tmpTerm, path, tmpNew)
 
               if getKind(tmpTerm) notin {tkVariable, tkConstant}:
                 canReduce = true

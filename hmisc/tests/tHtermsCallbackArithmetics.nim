@@ -66,22 +66,6 @@ func mkOp(op: ArithmOp, sub: seq[Arithm]): Arithm =
 func mkVal(val: int): Arithm =
   Arithm(operator: false, tval: val)
 
-proc toTerm[V, F](val: V, cb: TermImpl[V, F]): Term[V, F] =
-  if cb.isFunctor(val):
-    return makeFunctor[V, F](cb.getFSym(val), cb.getSubt(val).mapIt(it.toTerm(cb)))
-  else:
-    return makeConstant[V, F](val)
-
-proc fromTerm[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
-  assert term.getKind() in {tkFunctor, tkConstant},
-   "Cannot convert under-substituted term back to tree. " &
-     $term.getKind() & " has to be replaced with value"
-
-  if term.getKind() == tkFunctor:
-    result = cb.makeFunctor(term.getFSym())
-    cb.setSubt(result, term.getSubt().mapIt(it.fromTerm(cb)))
-  else:
-    result = term.getValue()
 
 suite "Hterms callback/arithmetic":
   test "Arithmetic addition":
@@ -134,7 +118,6 @@ suite "Hterms callback/arithmetic":
         mkOp(aopSucc, @[ mkOp(aopSucc, @[ mkVal(0) ]) ])
       ]).toTerm(cb),
       rSystem,
-      cb,
       reduceConstraints = rcNoConstraints
     )
 
