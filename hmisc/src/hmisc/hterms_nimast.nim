@@ -14,7 +14,12 @@ type
   NodeEnv* = TermEnv[NimNode, NimNodeKind]
 
 func isFunctor*(nnk: NimNodeKind): bool =
-  nnk notin {nnkNone .. nnkSym}
+  nnk notin {
+    nnkNone, nnkEmpty, nnkNilLit, # Empty node
+    nnkCharLit..nnkUInt64Lit, # Int literal
+    nnkFloatLit..nnkFloat64Lit, # Float literal
+    nnkStrLit..nnkTripleStrLit, nnkCommentStmt, nnkIdent, nnkSym # Str lit
+  }
 
 const nimAstImpl* = TermImpl[NimNode, NimNodeKind](
   getFsym: (proc(n: NimNode): NimNodeKind = n.kind),
@@ -186,5 +191,3 @@ macro makeNodeRewriteSystem*(body: untyped): untyped =
   result = newTree(nnkBracket, matcherTuples)
   result = quote do:
     makeReductionSystem(@`result`)
-
-  echo result.toStrLit()

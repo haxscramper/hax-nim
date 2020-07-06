@@ -135,7 +135,6 @@ proc fromTerm*[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
     result = cb.makeFunctor(
       term.getFSym(),
       term.getSubt().mapIt(it.fromTerm(cb)))
-    # cb.setSubt(result, )
   else:
     result = term.getValue()
 
