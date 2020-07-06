@@ -107,7 +107,7 @@ func makeFunctor*[V, F](
 #======================  accessing term internals  =======================#
 
 func getKind*[V, F](t: Term[V, F]): TermKind =
-  t.kind
+  t.tkind
 
 func getVName*[V, F](t: Term[V, F]): VarSym =
   assert t.getKind() == tkVariable
@@ -189,37 +189,41 @@ func `[]`*[V, F](e: TermEnv[V, F], t: VarSym): Term[V, F] =
       KeyError,
       &"Missing variable `{t}` in environment. Have vars: {vars}")
 
-func `[]=`*[VarSym, Obj](
-  system: var RedSystem[VarSym, Obj], lhs, rhs: Obj): void =
+func `[]=`*[V, F](system: var RedSystem[V, F], lhs, rhs: Term[V, F]): void =
   ## Add rule to environment
   system.rules[lhs] = rhs
 
-func `[]=`*[VarSym, Obj](
-  env: var TermEnv[VarSym, Obj], variable: VarSym, value: Obj): void =
+func `[]=`*[V, F](env: var TermEnv[V, F], variable: VarSym, value: Term[V, F]): void =
   ## Set value for variable in environemt
-
   env.values[variable] = value
 
-iterator items*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
-         RulePair[VarSym, Obj] =
+
+func `==`*[V, F](lhs, rhs: Term[V, F]): bool =
+  lhs.tkind == rhs.tkind and (
+    case lhs.tkind:
+      of tkConstant: lhs.value == rhs.value
+      of tkVariable: lhs.name == rhs.name
+      of tkFunctor: lhs.functor == rhs.functor and subnodesEq(lhs, rhs, subterms)
+      of tkPlaceholder: true
+  )
+
+iterator items*[V, F](system: RedSystem[V, F]): RulePair[V, F] =
   ## Iterate over all rules in rewriting system
   for pair in system.rules:
     yield pair
 
-iterator pairs*[VarSym, Obj](system: RedSystem[VarSym, Obj]):
-         (int, RulePair[VarSym, Obj]) =
+iterator pairs*[V, F](system: RedSystem[V, F]): (int, RulePair[V, F]) =
   ## Iterate over all rules with their indices in rewriting system
   for idx, pair in system.rules:
     yield (idx, pair)
 
 
-iterator pairs*[VarSym, Obj](
-  env: TermEnv[VarSym, Obj]): (VarSym, Obj) =
+iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
   ## Iterate over all variables and values in evnironment
   for lhs, rhs in pairs(env.values):
     yield (lhs, rhs)
 
-proc len*[VarSym, Obj](env: TermEnv[VarSym, Obj]): int =
+proc len*[V, F](env: TermEnv[V, F]): int =
   ## Get number of itesm in enviroenmt
   env.values.len()
 
@@ -232,12 +236,12 @@ proc copy*[V, F](
   ## Create copy of a term. All variables are replaced with new ones.
   # DOC what is returned?
   let inputEnv = env
-  case cb.getKind(term):
+  case getKind(term):
     of tkConstant:
       return (term, inputEnv)
     of tkVariable:
       let deref = term.dereference(env, cb)
-      if cb.getKind(deref) == tkVariable:
+      if getKind(deref) == tkVariable:
         var newVar = term
         # inc newVar.genIdx
         var resEnv = bindTerm(deref, newVar, env, cb)
@@ -248,12 +252,12 @@ proc copy*[V, F](
     of tkFunctor:
       var resEnv = env
       var subterms: seq[Term[V, F]]
-      for arg in cb.getSubt(term):
+      for arg in getSubt(term):
         let (tmpArg, tmpEnv) = arg.copy(resEnv, cb)
         resEnv = tmpEnv
         subterms.add tmpArg
 
-      return (cb.makeFunctor(cb.getFSym(term), subterms), resEnv)
+      return (makeFunctor(getFSym(term), subterms), resEnv)
 
     of tkPlaceholder:
       return (term, inputEnv)
@@ -263,13 +267,13 @@ proc bindTerm[V, F](
   cb: TermImpl[V, F]): TermEnv[V, F] =
   ## Create environment where `variable` is bound to `value`
   result = env
-  case cb.getKind(value):
+  case getKind(value):
     of tkConstant, tkVariable, tkPlaceholder:
-      result[cb.getVName(variable)] = value
+      result[getVName(variable)] = value
     of tkFunctor:
       let (newTerm, newEnv) = value.copy(env, cb)
       result = newEnv
-      result[cb.getVName(variable)] = newTerm
+      result[getVName(variable)] = newTerm
 
 proc dereference*[V, F](
   term: Term[V, F], env: TermEnv[V, F], cb: TermImpl[V, F]): Term[V, F]=
@@ -277,9 +281,9 @@ proc dereference*[V, F](
   ## the `term`
   result = term
 
-  while cb.getKind(result) == tkVariable and isBound(env, cb.getVName(result)):
-    let value = env[cb.getVName(result)]
-    if cb.getKind(value) == tkConstant or value == result:
+  while getKind(result) == tkVariable and isBound(env, getVName(result)):
+    let value = env[getVName(result)]
+    if getKind(value) == tkConstant or value == result:
       result = value
       break
 
@@ -296,8 +300,8 @@ proc unif*[V, F](
   let
     val1 = dereference(t1, env, cb)
     val2 = dereference(t2, env, cb)
-    k1 = cb.getKind(val1)
-    k2 = cb.getKind(val2)
+    k1 = getKind(val1)
+    k2 = getKind(val2)
 
   if k1 == tkConstant and k2 == tkConstant:
     if val1 == val2:
@@ -312,15 +316,15 @@ proc unif*[V, F](
     return none(TermEnv[V, F])
   else:
     var tmpRes = env
-    if cb.getFSym(val1) != cb.getFSym(val2):
+    if getFSym(val1) != getFSym(val2):
       return none(TermEnv[V, F])
 
-    if cb.getSubt(val1).len != cb.getSubt(val2).len:
+    if getSubt(val1).len != getSubt(val2).len:
       # TEST with different-sized term unification
       # TODO provide `reason` for failure
       return none(TermEnv[V, F])
 
-    for idx, (arg1, arg2) in zip(cb.getSubt(val1), cb.getSubt(val2)):
+    for idx, (arg1, arg2) in zip(getSubt(val1), getSubt(val2)):
       let res = unif(arg1, arg2, cb, tmpRes)
       if res.isSome():
         tmpRes = res.get()
@@ -336,8 +340,8 @@ iterator redexes*[V, F](
   que.addLast((term, @[0]))
   while que.len > 0:
     let (nowTerm, path) = que.popFirst()
-    if cb.getKind(nowTerm) == tkFunctor:
-      for idx, subTerm in cb.getSubt(nowTerm):
+    if getKind(nowTerm) == tkFunctor:
+      for idx, subTerm in getSubt(nowTerm):
         que.addLast((subTerm, path & @[idx]))
 
     yield (red: nowTerm, path: path)
@@ -346,26 +350,26 @@ iterator redexes*[V, F](
 proc varlist*[V, F](
   term: Term[V, F], cb: TermImpl[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
   ## Output list of all variables in term
-  case cb.getKind(term):
+  case getKind(term):
     of tkConstant, tkPlaceholder:
       return @[]
     of tkVariable:
       return @[(term, path)]
     of tkFunctor:
-      for idx, sub in cb.getSubt(term):
+      for idx, sub in getSubt(term):
         result &= sub.varlist(cb, path & @[idx])
 
 
 proc setAtPath*[V, F](
   term: var Term[V, F], path: TermPath,
   value: Term[V, F], cb: TermImpl[V, F]): void =
-  case cb.getKind(term):
+  case getKind(term):
     of tkFunctor:
       if path.len == 1:
         term = value
       else:
         setAtPath(
-          term = cb.getNthMod(term, path[1]),
+          term = getNthMod(term, path[1]),
           path = path[1 .. ^1],
           value = value,
           cb
@@ -382,7 +386,7 @@ proc substitute*[V, F](
   ## Substitute all variables in term with their values from environment
   result = term
   for (v, path) in term.varlist(cb):
-    if env.isBound(cb.getVName(v)):
+    if env.isBound(getVName(v)):
       result.setAtPath(path, v.dereference(env, cb), cb)
 
 proc treeRepr*[V, F](
@@ -391,17 +395,17 @@ proc treeRepr*[V, F](
   depth: int = 0): string =
 
   let ind = "  ".repeat(depth)
-  case cb.getKind(term):
+  case getKind(term):
     of tkConstant:
-      return cb.valStrGen(cb.getValue(term))
+      return cb.valStrGen(getValue(term))
         .split("\n").mapIt(ind & "cst " & it).join("\n")
     of tkPlaceholder:
       return ind & "plh _"
     of tkVariable:
-      return ind & "var " & cb.getVName(term)
+      return ind & "var " & getVName(term)
     of tkFunctor:
-      return ind & "fun " & $(cb.getFSym(term)) & "\n" &
-        cb.getSubt(term).mapIt(treeRepr(it, cb, depth + 1)).join("\n")
+      return ind & "fun " & $(getFSym(term)) & "\n" &
+        getSubt(term).mapIt(treeRepr(it, cb, depth + 1)).join("\n")
 
 type
   ReduceConstraints* = enum
@@ -513,7 +517,7 @@ proc reduce*[V, F](
               let tmpNew = (gen(newEnv)).substitute(newEnv, cb)
               setAtPath(tmpTerm, path, tmpNew, cb)
 
-              if cb.getKind(tmpTerm) notin {tkVariable, tkConstant}:
+              if getKind(tmpTerm) notin {tkVariable, tkConstant}:
                 canReduce = true
                 result.ok = true
               else:
