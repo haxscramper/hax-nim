@@ -72,12 +72,27 @@ proc toTerm[V, F](val: V, cb: TermImpl[V, F]): Term[V, F] =
   else:
     return makeConstant[V, F](val)
 
+proc fromTerm[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
+  assert term.getKind() in {tkFunctor, tkConstant},
+   "Cannot convert under-substituted term back to tree. " &
+     $term.getKind() & " has to be replaced with value"
+
+  if term.getKind() == tkFunctor:
+    result = cb.makeFunctor(term.getFSym())
+    cb.setSubt(result, term.getSubt().mapIt(it.fromTerm(cb)))
+  else:
+    result = term.getValue()
 
 suite "Hterms callback/arithmetic":
   test "Arithmetic addition":
 
     let cb = TermImpl[Arithm, ArithmOp](
-      valStrGen: (proc(n: Arithm): string = "[[ TODO ]]")
+      getFsym: (proc(n: Arithm): ArithmOp = n.tsym),
+      isFunctor: (proc(n: Arithm): bool = n.operator),
+      makeFunctor: (proc(op: ArithmOp): Arithm = Arithm(operator: true, tsym: op)),
+      getSubt: (proc(n: Arithm): seq[Arithm] = n.tsubt),
+      setSubt: (proc(n: var Arithm, sub: seq[Arithm]) = n.tsubt = sub),
+      valStrGen: (proc(n: Arithm): string = "[[ TODO ]]"),
     )
 
     assertCorrect(cb)
@@ -123,5 +138,5 @@ suite "Hterms callback/arithmetic":
       reduceConstraints = rcNoConstraints
     )
 
-    echo $res[0]
-    assert "S(S(S(S('0'))))" == $res[0]
+    echo $res[0].fromTerm(cb)
+    assert "S(S(S(S('0'))))" == $res[0].fromTerm(cb)

@@ -35,6 +35,8 @@ type
     getFSym*: proc(val: V): F
     isFunctor*: proc(val: V): bool
     getSubt*: proc(val: V): seq[V]
+    setSubt*: proc(val: var V, subt: seq[V])
+    makeFunctor*: proc(sym: F): V
     # getKind*: proc(self: Obj): TermKind ## Get term kind
     # setNth*: proc(self: var Obj, idx: int, value: Obj): void
     # getNth*: proc(self: Obj, idx: int): Obj
