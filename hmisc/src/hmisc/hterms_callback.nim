@@ -137,8 +137,6 @@ proc fromTerm*[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
     result = term.getValue()
 
 #==================================  2  ==================================#
-
-# REFACTOR remove (make TermImple fields `not nil` ?)
 proc assertCorrect*[V, F](impl: TermImpl[V, F]): void =
   ## Check if all fields in `impl` have been correctly initalized
   for name, value in impl.fieldPairs():
@@ -216,14 +214,14 @@ iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
   for lhs, rhs in pairs(env.values):
     yield (lhs, rhs)
 
-proc len*[V, F](env: TermEnv[V, F]): int =
+func len*[V, F](env: TermEnv[V, F]): int =
   ## Get number of itesm in enviroenmt
   env.values.len()
 
-proc bindTerm[V, F](
+func bindTerm[V, F](
   variable, value: Term[V, F], env: TermEnv[V, F], ): TermEnv[V, F]
 
-proc copy*[V, F](term: Term[V, F], env: TermEnv[V, F]): (Term[V, F], TermEnv[V, F]) =
+func copy*[V, F](term: Term[V, F], env: TermEnv[V, F]): (Term[V, F], TermEnv[V, F]) =
   ## Create copy of a term. All variables are replaced with new ones.
   # DOC what is returned?
   let inputEnv = env
@@ -253,7 +251,7 @@ proc copy*[V, F](term: Term[V, F], env: TermEnv[V, F]): (Term[V, F], TermEnv[V, 
     of tkPlaceholder:
       return (term, inputEnv)
 
-proc bindTerm[V, F](variable, value: Term[V, F], env: TermEnv[V, F]): TermEnv[V, F] =
+func bindTerm[V, F](variable, value: Term[V, F], env: TermEnv[V, F]): TermEnv[V, F] =
   ## Create environment where `variable` is bound to `value`
   result = env
   case getKind(value):
@@ -264,7 +262,7 @@ proc bindTerm[V, F](variable, value: Term[V, F], env: TermEnv[V, F]): TermEnv[V,
       result = newEnv
       result[getVName(variable)] = newTerm
 
-proc dereference*[V, F](
+func dereference*[V, F](
   term: Term[V, F], env: TermEnv[V, F], ): Term[V, F]=
   ## Traverse binding chain in environment `env` and return value of
   ## the `term`
@@ -278,7 +276,7 @@ proc dereference*[V, F](
 
     result = value
 
-proc unif*[V, F](
+func unif*[V, F](
   t1, t2: Term[V, F],
   env: TermEnv[V, F] = makeEnvironment[V, F]()): Option[TermEnv[V, F]] =
   ## Attempt to unify two terms. On success substitution (environment)
@@ -334,7 +332,7 @@ iterator redexes*[V, F](
     yield (red: nowTerm, path: path)
 
 
-proc varlist*[V, F](term: Term[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
+func varlist*[V, F](term: Term[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
   ## Output list of all variables in term
   case getKind(term):
     of tkConstant, tkPlaceholder:
@@ -346,7 +344,7 @@ proc varlist*[V, F](term: Term[V, F], path: TermPath = @[0]): seq[(Term[V, F], T
         result &= sub.varlist(path & @[idx])
 
 
-proc setAtPath*[V, F](
+func setAtPath*[V, F](
   term: var Term[V, F], path: TermPath,
   value: Term[V, F], ): void =
   case getKind(term):
@@ -365,14 +363,14 @@ proc setAtPath*[V, F](
     of tkConstant:
       assert false, "Cannot assign to constant: " & $term & " = " & $value
 
-proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
+func substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
   ## Substitute all variables in term with their values from environment
   result = term
   for (v, path) in term.varlist():
     if env.isBound(getVName(v)):
       result.setAtPath(path, v.dereference(env))
 
-proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
+func treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
   let ind = "  ".repeat(depth)
   case getKind(term):
     of tkConstant:

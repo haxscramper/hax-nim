@@ -1,6 +1,6 @@
 import hmisc/hterms_callback
 
-import hmisc/hterms_tree
+# import hmisc/hterms_tree
 
 import sequtils, strformat, strutils
 import hmisc/halgorithm
@@ -20,12 +20,12 @@ type
 
   Ast = object
     case kind: AstKind
-    of akStrLit, akIdent:
-      strVal: string
-    of akIntLit:
-      intVal: int
-    else:
-      sons: seq[Ast]
+      of akStrLit, akIdent:
+        strVal: string
+      of akIntLit:
+        intVal: int
+      else:
+        sons: seq[Ast]
 
 proc `==`(lhs, rhs: Ast): bool =
   lhs.kind == rhs.kind and
@@ -36,62 +36,55 @@ proc `==`(lhs, rhs: Ast): bool =
       else: subnodesEq(lhs, rhs, sons)
   )
 
-proc makeFunctor(kind: AstKind, sons: seq[Ast]): Ast =
-  case kind:
+type AstTerm = Term[Ast, AstKind]
+func nOp(op: AstKind, subt: seq[AstTerm]): AstTerm =
+  case op:
     of akStrLit .. akIdent:
       assert false
     else:
-      return Ast(kind: kind, sons: sons)
+      return makeFunctor[Ast, AstKind](op, subt)
 
-test "Ast rewriting":
-  defineTermSystemFor(
-    treeType = Ast,
-    enumType = AstKind,
-    kindField = kind,
-    sonsField = sons,
-    treeMaker = makeFunctor,
-    implName = astImpl,
-    val2String = (proc(n: Ast): string = $n),
-    functorKinds = {akCall .. akCondition},
-    constantKinds = {akStrLit .. akIdent},
-    doExport = false
-  )
+func nVar(n: string): AstTerm =
+  makeVariable[Ast, AstKind](n)
 
-  type
-    AstTerm = CaseTerm[Ast, AstKind]
+func mkOp(op: AstKind, sub: seq[Ast]): Ast =
+  case op:
+    of akCall, akCondition:
+      Ast(kind: op, sons: sub)
+    else:
+      raiseAssert("12")
 
-  let rSystem = RedSystem[string, CaseTerm[Ast, AstKind]](rules: @[
-    makeRulePair(
-      makePattern[string, CaseTerm[Ast, AstKind]](
-        AstTerm(tkind: tkFunctor, functor: akCall, sons: @[
-          AstTerm(tkind: tkConstant, value: Ast(
-            kind: akIdent, strVal: "someFunc")),
-          AstTerm(tkind: tkConstant, value: Ast(
-            kind: akIntLit, intVal: 9000))
-      ]))
-    ,
-      makeGenerator[string, CaseTerm[Ast, AstKind]](
-        AstTerm(tkind: tkConstant, value: Ast(
-          kind: akStrLit, strVal: "Hello 9000")
-      ))
-  )])
+func mkVal(val: int): Ast = Ast(kind: akIntLit, intVal: val)
+func mkIdent(val: string): Ast = Ast(kind: akIdent, strVal: val)
+func mkStrLit(val: string): Ast = Ast(kind: akStrLit, strVal: val)
 
-  let obj = Ast(kind: akCall, sons: @[
-    Ast(kind: akIdent, strVal: "someFunc"),
-    Ast(kind: akIntLit, intVal: 9000)
-  ])
+func nConst(n: Ast): AstTerm = makeConstant[Ast, AstKind](n)
 
-  # echo obj.toTerm()
 
-  let res = reduce(
-    obj.toTerm(),
-    rSystem,
-    astImpl
-  )
+suite "Hterms ast rewriting":
+  test "Ast rewriting":
+    let cb = TermImpl[Ast, AstKind](
+      getFsym: (proc(n: Ast): AstKind = n.kind),
+      isFunctor: (proc(n: Ast): bool = n.kind in {akCall .. akCondition}),
+      makeFunctor: (proc(op: AstKind): Ast = Ast(kind: op)),
+      getSubt: (proc(n: Ast): seq[Ast] = n.sons),
+      setSubt: (proc(n: var Ast, sub: seq[Ast]) = n.sons = sub),
+      valStrGen: (proc(n: Ast): string = "[[ TODO ]]"),
+    )
 
-  if res.ok:
-    let resAst = res.term.fromTerm()
-    echo resAst
-    assert resAst == Ast(kind: akStrLit, strVal: "Hello 9000")
-  else:
-    echo "res not ok"
+    let rSystem = RedSystem[Ast, AstKind](rules: @[
+      makeRulePair(
+        nOp(akCall, @[
+          mkIdent("someFunc").nConst(), mkVal(9000).nConst()
+        ]).makePattern(),
+        nConst(mkStrLit("Hello 9000")).makeGenerator()
+    )])
+
+    let obj =  mkOp(akCall, @[ mkIdent("someFunc"), mkVal(9000) ])
+    let res = reduce(obj.toTerm(cb), rSystem)
+    if res.ok:
+      let resAst = res.term.fromTerm(cb)
+      echo resAst
+      assert resAst == Ast(kind: akStrLit, strVal: "Hello 9000")
+    else:
+      echo "res not ok"
