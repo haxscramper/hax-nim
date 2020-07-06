@@ -24,6 +24,7 @@ type
         functor: F
         subterms: seq[Term[V, F]]
       of tkConstant:
+        csym: F
         value: V
       of tkVariable:
         name: VarSym
@@ -32,10 +33,11 @@ type
 
 
   TermImpl*[V, F] = object
-    getFSym*: proc(val: V): F
-    isFunctor*: proc(val: V): bool
+    # getFSym*: proc(val: V): F
+    # isFunctor*: proc(val: V): bool
     isFunctorSym*: proc(val: F): bool
     getSubt*: proc(val: V): seq[V]
+    getSym*: proc(val: V): F
     # setSubt*: proc(val: var V, subt: seq[V])
     makeFunctor*: proc(sym: F, subt: seq[V]): V
     valStrGen*: proc(val: V): string ## Conver value to string.
@@ -76,8 +78,8 @@ type
 func makePlaceholder*[V, F](): Term[V, F] =
   Term[V, F](tkind: tkPlaceholder)
 
-func makeConstant*[V, F](val: V): Term[V, F] =
-  Term[V, F](tkind: tkConstant, value: val)
+func makeConstant*[V, F](val: V, csym: F): Term[V, F] =
+  Term[V, F](tkind: tkConstant, value: val, csym: csym)
 
 func makeVariable*[V, F](name: VarSym): Term[V, F] =
   Term[V, F](tkind: tkVariable, name: name)
@@ -98,6 +100,14 @@ func getVName*[V, F](t: Term[V, F]): VarSym =
 func getFSym*[V, F](t: Term[V, F]): F =
   assert t.getKind() == tkFunctor
   t.functor
+
+func getSym*[V, F](t: Term[V, F]): F =
+  case t.getKind():
+    of tkFunctor: t.functor
+    of tkConstant: t.csym
+    else:
+      raiseAssert(
+        "Invalid term kind - cannot get symbol from " & $t.getKind())
 
 func getNth*[V, F](
   t: Term[V, F], idx: int): Term[V, F]=
@@ -125,11 +135,14 @@ func getValue*[V, F](self: Term[V, F]): V =
 
 #=======================  converting to/from term  =======================#
 
+proc isFunctor*[V, F](cb: TermImpl[V, F], val: V): bool =
+ cb.isFunctorSym(cb.getSym(val))
+
 proc toTerm*[V, F](val: V, cb: TermImpl[V, F]): Term[V, F] =
   if cb.isFunctor(val):
-    return makeFunctor[V, F](cb.getFSym(val), cb.getSubt(val).mapIt(it.toTerm(cb)))
+    return makeFunctor[V, F](cb.getSym(val), cb.getSubt(val).mapIt(it.toTerm(cb)))
   else:
-    return makeConstant[V, F](val)
+    return makeConstant[V, F](val, cb.getSym(val))
 
 proc fromTerm*[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
   assert term.getKind() in {tkFunctor, tkConstant},
@@ -157,7 +170,7 @@ func makeRulePair*[V, F](
   for id, rule in rules:
     case rule.isPattern:
       of true:
-        result.first.mgetOrPut(rule.patt.getFSym(), @[]).add id.int8
+        result.first.mgetOrPut(rule.patt.getSym(), @[]).add id.int8
       of false: result.matchers.add id.int8
 
 
@@ -245,7 +258,7 @@ iterator pairs*[V, F](system: RedSystem[V, F]): (RuleId, RulePair[V, F]) =
 
 iterator findApplicable*[V, F](
   system: RedSystem[V, F], redex: Term[V, F]): (RuleId, RulePair[V, F]) =
-  let fsym = redex.getFSym()
+  let fsym = redex.getSym()
   for pattId in system.first.getOrDefault(fsym, @[]):
     yield (pattId, system.rules[pattId])
 
@@ -413,7 +426,7 @@ proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
 
 proc apply*[V, F](
   redex: Term[V, F], rule: RulePair[V, F]): Option[TermEnv[V, F]] =
-  for id in rule.first[redex.getFSym()] & rule.matchers:
+  for id in rule.first[redex.getSym()] & rule.matchers:
     let unifRes = if rule.rules[id].isPattern: unif(rule.rules[id].patt, redex)
                   else: rule.rules[id].matcher(redex)
 

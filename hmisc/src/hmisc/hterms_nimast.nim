@@ -22,8 +22,8 @@ func isFunctor*(nnk: NimNodeKind): bool =
   }
 
 const nimAstImpl* = TermImpl[NimNode, NimNodeKind](
-  getFsym: (proc(n: NimNode): NimNodeKind = n.kind),
-  isFunctor: (proc(n: NimNode): bool = n.kind.isFunctor()),
+  getsym: (proc(n: NimNode): NimNodeKind = n.kind),
+  # isFunctor: (proc(n: NimNode): bool = n.kind.isFunctor()),
   isFunctorSym: (proc(kind: NimNodeKind): bool = kind.isFunctor()),
   makeFunctor: (
     proc(op: NimNodeKind, sub: seq[NimNode]): NimNode =
@@ -41,10 +41,10 @@ func makeNimNodePlaceholder*(name: VarSym): NodeTerm =
   makePlaceholder[NimNode, NimNodeKind]()
 
 func makeNimNodeFunctor*(sym: NimNodeKind, subt: seq[NodeTerm]): NodeTerm =
-  makeFunctor[NimNode, NimNodeKind](sym, subt)
+  makeFunctor(sym, subt)
 
 func makeNimNodeConstant*(val: NimNode): NodeTerm =
-  makeConstant[NimNode, NimNodeKind](val)
+  makeConstant(val, val.kind)
 
 proc toTerm*(nt: NimNode): NodeTerm =
   nt.toTerm(nimAstImpl)

@@ -8,37 +8,39 @@ import strutils, sequtils, strformat, sugar, options
 
 type
   ArithmOp = enum
+    aopVal
+
     aopSucc
     aopAdd
     aopMult
 
   Arithm = object
-    case operator: bool
-    of true:
-      tsym: ArithmOp
-      tsubt: seq[Arithm]
-    of false:
-      tval: int
+    case tsym: ArithmOp
+      of aopVal:
+        tval: int
+      else:
+        tsubt: seq[Arithm]
 
 proc `==`(lhs, rhs: Arithm): bool =
-  lhs.operator == rhs.operator and (
-    case lhs.operator:
-      of false: lhs.tval == rhs.tval
-      of true:
+  lhs.tsym == rhs.tsym and (
+    case lhs.tsym :
+      of aopVal: lhs.tval == rhs.tval
+      else:
         lhs.tsym == rhs.tsym and
         zip(lhs.tsubt, rhs.tsubt).allOfIt(it[0] == it[1])
   )
 
 proc `$`*(term: Arithm): string =
-  case term.operator:
-    of false:
+  case term.tsym:
+    of aopVal:
       "'" & $term.tval & "'"
-    of true:
+    else:
       let symName =
         case term.tsym:
           of aopSucc: "S"
           of aopAdd: "+"
           of aopMult: "*"
+          else: ""
 
       if ($term.tsym).validIdentifier():
         symName & "(" & term.tsubt.mapIt($it).join(", ") & ")"
@@ -58,37 +60,40 @@ func nVar(n: string): ATerm =
   makeVariable[Arithm, ArithmOp](n)
 
 func nConst(n: int): ATerm =
-  makeConstant[Arithm, ArithmOp](Arithm(operator: false, tval: n))
+  makeConstant[Arithm, ArithmOp](Arithm(tsym: aopVal, tval: n), aopVal)
 
 func mkOp(op: ArithmOp, sub: seq[Arithm]): Arithm =
-  Arithm(operator: true, tsym: op, tsubt: sub)
+  case op:
+    of aopVal:
+      discard
+    else:
+      return Arithm(tsym: op, tsubt: sub)
 
 func mkVal(val: int): Arithm =
-  Arithm(operator: false, tval: val)
+  Arithm(tsym: aopVal, tval: val)
 
 
 suite "Hterms callback/arithmetic":
   test "Arithmetic addition":
 
     let cb = TermImpl[Arithm, ArithmOp](
-      getFsym: (proc(n: Arithm): ArithmOp = n.tsym),
-      isFunctor: (proc(n: Arithm): bool = n.operator),
-      isFunctorSym: (proc(n: ArithmOp): bool = true),
+      getSym: (proc(n: Arithm): ArithmOp = n.tsym),
+      isFunctorSym: (proc(n: ArithmOp): bool = (n != aopVal)),
       makeFunctor: (
         proc(op: ArithmOp, sub: seq[Arithm]): Arithm =
-          Arithm(operator: true, tsym: op, tsubt: sub)
+          result = Arithm(tsym: op)
+          result.tsubt = sub
       ),
       getSubt: (proc(n: Arithm): seq[Arithm] = n.tsubt),
-      # setSubt: (proc(n: var Arithm, sub: seq[Arithm]) = n.tsubt = sub),
       valStrGen: (proc(n: Arithm): string = "[[ TODO ]]"),
     )
 
     assertCorrect(cb)
 
-    let rSystem = RedSystem[Arithm, ArithmOp](
+    let rSystem = makeReductionSystem(
       # NOTE this madness is intended to be generated from some kind of
       # DSL, not written by hand.
-      rules: @[
+      @[
         # A + 0 -> A
         makeRulePair(
           nOp(aopAdd, @[nVar("A"), nConst(0)]).makeMatcher(),
