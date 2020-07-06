@@ -1,7 +1,4 @@
-import hmisc/hterms_callback
-
-# import hmisc/hterms_tree
-
+import hmisc/nimast_trs
 import sequtils, strformat, strutils
 import hmisc/halgorithm
 
@@ -57,26 +54,28 @@ func mkOp(op: AstKind, sub: seq[Ast]): Ast =
 func mkVal(val: int): Ast = Ast(kind: akIntLit, intVal: val)
 func mkIdent(val: string): Ast = Ast(kind: akIdent, strVal: val)
 func mkStrLit(val: string): Ast = Ast(kind: akStrLit, strVal: val)
-
-func nConst(n: Ast): AstTerm = makeConstant[Ast, AstKind](n)
+func nConst(n: Ast): AstTerm = makeConstant(n, n.kind)
 
 
 suite "Hterms ast rewriting":
   test "Ast rewriting":
     let cb = TermImpl[Ast, AstKind](
-      getFsym: (proc(n: Ast): AstKind = n.kind),
-      isFunctor: (proc(n: Ast): bool = n.kind in {akCall .. akCondition}),
-      makeFunctor: (proc(op: AstKind): Ast = Ast(kind: op)),
+      getSym: (proc(n: Ast): AstKind = n.kind),
+      isFunctorSym: (proc(kind: AstKind): bool = kind in {akCall .. akCondition}),
+      makeFunctor: (
+        proc(op: AstKind, sub: seq[Ast]): Ast =
+          result = Ast(kind: op); result.sons = sub
+      ),
       getSubt: (proc(n: Ast): seq[Ast] = n.sons),
-      setSubt: (proc(n: var Ast, sub: seq[Ast]) = n.sons = sub),
+      # setSubt: (proc(n: var Ast, sub: seq[Ast]) = n.sons = sub),
       valStrGen: (proc(n: Ast): string = "[[ TODO ]]"),
     )
 
-    let rSystem = RedSystem[Ast, AstKind](rules: @[
+    let rSystem = makeReductionSystem(@[
       makeRulePair(
         nOp(akCall, @[
           mkIdent("someFunc").nConst(), mkVal(9000).nConst()
-        ]).makePattern(),
+        ]).makeMatcher(),
         nConst(mkStrLit("Hello 9000")).makeGenerator()
     )])
 

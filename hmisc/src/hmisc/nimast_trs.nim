@@ -1,11 +1,6 @@
-import macros
-import tables
-import strutils
-import sugar
-
-import hmisc/[hterms_callback, hterms_tree, halgorithm, helpers]
-
-export hterms_callback, hterms_tree, macros, halgorithm
+import macros, tables, strutils, sugar, sequtils
+import hmisc/[nim_trs, halgorithm, helpers]
+export nim_trs, macros, halgorithm
 
 type
   NodeTerm = Term[NimNode, NimNodeKind]

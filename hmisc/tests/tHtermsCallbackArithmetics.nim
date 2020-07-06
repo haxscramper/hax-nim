@@ -1,9 +1,5 @@
 import unittest
-
-import hmisc/hterms_callback
-
-import hmisc/halgorithm
-
+import hmisc/[nim_trs, halgorithm]
 import strutils, sequtils, strformat, sugar, options
 
 type
