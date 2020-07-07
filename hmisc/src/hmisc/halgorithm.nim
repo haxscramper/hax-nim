@@ -459,7 +459,7 @@ template last[T](stack: seq[T]): T = stack[^1]
 func makeDfsFrame[T, R](elems: seq[T], path: seq[int]): DfsFrame[T, R] =
   DfsFrame[T, R](idx: 0, inSubt: elems, path: path, subt: @[])
 
-template mapItTreeDFSImpl*[InTree, OutTree](
+template mapItDFSImpl*[InTree, OutTree](
   inTree: InTree,
   subnodeCall: untyped,
   op: untyped,
@@ -547,7 +547,7 @@ template mapItTreeDFSImpl*[InTree, OutTree](
 
   res
 
-macro mapItTreeDFS*(
+macro mapItDFS*(
   inTree: untyped,
   subnodeCall: untyped,
   outType: untyped,
@@ -582,7 +582,7 @@ suite'.
 
 
   result = quote do:
-    mapItTreeDFSImpl[typeof(`inTree`), `outType`](
+    mapItDFSImpl[typeof(`inTree`), `outType`](
       `inTree`,
       `subnodeCall`,
       `op`,

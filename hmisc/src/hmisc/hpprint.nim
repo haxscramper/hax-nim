@@ -897,7 +897,7 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
   let tree = toSimpleTree(obj, counter)
   # TO whoever reading this: I had to use life support system to not
   # die of brain overload. Just saying.
-  var folded = tree.mapItTreeDFS(
+  var folded = tree.mapItDFS(
     outType = seq[Var2[Edge, Node]],
     hasSubnodes = (it.kind != okConstant),
     subnodeCall = it.getSubnodes(),

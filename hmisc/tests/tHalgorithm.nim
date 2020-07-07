@@ -171,7 +171,7 @@ suite "Tree mapping":
       if it.isToken: some(it.tok) else: none(string),
       not it.isToken) == @["ident", "ident"]
 
-  test "{mapItTreeDFS} map to dot grap :proc:macro:example:":
+  test "{mapItDFS} map to dot grap :proc:macro:example:":
     ## Convert ast to linear structure (graphviz document). Fold tree
     ## into graph with only ~20 lines of code (mostly comments)
     type
@@ -180,7 +180,7 @@ suite "Tree mapping":
         sub: seq[T]
 
     let val = T(val: "hello", sub: @[T(val: "world"), T(val: "!")])
-    let res = val.mapItTreeDFS(
+    let res = val.mapItDFS(
       it.sub,
       seq[string],
       block:
@@ -221,19 +221,19 @@ suite "Tree mapping":
 
   # TODO macro type assertions for option
 
-  test "{mapItTreeDFS} type assertions :macro:type:example:":
-    let res = InTest().mapItTreeDFS(
+  test "{mapItDFS} type assertions :macro:type:example:":
+    let res = InTest().mapItDFS(
       it.sub, OutTest,
       OutTest(val: $it.val & "+"))
 
     assert res is OutTest
 
-  test "{mapItTreeDFS} get subnodes using proc call :macro:value:":
+  test "{mapItDFS} get subnodes using proc call :macro:value:":
     proc getSub(n: InTest): seq[InTest] = n.sub
-    discard inval.mapItTreeDFS(it.getSub(), string, "")
+    discard inval.mapItDFS(it.getSub(), string, "")
 
-  test "{mapItTreeDFS} value assertions :macro:value:":
-    assert inval.mapItTreeDFS(
+  test "{mapItDFS} value assertions :macro:value:":
+    assert inval.mapItDFS(
       it.sub, OutTest,
       block:
         OutTest(
