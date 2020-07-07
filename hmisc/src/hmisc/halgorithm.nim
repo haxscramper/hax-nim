@@ -442,40 +442,28 @@ proc mapDFSpost*[InTree, OutTree](
     path = path
   )
 
-macro mapItTreeDFS*(
-  inTree, subnodeCall, outType, op: untyped, hasSubnodes: untyped = true): untyped =
-  ##[
-Convert one tree type into another. Conversion is perfomed in
-bottom-up manner - first child nodes are evaluated, then results are
-supplied to parent nodes and so on.
 
-## Parameters
+type
+  DfsFrame[T, R] = object
+    idx: int
+    inSubt: seq[T]
+    path: seq[int]
+    subt: seq[R]
 
-:subnodeCall: Expression to get child nodes
-:outType: Result type
-:inTree: Tree to convert
-:op: Expression for converting objects.
+  DfsStack[T, R] = seq[DfsFrame[T, R]]
 
-## Injected variables
+template last[T](stack: var seq[T]): var T = stack[^1]
+template last[T](stack: seq[T]): T = stack[^1]
 
-:it: current tree node
-:path: path of the current node in original tree
-:subt: already converted subnodes
-:inSubt: current input subnodes
 
-## Notes
+func makeDfsFrame[T, R](elems: seq[T], path: seq[int]): DfsFrame[T, R] =
+  DfsFrame[T, R](idx: 0, inSubt: elems, path: path, subt: @[])
 
-Macro is a wrapper for call to recursive implementation of DFS mapper
-(`mapDFSpost`) - `op` and other expresions are wrapped into callback
-procs.
-
-## Example
-
-For examples of use look into `tests/tHalgorithm.nim`, 'Tree mapping
-suite'.
-
-  ]##
-
+template mapItTreeDFSImpl*[InTree, OutTree](
+  inTree: InTree,
+  subnodeCall: untyped,
+  op: untyped,
+  hasSubnodes: untyped = true): untyped =
   # NOTE Too lazy to check for already implemented features. I guess
   # most oft he things are implemented? #idea #software##emacs write
   # helper to jump to closest todo in the code. #todo parse todo items
@@ -498,58 +486,110 @@ suite'.
   # TODO predicate to check if item has subnodes or not.
   # TEST predicated for subnodes checking
   # REVIEW TODO STYLE rename `outType` into `intermediateType` ?
-  let
-    itIdent = ident "it"
-    pathIdent = ident "path"
-    subnIdent = ident "subt"
-    inSubnIdent = ident "inSubt"
 
+  var stack: seq[DfsFrame[InTree, OutTree]]
+  var res: OutTree
+  stack.add makeDfsFrame[InTree, OutTree](@[intree], @[])
 
-  let pos = inTree.lineInfoObj().line.newLit()
-  # defer:
-  #   echo result.toStrLit()
+  var cnt: int = 0
+  block dfsLoop:
+    while cnt < 20:
+      if stack.last.idx == stack.last.inSubt.len:
+        # Current toplevel frame reached the end
+        let top = stack.pop
+        let foldRes = (
+          block:
+            let
+              it {.inject.} = stack.last.inSubt[stack.last.idx]
+              path {.inject.} = top.path
+              subt {.inject.} = top.subt
+              inSubt {.inject.} = top.inSubt
 
-  result = quote do:
-    block:
-      type opType = typeof((
-        block:
-          var `itIdent`: typeof(`inTree`)
-          var `pathIdent`: seq[int]
-          var `subnIdent`: seq[`outType`]
-          var `inSubnIdent`: seq[typeof(`inTree`)]
+            op
+        )
 
-          `op`))
-
-      # TODO TEST write unit test for compile-time error
-      # TODO TEST write unit test for correct error position reporting
-      static:
-        if not (opType is `outType`) or (opType is Option[`outType`]):
+        if not (foldRes is OutTree) or (foldREs is Option[OutTree]):
+          let pos = instantiationInfo().line
           raiseAssert(
-            "Invalid type for expression result: expected either `" & $typeof(`outType`) &
-             "` or " & "`Option[" & $typeof(`outType`) &
+            "Invalid type for expression result: expected either `" & $typeof(OutTree) &
+             "` or " & "`Option[" & $typeof(OutTree) &
              "]` in `mapItTreeDfs` on line " & $`pos` & ", but `op` is " &
-            $typeof(opType)
+            $typeof(foldRes)
           )
 
-      mapDFSpost(
-        `inTree`,
-        map =
-          proc(
-            `itIdent`: typeof(`inTree`),
-            `pathIdent`: seq[int],
-            `subnIdent`: seq[`outType`],
-            `inSubnIdent`: seq[typeof(`inTree`)]
-          ): `outType` =
-              `op`
-        ,
-        getSubnodes = proc(`itIdent`: typeof(`inTree`)): seq[typeof(`inTree`)] =
-                        for subn in `subnodeCall`:
-                          result.add subn
-        ,
-        hasSubnodes =
-          proc(`itIdent`: typeof(`inTree`)): bool =
-            `hasSubnodes`
-      )
+        if stack.len == 1:
+          when foldRes is Option[OutTree]:
+            res = foldRes.get() # NOTE
+          else:
+            res = foldRes
+
+          break dfsLoop
+        else:
+          inc stack.last.idx
+          when foldRes is Option[OutTree]:
+            if foldRes.isSome():
+              stack.last.subt.add foldRes.get()
+          else:
+            stack.last.subt.add foldRes
+
+      else:
+        stack.add makeDfsFrame[InTree, OutTree](
+          block:
+            let it {.inject.} = stack.last.inSubt[stack.last.idx]
+            if hasSubnodes:
+              subnodeCall
+            else:
+              var tmp: seq[InTree]
+              tmp
+          ,
+          stack.last.path & @[stack.last.idx]
+        )
+
+  res
+
+macro mapItTreeDFS*(
+  inTree: untyped,
+  subnodeCall: untyped,
+  outType: untyped,
+  op: untyped,
+  hasSubnodes: untyped = true): untyped =
+
+  ##[
+Convert one tree type into another. Conversion is perfomed in
+bottom-up manner - first child nodes are evaluated, then results are
+supplied to parent nodes and so on.
+
+## Parameters
+
+:subnodeCall: Expression to get child nodes
+:outType: Result type
+:inTree: Tree to convert
+:op: Expression for converting objects.
+
+## Injected variables
+
+:it: current tree node
+:path: path of the current node in original tree
+:subt: already converted subnodes
+:inSubt: current input subnodes
+
+## Example
+
+For examples of use look into `tests/tHalgorithm.nim`, 'Tree mapping
+suite'.
+
+  ]##
+
+
+  result = quote do:
+    mapItTreeDFSImpl[typeof(`inTree`), `outType`](
+      `inTree`,
+      `subnodeCall`,
+      `op`,
+      `hasSubnodes`
+    )
+
+  # echo result.toStrLit()
 
 import tables, strutils
 

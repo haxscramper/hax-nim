@@ -1,4 +1,4 @@
-import helpers, halgorithm, hmisc_types
+import helpers, halgorithm, hmisc_types, hdrawing
 import sequtils, colors
 import tables, strformat, strutils
 import math

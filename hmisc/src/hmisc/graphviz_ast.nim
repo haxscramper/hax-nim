@@ -481,4 +481,4 @@ proc topng*(
     ($shellcmd)
     cp ($tmpimage) ($resfile)
 
-res.topng("/tmp/file.png")
+# res.topng("/tmp/file.png")
