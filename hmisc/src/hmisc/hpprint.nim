@@ -909,11 +909,6 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
           subt.concat()
   )
 
-  # if tree.isPrimitive: # If toplevel object is primitive add
-  #   let (node, edges) = tree.foldObject()
-  #   folded.add node
-  #   folded &= edges
-
   result = Graph(
     nodes: folded.filterIt(it.hasType(Node)).mapIt(it.get(Node)),
     edges: folded.filterIt(it.hastype(Edge)).mapIt(it.get(Edge))

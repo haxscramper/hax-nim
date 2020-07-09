@@ -8,6 +8,24 @@ export tables, intsets
 import htrie
 export htrie
 
+type TermPath = seq[int]
+
+
+type
+  InfoException = ref object of CatchableError
+
+  GenException*[T] = ref object of InfoException
+    info*: T
+
+
+proc raiseGenEx[T](msg: string, info: T): void =
+  var tmp = new GenException[T]
+  tmp.msg = msg
+  tmp.info = info
+  raise tmp
+
+template getGEx*[T](): untyped = cast[GenException[T]](getCurrentException())
+
 type
   TermKind* = enum
     tkVariable
@@ -15,8 +33,16 @@ type
     tkConstant
     tkPlaceholder
 
-  TermPath = seq[int]
   VarSym* = string
+  SubstitutionErrorInfo* = object
+    path*: TermPath
+    case kind*: TermKind:
+      of tkVariable:
+        vname*: VarSym
+      else:
+        discard
+
+
 
   Term*[V, F] = object
     case tkind*: TermKind
@@ -33,12 +59,42 @@ type
 
 
   TermImpl*[V, F] = object
-    # getFSym*: proc(val: V): F
-    # isFunctor*: proc(val: V): bool
+    ##[
+
+Callback procs for concrete types.
+
+'Implementation' of certain actions for concrete types `V` and `F`.
+
+## Example
+
+Example for `NimNode` and `NimNodeKind`
+
+.. code-block:: nim
+
+    func isFunctor*(nnk: NimNodeKind): bool =
+      nnk notin {
+        nnkNone, nnkEmpty, nnkNilLit, # Empty node
+        nnkCharLit..nnkUInt64Lit, # Int literal
+        nnkFloatLit..nnkFloat64Lit, # Float literal
+        nnkStrLit..nnkTripleStrLit, nnkCommentStmt, nnkIdent, nnkSym # Str lit
+      }
+
+    const nimAstImpl* = TermImpl[NimNode, NimNodeKind](
+      getsym: (proc(n: NimNode): NimNodeKind = n.kind),
+      isFunctorSym: (proc(kind: NimNodeKind): bool = kind.isFunctor()),
+      makeFunctor: (
+        proc(op: NimNodeKind, sub: seq[NimNode]): NimNode =
+          if sub.len == 0: newNimNode(op)
+          else: newTree(op, sub)
+      ),
+      getSubt: (proc(n: NimNode): seq[NimNode] = toSeq(n.children)),
+      valStrGen: (proc(n: NimNode): string = $n.toStrLit()),
+    )
+
+    ]##
     isFunctorSym*: proc(val: F): bool
     getSubt*: proc(val: V): seq[V]
     getSym*: proc(val: V): F
-    # setSubt*: proc(val: var V, subt: seq[V])
     makeFunctor*: proc(sym: F, subt: seq[V]): V
     valStrGen*: proc(val: V): string ## Conver value to string.
 
@@ -144,15 +200,27 @@ proc toTerm*[V, F](val: V, cb: TermImpl[V, F]): Term[V, F] =
   else:
     return makeConstant[V, F](val, cb.getSym(val))
 
-proc fromTerm*[V, F](term: Term[V, F], cb: TermImpl[V, F]): V =
-  assert term.getKind() in {tkFunctor, tkConstant},
-   "Cannot convert under-substituted term back to tree. " &
-     $term.getKind() & " has to be replaced with value"
+proc fromTerm*[V, F](
+  term: Term[V, F], cb: TermImpl[V, F], path: TermPath = @[0]): V =
+  if term.getKind() notin {tkFunctor, tkConstant}:
+    raiseGenEx(
+      "Cannot convert under-substituted term back to tree. " &
+      $term.getKind() & " has to be replaced with value",
+      case term.getKind():
+        of tkVariable:
+          SubstitutionErrorInfo(
+            path: path,
+            kind: tkVariable,
+            vname: term.getVName()
+          )
+        else:
+          SubstitutionErrorInfo(path: path)
+    )
 
   if term.getKind() == tkFunctor:
     result = cb.makeFunctor(
       term.getFSym(),
-      term.getSubt().mapIt(it.fromTerm(cb)))
+      term.getSubt().mapPairs(rhs.fromTerm(cb, path & @[lhs])))
   else:
     result = term.getValue()
 
@@ -452,6 +520,17 @@ proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): stri
         @[ ind & "fun " & $(getFSym(term)) ] &
         getSubt(term).mapIt(treeRepr(it, cb, depth + 1))
       ).join("\n")
+
+proc treeRepr*[V, F](val: V, cb: TermImpl[V, F], depth: int = 0): string =
+  let ind = "  ".repeat(depth)
+  if cb.isFunctor(val):
+    return (
+      @[ ind & "fun " & $(cb.getSym(val)) ] &
+      cb.getSubt(val).mapIt(treeRepr(it, cb, depth + 1))
+    ).join("\n")
+  else:
+    return cb.valStrGen(val)
+      .split("\n").mapIt(ind & "cst " & it).join("\n")
 
 type
   ReduceConstraints* = enum

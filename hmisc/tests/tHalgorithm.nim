@@ -172,8 +172,9 @@ suite "Tree mapping":
       not it.isToken) == @["ident", "ident"]
 
   test "{mapItDFS} map to dot grap :proc:macro:example:":
-    ## Convert ast to linear structure (graphviz document). Fold tree
-    ## into graph with only ~20 lines of code (mostly comments)
+    ## Convert ast to linear structure (graphviz document). Fold
+    ## tree-like type into dot graph with only ~20 lines of code
+    ## (mostly comments and formatting)
     type
       T = object
         val: string

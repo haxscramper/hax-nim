@@ -18,7 +18,6 @@ func isFunctor*(nnk: NimNodeKind): bool =
 
 const nimAstImpl* = TermImpl[NimNode, NimNodeKind](
   getsym: (proc(n: NimNode): NimNodeKind = n.kind),
-  # isFunctor: (proc(n: NimNode): bool = n.kind.isFunctor()),
   isFunctorSym: (proc(kind: NimNodeKind): bool = kind.isFunctor()),
   makeFunctor: (
     proc(op: NimNodeKind, sub: seq[NimNode]): NimNode =

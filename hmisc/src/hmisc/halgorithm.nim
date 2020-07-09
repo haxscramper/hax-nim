@@ -555,9 +555,11 @@ macro mapItDFS*(
   hasSubnodes: untyped = true): untyped =
 
   ##[
-Convert one tree type into another. Conversion is perfomed in
-bottom-up manner - first child nodes are evaluated, then results are
-supplied to parent nodes and so on.
+
+Convert one tree type into another.
+
+Conversion is perfomed in bottom-up manner - first child nodes are
+evaluated, then results are supplied to parent nodes and so on.
 
 ## Parameters
 
@@ -588,8 +590,6 @@ suite'.
       `op`,
       `hasSubnodes`
     )
-
-  # echo result.toStrLit()
 
 import tables, strutils
 
