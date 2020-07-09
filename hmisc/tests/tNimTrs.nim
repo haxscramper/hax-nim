@@ -156,3 +156,5 @@ suite "Nim trs primitives":
 
        cmpTerm res["ii"], nConst(90)
        cmpTerm res["io"], nConst(8)
+
+# suite "Nim trs reduction rule search":
