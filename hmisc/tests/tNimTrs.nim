@@ -1,4 +1,5 @@
 import sugar, strutils, sequtils, strformat
+import sets
 import hmisc/[nim_trs, helpers, halgorithm]
 
 #===========================  implementation  ============================#
@@ -32,6 +33,8 @@ type
   TrmTerm = Term[Trm, TrmKind]
   TrmEnv = TermEnv[Trm, TrmKind]
   TrmSys = RedSystem[Trm, TrmKind]
+  TrmGenp = GenProc[Trm, TrmKind]
+  TrmMatch = TermMatcher[Trm, TrmKind]
 
 func nOp(subt: varargs[TrmTerm]): TrmTerm =
   makeFunctor[Trm, TrmKind](tmkF, toSeq(subt))
@@ -77,6 +80,16 @@ proc makeSystem(rules: varargs[(TrmTerm, TrmTerm)]): TrmSys =
       makeGenerator(rhs)
     ))
   )
+
+proc makeSystem(rules: varargs[(TrmMatch, TrmTerm)]): TrmSys =
+  makeReductionSystem[Trm, TrmKind](
+    rules.mapPairs(makeRulePair(
+      lhs, makeGenerator(rhs))))
+
+proc makePatt(
+  upper: TrmTerm, subpatts: varargs[(VarSym, TrmTerm)],
+  default: TrmGenp = nil): TrmMatch =
+  makeMatcher(upper, toSeq(subpatts).toPattList(), default)
 
 
 #================================  tests  ================================#
@@ -207,3 +220,22 @@ suite "Nim trs reduction rule search":
 
     cmpTerm term, nConst(120)
     assert ok
+
+  test "Rewrite with subpatterms":
+    let (term, ok, _) = (
+      nT( nT(120), nT(90)).toTerm()
+    ).reduce(makeSystem({
+      nOp(nVar("i1"), nConst(nT(90))) : nVar("i1")
+    }))
+
+  test "Pattern with submatches":
+    let patt = makePatt(
+      nOp(nConst(10), nVar("ii"))
+    )
+
+    let subpatts = {
+      "ii" : nOp(nConst(80), nConst(10))
+    }.toPattList()
+
+    let vars = subpatts.getExportedVars()
+    assert "ii" in vars
