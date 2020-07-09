@@ -89,7 +89,6 @@ proc `$`*[Sym, Val](term: Term[Sym, Val]): string =
     of tkVariable:
       "_" & $term.name & "'".repeat(term.genIdx)
     of tkFunctor:
-      # $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
       if ($term.sym).validIdentifier():
         $term.sym & "(" & term.subt.mapIt($it).join(", ") & ")"
       else:

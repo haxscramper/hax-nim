@@ -532,7 +532,8 @@ proc setAtPath*[V, F](term: var Term[V, F], path: TermPath, value: Term[V, F]): 
     of tkPlaceholder:
       assert false, "Cannot assign to placeholder: " & $term & " = " & $value
     of tkConstant:
-      assert false, "Cannot assign to constant: " & $term & " = " & $value
+      term = value
+      # assert false, "Cannot assign to constant: " & $term & " = " & $value
 
 proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
   ## Substitute all variables in term with their values from environment
@@ -608,6 +609,33 @@ proc treeRepr*[V, F](val: V, cb: TermImpl[V, F], depth: int = 0): string =
   else:
     return cb.valStrGen(val)
       .split("\n").mapIt(ind & "cst " & it).join("\n")
+
+proc exprRepr*(vs: VarSym): string = "_" & vs
+proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
+  case term.getKind():
+    of tkConstant:
+      "'" & cb.valStrGen(term.value) & "'"
+    of tkVariable:
+      "_" & $term.name
+    of tkFunctor:
+      if ($getSym(term)).validIdentifier():
+        $getSym(term) & "(" & term.getSubt().mapIt(it.exprRepr(cb)).join(", ") & ")"
+      else:
+        let subt = term.getSubt()
+        case subt.len():
+          of 1: &"{term.getSym()}({subt[0]})"
+          of 2: &"{subt[0]} {term.getSym()} {subt[1]}"
+          else:
+            $term.getSym() & "(" & subt.mapIt(it.exprRepr(cb)).join(", ") & ")"
+    of tkPlaceholder:
+      "_"
+
+
+proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
+  "{" & env.mapPairs(
+    &"({lhs.exprRepr()} → {rhs.exprRepr(cb)})"
+  ).join(" ") & "}"
+
 
 
 proc reduce*[V, F](

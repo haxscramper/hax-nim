@@ -31,6 +31,7 @@ func `==`(lhs, rhs: Trm): bool =
 type
   TrmTerm = Term[Trm, TrmKind]
   TrmEnv = TermEnv[Trm, TrmKind]
+  TrmSys = RedSystem[Trm, TrmKind]
 
 func nOp(subt: varargs[TrmTerm]): TrmTerm =
   makeFunctor[Trm, TrmKind](tmkF, toSeq(subt))
@@ -53,12 +54,28 @@ const trmImpl* = TermImpl[Trm, TrmKind](
   isFunctorSym: (proc(kind: TrmKind): bool = kind == tmkF),
   makeFunctor: (proc(op: TrmKind, sub: seq[Trm]): Trm = nT(sub)),
   getSubt: (proc(n: Trm): seq[Trm] = n.subt),
-  valStrGen: (proc(n: Trm): string = $n),
+  valStrGen: (
+    proc(n: Trm): string =
+      case n.kind:
+        of tmkF: $tmkF
+        of tmkC: $n.val
+  ),
 )
 
 proc fromTerm(term: TrmTerm): Trm = term.fromTerm(trmImpl)
+proc toTerm(interm: Trm): TrmTerm = interm.toTerm(trmImpl)
 proc treeRepr(val: Trm): string = treeRepr(val, trmImpl)
 proc treeRepr(val: TrmTerm): string = treeRepr(val, trmImpl)
+proc exprRepr(val: TrmTerm): string = exprRepr(val, trmImpl)
+proc exprRepr(val: TrmEnv): string = exprRepr(val, trmImpl)
+proc makeSystem(rules: varargs[(TrmTerm, TrmTerm)]): TrmSys =
+  makeReductionSystem[Trm, TrmKind](
+    rules.mapPairs(makeRulePair(
+      makeMatcher(lhs),
+      makeGenerator(rhs)
+    ))
+  )
+
 
 #================================  tests  ================================#
 
@@ -157,4 +174,31 @@ suite "Nim trs primitives":
        cmpTerm res["ii"], nConst(90)
        cmpTerm res["io"], nConst(8)
 
-# suite "Nim trs reduction rule search":
+  test "Pretty-printing":
+    assertEq nOp(nConst(12), nConst(22)).exprRepr(), "tmkF('12', '22')"
+    assertEq mkEnv({"ii" : nConst(nT(10))}).exprRepr(), "{(_ii → '10')}"
+
+suite "Nim trs reduction rule search":
+  test "Rewrite constant":
+    let (term, ok, _) = nConst(12).reduce(makeSystem({
+      nConst(12) : nConst(14)
+    }))
+
+    cmpTerm term, nConst(14)
+
+  test "Rewrite term completely":
+    let (term, ok, _) = nConst(nT(nT(12), nT(22))).reduce(makeSystem({
+      nConst(nT(nT(12), nT(22))) : nConst(nT(90))
+    }))
+
+    cmpTerm term, nConst(90)
+
+  test "Rewrite upper term":
+    let (term, ok, _) = (
+      nT( nT(120), nT(90)).toTerm()
+    ).reduce(makeSystem({
+      nOp(nVar("i1"), nConst(nT(90))) : nVar("i1")
+    }))
+
+    cmpTerm term, nConst(120)
+    assert ok
