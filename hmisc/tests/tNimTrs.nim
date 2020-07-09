@@ -66,8 +66,10 @@ proc fromTerm(term: TrmTerm): Trm = term.fromTerm(trmImpl)
 proc toTerm(interm: Trm): TrmTerm = interm.toTerm(trmImpl)
 proc treeRepr(val: Trm): string = treeRepr(val, trmImpl)
 proc treeRepr(val: TrmTerm): string = treeRepr(val, trmImpl)
-proc exprRepr(val: TrmTerm): string = exprRepr(val, trmImpl)
-proc exprRepr(val: TrmEnv): string = exprRepr(val, trmImpl)
+
+proc exprRepr(val: TrmEnv | TrmTerm | TrmSys): string =
+  exprRepr(val, trmImpl)
+
 proc makeSystem(rules: varargs[(TrmTerm, TrmTerm)]): TrmSys =
   makeReductionSystem[Trm, TrmKind](
     rules.mapPairs(makeRulePair(
@@ -176,7 +178,10 @@ suite "Nim trs primitives":
 
   test "Pretty-printing":
     assertEq nOp(nConst(12), nConst(22)).exprRepr(), "tmkF('12', '22')"
-    assertEq mkEnv({"ii" : nConst(nT(10))}).exprRepr(), "{(_ii → '10')}"
+    assertEq mkEnv({"ii" : nConst(nT(10))}).exprRepr(), "{(_ii -> '10')}"
+    assertEq makeSystem({
+      nOp(nVar("i1"), nConst(nT(90))) : nVar("i1")
+    }).exprRepr(), "0: tmkF(_i1, '90') ~~> _i1"
 
 suite "Nim trs reduction rule search":
   test "Rewrite constant":

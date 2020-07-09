@@ -1,7 +1,7 @@
 ## Term algorithms. Implmenetation uses callback functions for getting
 ## values/types from terms.
 
-import hashes, sequtils, tables, strformat, strutils
+import hashes, sequtils, tables, strformat, strutils, sugar
 import helpers, deques, intsets, halgorithm
 export tables, intsets
 
@@ -633,10 +633,25 @@ proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
 
 proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
   "{" & env.mapPairs(
-    &"({lhs.exprRepr()} → {rhs.exprRepr(cb)})"
+    &"({lhs.exprRepr()} -> {rhs.exprRepr(cb)})"
   ).join(" ") & "}"
 
+proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
+  let rhs =
+    case rule.gen.isPattern:
+      of true: exprRepr(rule.gen.patt)
+      of false: "proc"
 
+  let matchers = collect(newSeq):
+    for match in rule.rules:
+      case match.isPattern:
+        of true: exprRepr(match.patt, cb)
+        of false: "proc"
+
+  return matchers.join(" | ") & " ~~> " & rhs
+
+proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
+  sys.rules.mapPairs(&"{idx}: {rhs.exprRepr(cb)}").join("\n")
 
 proc reduce*[V, F](
   term: Term[V, F],
