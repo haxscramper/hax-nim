@@ -86,4 +86,5 @@ suite "Hterms ast rewriting":
       echo resAst
       assert resAst == Ast(kind: akStrLit, strVal: "Hello 9000")
     else:
-      echo "res not ok"
+      fail()
+      echo res.term.treeRepr(cb)

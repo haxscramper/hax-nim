@@ -123,7 +123,7 @@ proc makePatternDecl(
   sectBody: NimNode): tuple[node: NimNode, vars: seq[string]] =
   ## Declare pattern matcher for section body
   var vars: seq[string]
-  let ruleMatcherDef = sectBody.mapItTreeDFS(
+  let ruleMatcherDef = sectBody.mapItDFS(
     toSeq(it.children),
     NimNode,
     buildPatternDecl(it, path, subt, vars))

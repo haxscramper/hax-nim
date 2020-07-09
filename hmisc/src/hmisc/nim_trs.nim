@@ -99,7 +99,7 @@ Example for `NimNode` and `NimNodeKind`
     valStrGen*: proc(val: V): string ## Conver value to string.
 
   TermEnv*[V, F] = object
-    ## Mapping between varuable symbols and values
+    ## Mapping between variable symbols and values
     values*: Table[VarSym, Term[V, F]]
 
   GenProc*[V, F] = proc(env: TermEnv[V, F]): Term[V, F] ## Proc
@@ -127,6 +127,48 @@ Example for `NimNode` and `NimNodeKind`
     matchers: set[RuleId] # Matcher procs - always have to try
     rules: seq[RulePair[V, F]]
 
+#=====================  reduction constraint types  ======================#
+
+type
+  ReduceConstraints* = enum
+    rcNoConstraints
+    rcRewriteOnce
+    rcApplyOnce
+
+  ReductionState = object
+    rewPaths: Trie[int, set[RuleId]]
+    constr: ReduceConstraints
+    maxDepth: int
+
+
+proc registerUse(rs: var ReductionState, path: TermPath, id: RuleId): void =
+  case rs.constr:
+    of rcApplyOnce:
+      if path notin rs.rewPaths:
+        var tmp: set[RuleId]
+        rs.rewPaths[path] = tmp
+
+      rs.rewPaths[path].incl id
+    of rcRewriteOnce:
+      var tmp: set[RuleId]
+      rs.rewPaths[path] = tmp
+
+    else:
+      discard
+
+proc canRewrite(rs: ReductionState, path: TermPath): bool =
+  path.len < rs.maxDepth and not (
+    # Avoid rewriting anyting on this path
+    rs.constr == rcRewriteOnce and
+    rs.rewPaths.prefixHasValue(path)
+  )
+
+
+proc cannotUse(rs: ReductionState, path: TermPath, rule: RuleId): bool =
+    # Avoid using this rule again on the same path
+    (rs.constr == rcApplyOnce) and
+    (rs.rewPaths.prefixHasValue(path)) and
+    toSeq(rs.rewPaths.prefixedValues(path)).anyOfIt(rule in it)
 
 #==========================  making new terms  ===========================#
 
@@ -324,14 +366,6 @@ iterator pairs*[V, F](system: RedSystem[V, F]): (RuleId, RulePair[V, F]) =
   for idx, pair in system.rules:
     yield (RuleId(idx), pair)
 
-iterator findApplicable*[V, F](
-  system: RedSystem[V, F], redex: Term[V, F]): (RuleId, RulePair[V, F]) =
-  let fsym = redex.getSym()
-  for pattId in system.first.getOrDefault(fsym, @[]):
-    yield (pattId, system.rules[pattId])
-
-  for pattId in system.matchers:
-    yield (pattId, system.rules[pattId])
 
 iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
   ## Iterate over all variables and values in evnironment
@@ -492,8 +526,12 @@ proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
     if env.isBound(getVName(v)):
       result.setAtPath(path, v.dereference(env))
 
+
+
 proc apply*[V, F](
   redex: Term[V, F], rule: RulePair[V, F]): Option[TermEnv[V, F]] =
+  ## Match pattern from `rule` with `redex` and return unification
+  ## environment.
   for id in rule.first[redex.getSym()] & rule.matchers:
     let unifRes = if rule.rules[id].isPattern: unif(rule.rules[id].patt, redex)
                   else: rule.rules[id].matcher(redex)
@@ -501,8 +539,30 @@ proc apply*[V, F](
     if unifRes.isSome():
       return unifRes
 
-proc generate*[V, F](
-  rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
+iterator possibleMatches*[V, F](system: RedSystem[V, F], redex: Term[V, F]): RuleId =
+  let fsym = redex.getSym()
+  for pattId in system.first.getOrDefault(fsym, @[]):
+    yield pattId
+
+  for pattId in system.matchers:
+    yield pattId
+
+proc findApplicable*[V, F](
+  system: RedSystem[V, F],
+  redex: Term[V, F],
+  rs: ReductionState,
+  path: TermPath): Option[(RuleId, TermEnv[V, F], RulePair[V, F])] =
+  ## Return first rule in system that can be applied for given `redex`
+  ## and unification environment under which rule matches with pattern
+  ## in rule.
+  for id in system.possibleMatches(redex):
+    let rule = system.rules[id]
+    let env = redex.apply(rule)
+    if env.isSome():
+      return some((id, env.get(), rule))
+
+proc generate*[V, F](rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
+  ## Apply generator in `rule` using environment `env`
   rule.gen(env)
 
 proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
@@ -532,53 +592,11 @@ proc treeRepr*[V, F](val: V, cb: TermImpl[V, F], depth: int = 0): string =
     return cb.valStrGen(val)
       .split("\n").mapIt(ind & "cst " & it).join("\n")
 
-type
-  ReduceConstraints* = enum
-    rcNoConstraints
-    rcRewriteOnce
-    rcApplyOnce
-
-
-  ReductionState = object
-    rewPaths: Trie[int, set[RuleId]]
-    constr: ReduceConstraints
-    maxDepth: int
-
-proc registerUse(rs: var ReductionState, path: TermPath, id: RuleId): void =
-  case rs.constr:
-    of rcApplyOnce:
-      if path notin rs.rewPaths:
-        var tmp: set[RuleId]
-        rs.rewPaths[path] = tmp
-
-      rs.rewPaths[path].incl id
-    of rcRewriteOnce:
-      var tmp: set[RuleId]
-      rs.rewPaths[path] = tmp
-
-    else:
-      discard
-
-proc canRewrite(rs: ReductionState, path: TermPath): bool =
-  path.len < rs.maxDepth and not (
-    # Avoid rewriting anyting on this path
-    rs.constr == rcRewriteOnce and
-    rs.rewPaths.prefixHasValue(path)
-  )
-
-
-proc cannotUse(rs: ReductionState, path: TermPath, rule: RuleId): bool =
-    # Avoid using this rule again on the same path
-    (rs.constr == rcApplyOnce) and
-    (rs.rewPaths.prefixHasValue(path)) and
-    toSeq(rs.rewPaths.prefixedValues(path)).anyOfIt(rule in it)
-
 
 proc reduce*[V, F](
   term: Term[V, F],
   system: RedSystem[V, F],
   maxDepth: int = 40,
-  maxIterations: int = 4000,
   reduceConstraints: ReduceConstraints = rcApplyOnce
                 ): tuple[term: Term[V, F], ok: bool, rewPaths: Trie[int, set[RuleId]]] =
   ##[
@@ -595,7 +613,6 @@ rule value generator.
 :system: collection of rules (matcher - generator pairs)
 :cb: implementation callbacks for term
 :maxDepth: do not reduce terms deeper than this value
-:maxIterations: stop reduction attempts after reaching this value
 :reduceConstaints: Configuration for continous application of
                    reduction rules on the same paths.
    - **rcNoConstaints** Reduce as long as reduction can take
@@ -618,27 +635,34 @@ rule value generator.
     while true:
       var canReduce = false
       for (redex, path) in tmpTerm.redexes():
-        if rs.canRewrite(path):
-          for idx, rule in system.findApplicable(redex):
-            inc iterIdx
-            if iterIdx > maxIterations: break outerLoop
-            if rs.cannotUse(path, idx): continue
+        let rule = system.findApplicable(redex, rs, path)
+        if rule.isSome():
+          canReduce = true
+          result.ok = true
+          let (idx, env, rule) = rule.get()
+          let genRes = rule.generate(env).substitute(env)
+          tmpTerm.setAtPath(path, genRes)
 
-            var unifRes: Option[TermEnv[V, F]] = redex.apply(rule)
-            # Unification ok, calling generator proc to get replacement
-            if unifRes.isSome():
-              rs.registerUse(path, idx)
-              let newEnv = unifRes.get()
+        # if rs.canRewrite(path):
+        #   for idx, rule in system.findApplicable(redex):
+        #     # inc iterIdx
+        #     # if rs.cannotUse(path, idx): continue
 
-              # New value from generator
-              let tmpNew = rule.generate(newEnv).substitute(newEnv)
-              setAtPath(tmpTerm, path, tmpNew)
+        #     var unifRes: Option[TermEnv[V, F]] = redex.apply(rule)
+        #     # Unification ok, calling generator proc to get replacement
+        #     if unifRes.isSome():
+        #       rs.registerUse(path, idx)
+        #       let newEnv = unifRes.get()
 
-              if getKind(tmpTerm) notin {tkVariable, tkConstant}:
-                canReduce = true
-                result.ok = true
-              else:
-                return (tmpTerm, true, rs.rewPaths)
+        #       # New value from generator
+        #       let tmpNew = rule.generate(newEnv).substitute(newEnv)
+        #       setAtPath(tmpTerm, path, tmpNew)
+
+              # if getKind(tmpTerm) notin {tkVariable, tkConstant}:
+              #   canReduce = true
+              #   result.ok = true
+              # else:
+              #   return (tmpTerm, true, rs.rewPaths)
 
       if not canReduce:
         result.term = tmpTerm
