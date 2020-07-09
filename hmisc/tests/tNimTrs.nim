@@ -41,6 +41,9 @@ func nVar(n: string): TrmTerm =
 func nConst(n: Trm): TrmTerm =
   makeConstant(n, n.kind)
 
+func nConst(val: int): TrmTerm = nConst(nT(val))
+func nConst(subt: varargs[Trm]): TrmTerm = nConst(nT(subt))
+
 func mkEnv(vals: varargs[tuple[vname: string, val: TrmTerm]]): TrmEnv =
   for (name, val) in vals:
     result[name] = val
@@ -61,8 +64,12 @@ proc treeRepr(val: TrmTerm): string = treeRepr(val, trmImpl)
 
 import unittest
 
-proc cmpTerm(term: TrmTerm, val: Trm): void =
-  if term.fromTerm() != val:
+proc cmpTerm(term: TrmTerm | Trm, val: Trm | TrmTerm): void =
+  let ok =
+    (when term is TrmTerm: term.fromTerm() else: term) ==
+    (when val is TrmTerm: val.fromTerm() else: val)
+
+  if not ok:
     echo "Found:"
     echo treeRepr(term)
     echo "Expected:"
@@ -105,3 +112,47 @@ suite "Nim trs primitives":
       let e = getGEx[SubstitutionErrorInfo]
       assertEq e.info.path, @[0, 0, 0]
       assertEq e.info.vname, "ii"
+
+  test "{unif} term unification tests":
+     block:
+       let res = unif(nVar("ii"), nConst(nT(12))).get()
+       cmpTerm res["ii"], nConst(nT(12))
+
+     block:
+       let res = unif(nOp(nVar("ii")), nOp(nConst(nT(12)))).get()
+       cmpTerm res["ii"], nConst(nT(12))
+
+     block:
+       let res = unif(
+         nOp(nVar("ii"), nVar("ii")),
+         nOp(nConst(nT(12)), nConst(nT(12)))
+       ).get()
+
+       cmpTerm res["ii"], nConst(nT(12))
+
+     block:
+       let res = unif(
+         nOp(nVar("ii"), nConst(nT(12))),
+         nOp(nConst(nT(12)), nVar("ii"))
+       ).get()
+
+       cmpTerm res["ii"], nConst(nT(12))
+
+     block:
+       let res = unif(
+         nOp(nVar("ii"), nConst(nT(12)), nVar("zz")),
+         nOp(nConst(nT(22)), nVar("qq"), nConst(nT(90)))
+       ).get()
+
+       cmpTerm res["ii"], nConst(22)
+       cmpTerm res["qq"], nConst(12)
+       cmpTerm res["zz"], nConst(90)
+
+     block:
+       let res = unif(
+         nOp(nVar("ii"), nOp(nVar("io"), nConst(90)), nConst(90)),
+         nOp(nConst(90), nOp(nConst(8), nConst(90)), nVar("ii"))
+       ).get()
+
+       cmpTerm res["ii"], nConst(90)
+       cmpTerm res["io"], nConst(8)

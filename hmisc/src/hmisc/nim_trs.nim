@@ -20,7 +20,7 @@ type
 
 proc raiseGenEx[T](msg: string, info: T): void =
   var tmp = new GenException[T]
-  tmp.msg = msg
+  tmp.msg = msg & " [generic exception, T is `" & $typeof(T) & "`]"
   tmp.info = info
   raise tmp
 
