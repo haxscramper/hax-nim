@@ -9,7 +9,7 @@ import unittest
 
 suite "Drawing":
   test "test":
-    var buf = makeBuf(60, 40)
+    var buf = makeBuf()
     makeTermText((0,0), @["* (0, 0)"]).render(buf)
     makeTermText((8, 5), @["* (5, 5)"]).render(buf)
     makeTermPoint((39, 19)).render(buf)

@@ -32,11 +32,23 @@ type
 
 converter toRune*(c: char): Rune = toRunes($c)[0]
 
+const whitespaceRune: Rune = toRunes(" ")[0]
+
+func setAtPoint(buf: var TermBuf, row, col: int, rune: Rune): void =
+  for _ in buf.buf.len .. row:
+    buf.buf.add @[]
+
+  for r in 0 .. row:
+    let rowLen = buf.buf[r].len
+    if rowLen - 1 < col:
+      buf.buf[r] &= whitespaceRune.repeat(col - rowLen + 1).toRunes()
+
+  buf.buf[row][col] = rune
+
 func `[]=`*(buf: var TermBuf, x, y: int, rune: Rune): void =
   let y = y + buf.yDiff
   let x = x + buf.xDiff
-  if (y < buf.buf.len) and (x < buf.buf[y].len):
-    buf.buf[y][x] = rune
+  buf.setAtPoint(y, x, rune)
 
 func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
   buf[x, y] = toRunes($c)[0]
@@ -44,12 +56,8 @@ func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
 func `[]=`*(buf: var TermBuf, pos: Point[int], c: Rune): void =
   buf[pos.x, pos.y] = c
 
-func makeBuf*(
-  xSize, ySize: int, offset: (int, int) = (0, 0)): TermBuf =
-  TermBuf(
-    buf: newSeqWith(ySize, toRunes(" ".repeat(xSize))),
-    xDiff: offset[0], yDiff: offset[1]
-  )
+func makeBuf*(offset: (int, int) = (0, 0)): TermBuf =
+  TermBuf(xDiff: offset[0], yDiff: offset[1])
 
 func `$`*(buf: TermBuf): string = buf.buf.join("\n")
 
