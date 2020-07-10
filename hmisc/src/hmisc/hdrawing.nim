@@ -1,21 +1,39 @@
 import sequtils, strutils, math, lenientops, helpers, strformat, tables
+import halgorithm
+import unicode
+
+
 
 type
   Shape* = ref object of RootObj
-
   TermBuf* = object
-    buf: seq[string]
+    buf: seq[seq[Rune]]
     xDiff: int
     yDiff: int
 
+  Point*[Num] = object
+    x: Num
+    y: Num
+
+  Radian* = float
+
+
+func `[]=`*(buf: var TermBuf, x, y: int, rune: Rune): void =
+  let y = y + buf.yDiff
+  let x = x + buf.xDiff
+  if (y < buf.buf.len) and (x < buf.buf[y].len):
+    buf.buf[y][x] = rune
+
 func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
-  # d &"Seting {c} to [{x}, {y}]"
-  buf.buf[y + buf.yDiff][x + buf.xDiff] = c
+  buf[x, y] = toRunes($c)[0]
 
+func `[]=`*(buf: var TermBuf, pos: Point[int], c: char): void =
+  buf[pos.x, pos.y] = c
 
-func makeBuf*(rows, cols: int, offset: (int, int) = (0, 0)): TermBuf =
+func makeBuf*(
+  xSize, ySize: int, offset: (int, int) = (0, 0)): TermBuf =
   TermBuf(
-    buf: newSeqWith(rows, " ".repeat(cols)),
+    buf: newSeqWith(ySize, toRunes(" ".repeat(xSize))),
     xDiff: offset[0], yDiff: offset[1]
   )
 
@@ -26,12 +44,6 @@ method render*(s: Shape, buf: var TermBuf): void {.base.} =
   raiseAssert("Cannot draw base shape implementation")
 
 type
-  Point*[Num] = object
-    x: Num
-    y: Num
-
-  Radian* = float
-
   SPoint*[T, Num] = ref object of Shape
     point: Point[Num]
     config: T
@@ -42,7 +54,19 @@ type
     angle: Radian
     config: T
 
-type
+  SText*[Num] = ref object of Shape
+    start: Point[Num]
+    width: Num
+    height: Num
+    case reflow: bool
+      of true:
+        text: string
+      of false:
+        lines: seq[string]
+
+  Multishape* = ref object of Shape
+    shapes: seq[Shape]
+
   RectPoint* = enum
     rpoLeftEdge
     rpoRightEdge
@@ -59,16 +83,24 @@ type
     width: Num
     config: T
 
-  TermRectConf* = Table[RectPoint, char]
+  TermRectConf* = Table[RectPoint, Rune]
   TermRect* = SRect[TermRectConf, int]
 
+
 func makePoint*[Num](x, y: Num): auto = Point[Num](x: x, y: y)
+func makePoint*[Num](pos: (Num, Num)): auto = Point[Num](x: pos[0], y: pos[1])
 func shiftX*[Num](p: Point[Num], dx: Num): Point[Num] =
   makePoint[Num](p.x + dx, p.y)
 
 func shiftY*[Num](p: Point[Num], dy: Num): Point[Num] =
   makePoint[Num](p.x, p.y + dy)
 
+
+func shiftXY*[Num](p: Point[Num], dx: Num, dy: Num): Point[Num] =
+  makePoint[Num](p.x + dx, p.y + dy)
+
+func shiftXY*[Num](p: (Num, Num), dx: Num, dy: Num): (Num, Num) =
+  (p[0] + dx, p[1] + dy)
 
 func x*[T, Num](p: SPoint[T, Num]): Num = p.point.x
 func y*[T, Num](p: SPoint[T, Num]): Num = p.point.y
@@ -126,15 +158,19 @@ method render*(rect: SRect[char, int], buf: var TermBuf): void =
   renderLine(
     rect.upLeft, rect.width, 0, buf, rect.config)
   renderLine(
-    rect.upLeft, 0, rect.height, buf, rect.config)
+    rect.upLeft, 0, rect.height - 1, buf, rect.config)
 
   renderLine(
-    rect.upLeft.shiftY(rect.height), rect.width, 0, buf, rect.config)
+    rect.upLeft.shiftY(rect.height - 1), rect.width, 0, buf, rect.config)
   renderLine(
-    rect.upLeft.shiftX(rect.width), 0, rect.height, buf, rect.config)
+    rect.upLeft.shiftX(rect.width), 0, rect.height - 1, buf, rect.config)
 
 
-method render*(rect: SRect[Table[RectPoint, char], int], buf: var TermBuf): void =
+method render*(rect: TermRect, buf: var TermBuf): void =
+  # if rpoLeftEdge in rect.config:
+  #   renderLine(
+  #     rect.upLeft, 0, rect.height, rect
+  #   )
   echo "rendering rect"
   # renderLine(
   #   rect.upLeft, rect.width, 0, buf, rect.config)
@@ -146,6 +182,23 @@ method render*(rect: SRect[Table[RectPoint, char], int], buf: var TermBuf): void
   # renderLine(
   #   rect.upLeft.shiftX(rect.width), 0, rect.height, buf, rect.config)
 
+method render*(multi: Multishape, buf: var TermBuf): void =
+  for shape in multi.shapes:
+    render(shape, buf)
+
+method render*(text: SText[int], buf: var TermBuf): void =
+  case text.reflow:
+    of true:
+      raiseAssert("reflow text is not implemented")
+    of false:
+      for rId, row in text.lines:
+        for cId in 0 ..< min(row.len, text.width):
+          # echo &"{text.start}, ({cId}, {rId}), {text.start.shiftXY(cId, rId)}"
+          buf[text.start.shiftXY(cId, rId)] = row[cId]
+
+method render*(point: SPoint[char, int], buf: var TermBuf): void =
+  buf[point.point] = point.config
+
 func makeTermRect*(
   start: (int, int),
   width, height: int, border: char = '+'): SRect[char, int] =
@@ -156,14 +209,60 @@ func makeTermRect*(
     height: height
   )
 
+func makeTermText*(start: (int, int), text: seq[string]): SText[int] =
+  SText[int](
+    start: makePoint(start[0], start[1]),
+    lines: text,
+    reflow: false,
+    width: toSeq(text.mapIt(it.len)).max(0),
+    height: text.len
+  )
+
 func makeTermVline*(
-  x, y: int, length: int, c: char = '|', isDown: bool = true): auto =
+  start: (int, int), length: int, c: char = '|', isDown: bool = true): auto =
   SLine[char, int](
-    angle: if isDown: 3 * (PI/2) else: PI/2,
+    angle: if isDown: (PI/2) else: 3 * (PI/2),
     config: c,
-    start: makePoint(x, y),
+    start: start.makePoint(),
     length: length
   )
 
-func makeUnicodeTermRect(): TermRect =
-  discard
+func makeTermHline*(
+  start: (int, int), length: int, c: char = '-', isRight: bool = true): auto =
+  SLine[char, int](
+    angle: if isRight: PI*0 else: PI,
+    config: c,
+    start: start.makePoint(),
+    length: length)
+
+func makeTermPoint*(start: (int, int), c: char = '+'): SPoint[char, int] =
+  SPoint[char, int](point: start.makePoint(), config: c)
+
+func makeBoxedTermText*(start: (int, int), text: seq[string], boxc: char = '#'): Multishape =
+  let inner = makeTermText(start.shiftXY(1, 1), text)
+  Multishape(shapes: @[
+    cast[Shape](inner),
+    makeTermRect(
+      start, width = inner.width + 2, height = inner.height + 2, border = boxc)
+  ])
+
+func makeTwoLineBorder*(): TermRectConf =
+  {
+    rpoLeftEdge : "║",
+    rpoRightEdge : "║",
+    rpoBottomEdge : "═",
+    rpoTopEdge : "═",
+    rpoTopLeft : "╔",
+    rpoTopRight : "╗",
+    rpoBottomLeft : "╚",
+    rpoBottomRight : "╝",
+  }.mapPairs((lhs, rhs.toRunes()[0])).toTable()
+
+func makeTermRect*(
+  start: (int, int), width, height: int, conf: TermRectConf): TermRect =
+    TermRect(
+      upLeft: start.makePoint(),
+      height: height,
+      width: width,
+      config: conf
+    )
