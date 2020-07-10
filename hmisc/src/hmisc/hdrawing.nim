@@ -17,6 +17,7 @@ type
 
   Radian* = float
 
+converter toRune*(c: char): Rune = toRunes($c)[0]
 
 func `[]=`*(buf: var TermBuf, x, y: int, rune: Rune): void =
   let y = y + buf.yDiff
@@ -27,7 +28,7 @@ func `[]=`*(buf: var TermBuf, x, y: int, rune: Rune): void =
 func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
   buf[x, y] = toRunes($c)[0]
 
-func `[]=`*(buf: var TermBuf, pos: Point[int], c: char): void =
+func `[]=`*(buf: var TermBuf, pos: Point[int], c: Rune): void =
   buf[pos.x, pos.y] = c
 
 func makeBuf*(
@@ -106,7 +107,7 @@ func x*[T, Num](p: SPoint[T, Num]): Num = p.point.x
 func y*[T, Num](p: SPoint[T, Num]): Num = p.point.y
 
 
-iterator `..+`(start: int, offset: int): int =
+iterator `..+`*(start: int, offset: int): int =
   for i in start ..< start + offset:
     yield i
 
@@ -114,7 +115,7 @@ func order[Num](a, b: Num): (Num, Num) =
   if a > b: (b, a)
   else: (a, b)
 
-func renderLine(x0, y0, x1, y1: int, buf: var TermBuf, c: char): void =
+func renderLine(x0, y0, x1, y1: int, buf: var TermBuf, rune: Rune): void =
   # de x0, y0, x1, y1
   let
     dx = x1 - x0
@@ -128,11 +129,11 @@ func renderLine(x0, y0, x1, y1: int, buf: var TermBuf, c: char): void =
     y = y0
 
   for i in 0 .. steps:
-    buf[x, y] = c
+    buf[x, y] = rune
     x += xInc.int
     y += yInc.int
 
-func renderLine*(p: Point[int], w, h: int, buf: var TermBuf, c: char): void =
+func renderLine*(p: Point[int], w, h: int, buf: var TermBuf, c: Rune): void =
   renderLine(
     p.x,
     p.y,
@@ -149,7 +150,7 @@ method render*(line: SLine[char, int], buf: var TermBuf): void =
     x1 = int(line.start.x + cos(line.angle) * line.length),
     y1 = int(line.start.y + sin(line.angle) * line.length),
     buf = buf,
-    c = line.config
+    rune = line.config
   )
 
 
@@ -167,20 +168,34 @@ method render*(rect: SRect[char, int], buf: var TermBuf): void =
 
 
 method render*(rect: TermRect, buf: var TermBuf): void =
-  # if rpoLeftEdge in rect.config:
-  #   renderLine(
-  #     rect.upLeft, 0, rect.height, rect
-  #   )
-  echo "rendering rect"
-  # renderLine(
-  #   rect.upLeft, rect.width, 0, buf, rect.config)
-  # renderLine(
-  #   rect.upLeft, 0, rect.height, buf, rect.config)
+  let h = rect.height
+  let w = rect.width
 
-  # renderLine(
-  #   rect.upLeft.shiftY(rect.height), rect.width, 0, buf, rect.config)
-  # renderLine(
-  #   rect.upLeft.shiftX(rect.width), 0, rect.height, buf, rect.config)
+  if rpoLeftEdge in rect.config:
+    renderLine(
+      rect.upLeft, 0, h - 1, buf, rect.config[rpoLeftEdge])
+
+  if rpoRightEdge in rect.config:
+    renderLine(
+      rect.upLeft.shiftX(w - 1), 0, h - 1, buf, rect.config[rpoRightEdge])
+
+  if rpoTopEdge in rect.config:
+    renderLine(rect.upLeft, w - 1, 0, buf, rect.config[rpoTopEdge])
+
+  if rpoBottomEdge in rect.config:
+    renderLine(rect.upLeft.shiftY(h - 1), w - 1, h, buf, rect.config[rpoBottomEdge])
+
+  if rpoTopLeft in rect.config:
+    buf[rect.upLeft.shiftXY(0, 0)] = rect.config[rpoTopLeft]
+
+  if rpoTopRight in rect.config:
+    buf[rect.upLeft.shiftXY(w - 1, 0)] = rect.config[rpoTopRight]
+
+  if rpoBottomLeft in rect.config:
+    buf[rect.upLeft.shiftXY(0, h - 1)] = rect.config[rpoBottomLeft]
+
+  if rpoBottomRight in rect.config:
+    buf[rect.upLeft.shiftXY(w - 1, h - 1)] = rect.config[rpoBottomRight]
 
 method render*(multi: Multishape, buf: var TermBuf): void =
   for shape in multi.shapes:
@@ -246,7 +261,7 @@ func makeBoxedTermText*(start: (int, int), text: seq[string], boxc: char = '#'):
       start, width = inner.width + 2, height = inner.height + 2, border = boxc)
   ])
 
-func makeTwoLineBorder*(): TermRectConf =
+func makeTwoLineRectBorder*(): TermRectConf =
   {
     rpoLeftEdge : "║",
     rpoRightEdge : "║",
@@ -266,3 +281,11 @@ func makeTermRect*(
       width: width,
       config: conf
     )
+
+func makeBoxedTermText*(start: (int, int), text: seq[string], conf: TermRectConf): Multishape =
+  let inner = makeTermText(start.shiftXY(1, 1), text)
+  Multishape(shapes: @[
+    cast[Shape](inner),
+    makeTermRect(
+      start, width = inner.width + 2, height = inner.height + 2, conf)
+  ])
