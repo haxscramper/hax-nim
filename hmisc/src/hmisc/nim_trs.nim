@@ -624,9 +624,10 @@ proc findApplicable*[V, F](
 
 proc generate*[V, F](rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
   ## Apply generator in `rule` using environment `env`
-  case rule.gen.isPattern:
-    of true: rule.gen.patt.substitute(env)
-    of false: rule.gen.gen(env)
+  if rule.gen.isPattern:
+    rule.gen.patt.substitute(env)
+  else:
+    rule.gen.gen(env)
 
 proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
   let ind = "  ".repeat(depth)

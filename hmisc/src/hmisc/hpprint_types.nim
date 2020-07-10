@@ -1,4 +1,5 @@
 import helpers, halgorithm, hmisc_types, hdrawing
+export hdrawing
 import sequtils, colors
 import tables, strformat, strutils
 import math

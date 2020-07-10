@@ -20,6 +20,7 @@ import gara, with
 import obj_field_macros
 
 export tables, halgorithm
+export hvariant
 import hpprint_types, hdrawing
 import algorithm
 

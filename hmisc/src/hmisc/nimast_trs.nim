@@ -179,7 +179,7 @@ macro makeNodeRewriteSystem*(body: untyped): untyped =
     matcherTuples.add quote do:
       makeRulePair(
         makeMatcher(`matcherDecl`),
-        `generator`
+        makeGenerator(`generator`)
       )
 
   result = newTree(nnkBracket, matcherTuples)

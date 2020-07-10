@@ -75,7 +75,7 @@ template objKind(o: untyped): AnyKind =
 import macros
 
 
-import hmisc/hterms_nimast
+import hmisc/nimast_trs
 
 proc parseEnumSet[Enum](
   node: NimNode,
@@ -225,7 +225,7 @@ macro switchType(expr, body: untyped): untyped =
 
   let term = body.toTerm()
   let reduced = reduce(
-    term, rewrite, nimAstImpl,
+    term, rewrite,
     reduceConstraints = rcRewriteOnce
   )
 
