@@ -57,7 +57,7 @@ func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
 func `[]=`*(buf: var TermBuf, pos: Point[int], c: Rune): void =
   buf[pos.x, pos.y] = c
 
-func makeBuf*(offset: (int, int) = (0, 0)): TermBuf =
+func newBuf*(offset: (int, int) = (0, 0)): TermBuf =
   TermBuf(xDiff: offset[0], yDiff: offset[1])
 
 func `$`*(buf: TermBuf): string = buf.buf.join("\n")
@@ -355,7 +355,7 @@ method render*(text: SText[int], buf: var TermBuf): void =
 method render*(point: SPoint[char, int], buf: var TermBuf): void =
   buf[point.point] = point.config
 
-func makeTermRect*(
+func newTermRect*(
   start: (int, int),
   width, height: int, border: char = '+'): SRect[char, int] =
   SRect[char, int](
@@ -365,7 +365,7 @@ func makeTermRect*(
     height: height
   )
 
-func makeTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
+func newTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
   SText[int](
     start: makePoint(start[0], start[1]),
     lines: text,
@@ -374,7 +374,7 @@ func makeTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
     height: text.len
   )
 
-func makeTermVline*(
+func newTermVline*(
   start: (int, int), length: int, c: char = '|', isDown: bool = true): auto =
   SLine[char, int](
     angle: if isDown: (PI/2) else: 3 * (PI/2),
@@ -383,7 +383,7 @@ func makeTermVline*(
     length: length
   )
 
-func makeTermHline*(
+func newTermHline*(
   start: (int, int), length: int, c: char = '-', isRight: bool = true): auto =
   SLine[char, int](
     angle: if isRight: PI*0 else: PI,
@@ -391,14 +391,14 @@ func makeTermHline*(
     start: start.makePoint(),
     length: length)
 
-func makeTermPoint*(start: (int, int), c: char = '+'): SPoint[char, int] =
+func newTermPoint*(start: (int, int), c: char = '+'): SPoint[char, int] =
   SPoint[char, int](point: start.makePoint(), config: c)
 
-func makeBoxedTermText*(start: (int, int), text: seq[RuneSeq], boxc: char = '#'): Multishape =
-  let inner = makeTermText(start.shiftXY(1, 1), text)
+func newBoxedTermText*(start: (int, int), text: seq[RuneSeq], boxc: char = '#'): Multishape =
+  let inner = newTermText(start.shiftXY(1, 1), text)
   Multishape(shapes: @[
     cast[Shape](inner),
-    makeTermRect(
+    newTermRect(
       start, width = inner.width + 2, height = inner.height + 2, border = boxc)
   ])
 
@@ -414,7 +414,7 @@ func makeTwoLineRectBorder*(): TermRectConf =
     rpoBottomRight : "╝",
   }.mapPairs((lhs, rhs.toRunes()[0])).toTable()
 
-func makeTermRect*(
+func newTermRect*(
   start: (int, int), width, height: int, conf: TermRectConf): TermRect =
     TermRect(
       upLeft: start.makePoint(),
@@ -423,15 +423,15 @@ func makeTermRect*(
       config: conf
     )
 
-func makeBoxedTermText*(
+func newBoxedTermText*(
   start: (int, int),
   text: seq[RuneSeq],
   conf: TermRectConf,
   size: (int, int) = (-1, -1)): Multishape =
-  let inner = makeTermText(start.shiftXY(1, 1), text)
+  let inner = newTermText(start.shiftXY(1, 1), text)
   Multishape(shapes: @[
     cast[Shape](inner),
-    makeTermRect(
+    newTermRect(
       start,
       width = (size == (-1, -1)).tern(inner.width + 2, size[0]),
       height = (size == (-1, -1)).tern(inner.height + 2, size[1]),
@@ -479,7 +479,10 @@ func makeAsciiGridBorders*(): TermGridConf =
     gpoVerticalGap : "|",
   }.mapPairs((lhs, rhs.toRunes()[0])).toTable()
 
-func makeTermGrid*(
+
+func makeEmptyGridBorders*(): TermGridConf = discard
+
+func newTermGrid*(
   start: (int, int),
   cellws: seq[int],
   cellhs: seq[int],
@@ -494,27 +497,27 @@ func makeTermGrid*(
 func newMultishape(shapes: seq[Shape]): Multishape = Multishape(shapes: shapes)
 
 
-func makeTermGrid*(
+func newTermGrid*(
   start: (int, int), cells: seq[seq[RuneSeq]], conf: TermGridConf): Multishape =
   let cells: Seq2d[seq[RuneSeq]] = cells.mapIt(
     it.mapIt(($it).split('\n').mapIt(it.toRunes()))
   ).toSeq2d()
   let cellws: seq[int] = collect(newSeq):
-    for col in cells.itercols():
+    for col in cells.itercols(@["".toRunes()]):
       col.mapIt(it.mapIt(it.len).max(0)).max(0)
 
   let cellhs: seq[int] = collect(newSeq):
     for row in cells.iterrows():
       row.mapIt(it.len).max(0)
 
-  let grid = makeTermGrid(start, cellws, cellhs, conf)
+  let grid = newTermGrid(start, cellws, cellhs, conf)
   let (vSpacing, hSpacing, totalW, totalH) = gridDimensions(grid)
   let absColPos: seq[int] = grid.cellWidths.cumsumjoin(vSpacing, true)
   let absRowPos: seq[int] = grid.cellHeights.cumsumjoin(hSpacing, true)
 
   let cellShapes: seq[Shape] = collect(newSeq):
     for (pos, cell) in cells.itercells():
-      Shape(makeTermText(
+      Shape(newTermText(
         start = (
           start[0] + absColPos[pos[1]] + 1,
           start[1] + absRowPos[pos[0]] + 1
@@ -523,12 +526,8 @@ func makeTermGrid*(
   newMultishape(@[Shape(grid)] & cellShapes)
 
 
-# func makeTermGrid*(
-#   start: (int, int), cells: seq[seq[string]], conf: TermGridConf): Multishape =
-#   makeTermGrid(start, cells.mapIt(it.mapIt(it.toRunes)), conf)
-
 func toString*(shape: Shape): string =
-  var buf = makeBuf()
+  var buf = newBuf()
   shape.render(buf)
   return $buf
 

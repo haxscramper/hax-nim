@@ -74,15 +74,18 @@ iterator iterrows*[T](s: Seq2D[T]): seq[T] =
   for row in s.elems:
     yield row
 
-iterator itercols*[T](s: Seq2D[T]): seq[T] =
-  let rowlen = s.elems[0].len
-  for row in s.elems:
-    assert row.len == rowlen, "Row lenths differ"
+iterator itercols*[T](s: Seq2D[T], default: T): seq[T] =
+  let rowlen = s.elems.mapIt(it.len).max()
+  # for row in s.elems:
+  #   assert row.len == rowlen, "Row lenths differ"
 
   for col in 0 ..< rowlen:
     var buf: seq[T]
     for row in s.elems:
-      buf.add row[col]
+      if col > row.len - 1:
+        buf.add default
+      else:
+        buf.add row[col]
 
     yield buf
 
