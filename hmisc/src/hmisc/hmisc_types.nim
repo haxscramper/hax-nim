@@ -86,6 +86,11 @@ iterator itercols*[T](s: Seq2D[T]): seq[T] =
 
     yield buf
 
+iterator itercells*[T](s: Seq2D[T]): ((int, int), T) =
+  for rowId, row in s.elems:
+    for colId, cell in row:
+      yield((rowId, colId), cell)
+
 func `[]`*[T](grid: Seq2d[T], row, col: int): T =
   grid.elems[row][col]
 

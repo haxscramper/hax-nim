@@ -19,6 +19,7 @@ func cumsumjoin*(
 
 type
   Shape* = ref object of RootObj
+  RuneSeq = seq[Rune]
   TermBuf* = object
     buf: seq[seq[Rune]]
     xDiff: int
@@ -84,7 +85,7 @@ type
       of true:
         text: string
       of false:
-        lines: seq[string]
+        lines: seq[RuneSeq]
 
   Multishape* = ref object of Shape
     shapes: seq[Shape]
@@ -243,24 +244,28 @@ method render*(rect: TermRect, buf: var TermBuf): void =
   if rpoBottomRight in rect.config:
     buf[rect.upLeft.shiftXY(w - 1, h - 1)] = rect.config[rpoBottomRight]
 
-method render*(rect: TermGrid, buf: var TermBuf): void =
-  let gridX = rect.start.x
-  let rc = rect.config
-  let gridY = rect.start.y
-  let vSpacing = (
+func gridDimensions*(grid: TermGrid): tuple[vSpacing, hSpacing, totalW, totalH: int] =
+  let rc = grid.config
+  result.vSpacing = (
     (gpoHorizontalGap in rc) or
     (gpoLeftIntersection in rc) or
     (gpoRightIntersection in rc)
   ).tern(1, 0)
 
-  let hSpacing = (
+  result.hSpacing = (
     (gpoVerticalGap in rc) or
     (gpoTopIntersection in rc) or
     (gpoBottomIntersection in rc)
   ).tern(1, 0)
 
-  let totalW = rect.cellWidths.sumjoin(vSpacing)
-  let totalH = rect.cellHeights.sumjoin(hSpacing)
+  result.totalW = grid.cellWidths.sumjoin(result.vSpacing)
+  result.totalH = grid.cellHeights.sumjoin(result.hSpacing)
+
+method render*(rect: TermGrid, buf: var TermBuf): void =
+  let gridX = rect.start.x
+  let gridY = rect.start.y
+  let rc = rect.config
+  let (vSpacing, hSpacing, totalW, totalH) = gridDimensions(rect)
 
   block outerBorder:
     if gpoTopBorder in rc:
@@ -272,7 +277,7 @@ method render*(rect: TermGrid, buf: var TermBuf): void =
     if gpoBottomBorder in rc:
       renderLine(
         x0 = gridX, x1 = gridX + totalW,
-        y0 = gridY + totalH, y1 = gridY + totalH,
+        y0 = gridY + totalH + 1, y1 = gridY + totalH + 1,
         buf, rc[gpoBottomBorder])
 
     if gpoLeftBorder in rc:
@@ -283,14 +288,14 @@ method render*(rect: TermGrid, buf: var TermBuf): void =
 
     if gpoRightBorder in rc:
       renderLine(
-        x0 = gridX + totalW, x1 = gridX + totalW,
+        x0 = gridX + totalW + 1, x1 = gridX + totalW + 1,
         y0 = gridY, y1 = gridY + totalH,
         buf, rc[gpoRightBorder])
 
     if gpoTopLeft in rc: buf[gridX, gridY] = rc[gpoTopLeft]
-    if gpoBottomLeft in rc: buf[gridX, gridY + totalH] = rc[gpoBottomLeft]
-    if gpoTopRight in rc: buf[gridX + totalW, gridY] = rc[gpoTopRight]
-    if gpoBottomRight in rc: buf[gridX + totalW, gridY + totalH] = rc[gpoBottomRight]
+    if gpoBottomLeft in rc: buf[gridX, gridY + totalH + 1] = rc[gpoBottomLeft]
+    if gpoTopRight in rc: buf[gridX + totalW + 1, gridY] = rc[gpoTopRight]
+    if gpoBottomRight in rc: buf[gridX + totalW + 1, gridY + totalH + 1] = rc[gpoBottomRight]
 
 
   block inerGrid:
@@ -308,7 +313,7 @@ method render*(rect: TermGrid, buf: var TermBuf): void =
           buf[gridX, gridY + row] = rc[gpoLeftIntersection]
 
         if gpoRightIntersection in rc:
-          buf[gridX + totalW, gridY + row] = rc[gpoRightIntersection]
+          buf[gridX + totalW + 1, gridY + row] = rc[gpoRightIntersection]
 
 
     if hSpacing == 1:
@@ -325,7 +330,7 @@ method render*(rect: TermGrid, buf: var TermBuf): void =
           buf[gridX + col, gridY] = rc[gpoTopIntersection]
 
         if gpoBottomIntersection in rc:
-          buf[gridX + col, gridY + totalH] = rc[gpoBottomIntersection]
+          buf[gridX + col, gridY + totalH + 1] = rc[gpoBottomIntersection]
 
     if gpoIntersection in rc:
       for row in rect.cellHeights.cumsumjoin(vSpacing)[0..^2]:
@@ -360,7 +365,7 @@ func makeTermRect*(
     height: height
   )
 
-func makeTermText*(start: (int, int), text: seq[string]): SText[int] =
+func makeTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
   SText[int](
     start: makePoint(start[0], start[1]),
     lines: text,
@@ -389,7 +394,7 @@ func makeTermHline*(
 func makeTermPoint*(start: (int, int), c: char = '+'): SPoint[char, int] =
   SPoint[char, int](point: start.makePoint(), config: c)
 
-func makeBoxedTermText*(start: (int, int), text: seq[string], boxc: char = '#'): Multishape =
+func makeBoxedTermText*(start: (int, int), text: seq[RuneSeq], boxc: char = '#'): Multishape =
   let inner = makeTermText(start.shiftXY(1, 1), text)
   Multishape(shapes: @[
     cast[Shape](inner),
@@ -420,7 +425,7 @@ func makeTermRect*(
 
 func makeBoxedTermText*(
   start: (int, int),
-  text: seq[string],
+  text: seq[RuneSeq],
   conf: TermRectConf,
   size: (int, int) = (-1, -1)): Multishape =
   let inner = makeTermText(start.shiftXY(1, 1), text)
@@ -454,6 +459,26 @@ func makeThinLineGridBorders*(): TermGridConf =
     gpoVerticalGap : "│",
   }.mapPairs((lhs, rhs.toRunes()[0])).toTable()
 
+
+func makeAsciiGridBorders*(): TermGridConf =
+  {
+    gpoIntersection : "+",
+    gpoTopLeft : "+",
+    gpoTopRight : "+",
+    gpoBottomLeft : "+",
+    gpoBottomRight : "+",
+    gpoLeftBorder : "|",
+    gpoLeftIntersection : "+",
+    gpoRightBorder : "|",
+    gpoRightIntersection : "+",
+    gpoTopBorder : "-",
+    gpoTopIntersection : "+",
+    gpoBottomBorder : "-",
+    gpoBottomIntersection : "+",
+    gpoHorizontalGap : "-",
+    gpoVerticalGap : "|",
+  }.mapPairs((lhs, rhs.toRunes()[0])).toTable()
+
 func makeTermGrid*(
   start: (int, int),
   cellws: seq[int],
@@ -468,9 +493,12 @@ func makeTermGrid*(
 
 func newMultishape(shapes: seq[Shape]): Multishape = Multishape(shapes: shapes)
 
+
 func makeTermGrid*(
-  start: (int, int), cells: seq[seq[string]], conf: TermGridConf): Multishape =
-  let cells: Seq2d[seq[string]] = cells.mapIt(it.mapIt(it.split('\n'))).toSeq2d()
+  start: (int, int), cells: seq[seq[RuneSeq]], conf: TermGridConf): Multishape =
+  let cells: Seq2d[seq[RuneSeq]] = cells.mapIt(
+    it.mapIt(($it).split('\n').mapIt(it.toRunes()))
+  ).toSeq2d()
   let cellws: seq[int] = collect(newSeq):
     for col in cells.itercols():
       col.mapIt(it.mapIt(it.len).max(0)).max(0)
@@ -480,6 +508,31 @@ func makeTermGrid*(
       row.mapIt(it.len).max(0)
 
   let grid = makeTermGrid(start, cellws, cellhs, conf)
-  newMultishape(@[
-    cast[Shape](grid)
-  ])
+  let (vSpacing, hSpacing, totalW, totalH) = gridDimensions(grid)
+  let absColPos: seq[int] = grid.cellWidths.cumsumjoin(vSpacing, true)
+  let absRowPos: seq[int] = grid.cellHeights.cumsumjoin(hSpacing, true)
+
+  let cellShapes: seq[Shape] = collect(newSeq):
+    for (pos, cell) in cells.itercells():
+      Shape(makeTermText(
+        start = (
+          start[0] + absColPos[pos[1]] + 1,
+          start[1] + absRowPos[pos[0]] + 1
+        ), cell))
+
+  newMultishape(@[Shape(grid)] & cellShapes)
+
+
+# func makeTermGrid*(
+#   start: (int, int), cells: seq[seq[string]], conf: TermGridConf): Multishape =
+#   makeTermGrid(start, cells.mapIt(it.mapIt(it.toRunes)), conf)
+
+func toString*(shape: Shape): string =
+  var buf = makeBuf()
+  shape.render(buf)
+  return $buf
+
+converter toRunes*(s: string): RuneSeq = unicode.toRunes(s)
+converter toRunes*(s: seq[string]): seq[RuneSeq] = s.mapIt(unicode.toRunes(it))
+converter toRunes*(s: seq[seq[string]]): seq[seq[RuneSeq]] =
+  s.mapIt(it.mapIt(unicode.toRunes(it)))
