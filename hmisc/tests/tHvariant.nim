@@ -58,3 +58,9 @@ suite "Variant":
       raised = true
 
     assert raised
+
+
+
+  test "{toVar2}":
+    block:
+      let v = toVar2[int, float](12)

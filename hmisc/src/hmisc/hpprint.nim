@@ -20,7 +20,7 @@ import gara, with
 import obj_field_macros
 
 export tables, halgorithm
-import hpprint_types
+import hpprint_types, hdrawing
 import algorithm
 
 # func makeGridItem[T](arg: T): BlockGrid[T] =

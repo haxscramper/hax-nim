@@ -25,71 +25,78 @@ export deques
 # IDEA `itemsBFS` and `itemsDFS` to iterate over nodes in tree
 # IDEA `pairsBFS` and `pairsDFS` to iterate over paths
 #      (similar to index?) + nodes in tree
+# IDEA it is possible to support DAG by computing hash of each node
+
+import options
 
 template mapItBFStoSeq*(
   topNode: typed,
   subNode: untyped,
   op: untyped,
-  hasSubnodes: untyped = true,
-  filterOptions: static[bool] = true): untyped =
-    # IDEA maybe add better static type checking? Something like
-    # boost's concepts: "the top node type must satisfy requirement
-    # is-tree-on-$topNode". And I will check that `subNode` is indeed
-    # contains objects of the Node type.
-    ## Perform BFS (`Breadth First Search
-    ## <https://en.wikipedia.org/wiki/Breadth-first_search>`_)
-    ## iteration of recursive data type. `topNode` is a top-level item
-    ## in tree, `subNode` is name of the field that contains child
-    ## nodes, `op` is an expression that will be evaluated to get
-    ## results. Varables `it` and `lv` are injected into scope. `it`
-    ## is a value of current node in tree, `lv` is a level of the tree
-    ## we are currenty in (might be useful for checking for root node
-    ## or something like that). `lv` starts at 0 and is incremented
-    ## each on each iteration.
-    # TODO assert correct types for `topNode...` and `subNodes...`
-    type OutType = type((
-      block:
-        var it {.inject.}: type(topNode)
-        var lv {.inject.}: int
-        op))
+  hasSubnodes: untyped = true): untyped =
+  # IDEA maybe add better static type checking? Something like
+  # boost's concepts: "the top node type must satisfy requirement
+  # is-tree-on-$topNode". And I will check that `subNode` is indeed
+  # contains objects of the Node type.
+  ##[
 
-    const doFiltering = (OutType is Option) and filterOptions
-    when doFiltering:
-      type SeqType = type((
-        block:
-          var res: OutType
-          get(res)))
+Do BFS iteration on recursive data type and map results into sequence
 
+## Parameters
+
+:topNode: First node in tree
+:subNode: Expression to get subnodes
+:op: Expression to get result.
+  If `typeof(op)` is `Option` `none` results are discarded
+:hasSubnode: Check if particular node can have subnodes
+
+## Injected variables
+
+:it: Current node in tree
+:lv: level of current node in original tree
+
+  ]##
+  # TODO replace `lv` with `path`
+  # TODO assert correct types for `topNode...` and `subNodes...`
+  type OutType = type((
+    block:
+      var it {.inject.}: type(topNode)
+      var lv {.inject.}: int
+      op))
+
+  when OutType is Option:
+    type ResType = type((var res: OutType; get(res)))
+  else:
+    type ResType = OutType
+
+  type VertType = typeof((topNode))
+  var result: seq[ResType] = @[]
+
+  var q = initDeque[(VertType, int)]()
+  q.addLast((topNode, 0))
+
+  while q.len != 0:
+    var tmp = q.popFirst()
+    let it {.inject.}: VertType = tmp[0]
+    let lv {.inject.}: int = tmp[1]
+
+    when OutType is Option:
+      let tmpRes: OutType = op
+      if tmpRes.isSome():
+        result.add tmpRes.get()
     else:
-      type SeqType = OutType
+      result.add(op)
 
-    type VertType = type((topNode))
-    var result: seq[SeqType] = @[]
+    if hasSubnodes:
+      for sub in subNode:
+        static:
+          assert sub is VertType,
+            "Mismatch between type of the subnodes and root tree - subnode is " &
+            $typeof(sub) & ", while `topNode` is " & $typeof(topNode)
 
-    var q = initDeque[(VertType, int)]()
-    q.addLast((topNode, 0))
-    while q.len != 0:
-      var tmp = q.popFirst()
-      let it {.inject.} = tmp[0]
-      let lv {.inject.} = tmp[1]
+        q.addLast((sub, lv + 1))
 
-      when doFiltering:
-        let tmpRes: OutType = op
-        if tmpRes.isSome():
-          result.add tmpRes.get()
-      else:
-        result.add(op)
-
-      if hasSubnodes:
-        for sub in subNode:
-          static:
-            assert sub is VertType,
-              "Mismatch between type of the subnodes and root tree - `subNode` is " &
-              $typeof(subNode) & "while `topNode` is " & $typeof(topNode)
-
-          q.addLast((sub, lv + 1))
-
-    result
+  result
 
 template mergeUniqByIt*(sequence, operation: untyped): untyped =
   ## For each element in sequence apply `operation` and compare

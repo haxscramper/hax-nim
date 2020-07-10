@@ -1,7 +1,7 @@
 import unittest, strutils
 import sugar, json, sequtils, tables, strformat
 
-import hmisc/[halgorithm, helpers, hpprint]
+import hmisc/[halgorithm, helpers, hpprint, hvariant]
 
 type
   InTest = object
@@ -146,6 +146,76 @@ suite "Tree mapping":
     )
 
     assert values == @["CreateNewDoc()", "OpenDoc()", "CloseDoc()"]
+
+  test "{mapBFStoSeq} nested grid":
+    type
+      Cell = object
+        case isVal: bool
+          of true:
+            val: string
+          of false:
+            grid: Grid
+
+      Grid = object
+        elems: seq[seq[Cell]]
+
+    let grid: Grid = Grid(
+      elems: @[@[
+        Cell(isVal: true, val: "1"),
+        Cell(isVal: true, val: "2")
+      ], @[
+        Cell(isVal: true, val: "3"),
+        Cell(isVal: false, grid: Grid(
+          elems: @[@[
+            Cell(isVal: true, val: "4.1"),
+            Cell(isVal: true, val: "4.2")
+          ], @[
+            Cell(isVal: true, val: "4.3"),
+            Cell(isVal: true, val: "4.4")
+          ]]
+        ))
+      ]]
+    )
+
+    func concatIdx[T](s: seq[seq[T]]): seq[((int, int), T)] =
+      for rId, row in s:
+        for cId, col in row:
+          result.add ((rId, cId), col)
+
+    template mapItTuples[T, A](ins: seq[(T, A)], op: untyped): untyped =
+      var res: seq[(T, typeof((var it {.inject.}: A; op)))]
+      for s in ins:
+        let it {.inject.}: A = s[1]
+        res.add (s[0], op)
+
+      res
+
+    let res = mapItBFStoSeq(
+      # Tree is not entirely homogenous, it is necessary to use
+      # variant in order to be able to process it
+      topNode = ((0, 0), toVar2[Cell, Grid](grid)),
+      subNode = mapItTuples[(int, int), Cell](
+        (it[1].idx == 0).tern(
+          it[1].get(Cell).grid.elems.concatIdx(),
+          it[1].get(Grid).elems.concatIdx()),
+        toVar2[Cell, Grid](it)
+      ),
+      op = (
+        block:
+          # Export cells from grid.
+          assert it is ((int, int), Var2[Cell, Grid])
+          it
+      ),
+      hasSubnodes = (
+        it[1].idx == 1 or # Either grid node or cell with nested grid
+        (it[1].idx == 0 and not it[1].get(Cell).isVal)
+      )
+    )
+
+    assert res is seq[((int, int), Var2[Cell, Grid])]
+    assert res[0][1].hasType(Grid) # First element
+    for it in res[1..^1]:
+      let cell = it[1].get(Cell)
 
   test "{mapDFSpost} check missing subnodes :proc:generic:example":
     ## Check if tree instance can have subnodes before trying to

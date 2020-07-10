@@ -229,13 +229,22 @@ suite "Nim trs reduction rule search":
     }))
 
   test "Pattern with submatches":
-    let patt = makePatt(
-      nOp(nConst(10), nVar("ii"))
-    )
+    block:
+      let subpatts = {
+        "ii" : nOp(nConst(80), nVar("zz"))
+      }.toPattList()
 
-    let subpatts = {
-      "ii" : nOp(nConst(80), nConst(10))
-    }.toPattList()
+      let vars = subpatts.getExportedVars()
+      assert "zz" in vars
 
-    let vars = subpatts.getExportedVars()
-    assert "ii" in vars
+    block:
+      let patt = makePatt(
+        nOp(nConst(10), nVar("ii")),
+        {
+          "ii" : nOp(nConst(80), nVar("zz"))
+        }
+      )
+
+      let vars = patt.getExportedVars()
+      assert "ii" in vars
+      assert "zz" in vars

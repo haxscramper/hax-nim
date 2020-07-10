@@ -9,6 +9,13 @@ type
   Var3*[T0, T1, T2] = Var4[T0, T1, T2, void]
   Var2*[T0, T1] = Var4[T0, T1, void, void]
 
+func getTypeName*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3]): string =
+  case v.idx:
+    of 0: $typeof(T0)
+    of 1: $typeof(T1)
+    of 2: $typeof(T2)
+    of 3: $typeof(T3)
+
 template get*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3], t: typed): auto =
   const idx = when t is T0: 0
               elif t is T1: 1
@@ -23,8 +30,8 @@ template get*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3], t: typed): auto =
     else: v.f3
   else:
     raiseAssert("Cannot get value for type `" & $typeof(t) &
-      "` - current variant index is " & $v.idx & ", but " &
-      "value with type `" & $typeof(t) & "` has index " & $idx)
+      "` - current variant index is " & $v.idx & " (type is `" & v.getTypeName() &
+      "`) , but " & "value with type `" & $typeof(t) & "` has index " & $idx)
 
 
 func idx*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3]): int = v.idx
@@ -64,9 +71,8 @@ template `&=`*[T0, T1, T2, T3](
   for item in val:
     v.add item
 
-func toVar2*[T0, T1](val: T0 | T1): Var2[T0, T1] =
-  when val is T0: Var2[T0, T1](idx: 0, f0: val)
-  else:           Var2[T0, T1](idx: 1, f1: val)
+func toVar2*[T0, T1](val: T0): Var2[T0, T1] = Var2[T0, T1](idx: 0, f0: val)
+func toVar2*[T0, T1](val: T1): Var2[T0, T1] = Var2[T0, T1](idx: 1, f1: val)
 
 import sequtils
 
