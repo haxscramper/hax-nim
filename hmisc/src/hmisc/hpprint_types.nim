@@ -1,4 +1,6 @@
 import helpers, halgorithm, hmisc_types, hdrawing
+import unicode
+import sugar
 export hdrawing
 import sequtils, colors
 import tables, strformat, strutils
@@ -205,25 +207,6 @@ func makeObjElem*(text: string): ObjElem =
   ObjElem(text: text)
 
 type
-  GridPoint* = enum
-    gpoIntersection
-    gpoTopLeft
-    gpoTopRight
-    gpoBottomLeft
-    gpoBottomRight
-    gpoLeftBorder
-    gpoLeftIntersection
-    gpoRightBorder
-    gpoRightIntersection
-    gpoTopBorder
-    gpoTopIntersection
-    gpoBottomBorder
-    gpoBottomIntersection
-    gpoHorizontalGap
-    gpoVerticalGap
-
-
-type
   SizePolicy* = enum
     spExpanding
     spFixed
@@ -244,7 +227,7 @@ type
         grid*: BlockGrid[T]
 
   BlockGrid*[T] = object
-    borders*: Table[GridPoint, string]
+    borders*: TermGridConf
     grid*: SparseGrid[GridCell[T]] ## row[col[cell]]
     maxH: Map[int, int] ## Max height in each row
     maxW: Map[int, int] ## Max width in each column
@@ -258,33 +241,6 @@ type
     col*: int
 
 import hashes
-func `[]`*[T](
-  cell: GridCell[T], pos: RectPoint, default: string = ""): string =
-  cell.borders.getOrDefault(pos, default)
-
-func `[]`*[T](
-  grid: BlockGrid[T], pos: GridPoint, default: string = ""): string =
-  grid.borders.getOrDefault(pos, default)
-
-func makeUnicodeGridBorders*(): Table[GridPoint, string] =
-  {
-    gpoIntersection : "┼",
-    gpoTopLeft : "┌",
-    gpoTopRight : "┐",
-    gpoBottomLeft : "└",
-    gpoBottomRight : "┘",
-    gpoLeftBorder : "│",
-    gpoLeftIntersection : "├",
-    gpoRightBorder : "│",
-    gpoRightIntersection : "┤",
-    gpoTopBorder : "─",
-    gpoTopIntersection : "┬",
-    gpoBottomBorder : "─",
-    gpoBottomIntersection : "┴",
-    gpoHorizontalGap : "─",
-    gpoVerticalGap : "│",
-  }.toTable()
-
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
@@ -306,8 +262,8 @@ func totalHeight*[T](grid: BlockGrid[T], rowRange: Range): int =
 func columns*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxH.mapPairs(lhs)
 
-func colSizes*[T](grid: BlockGrid[T]): Map[int, int] = grid.maxW
-func rowSizes*[T](grid: BlockGrid[T]): Map[int, int] = grid.maxH
+func colSizes*[T](grid: BlockGrid[T]): seq[int] = grid.maxW
+func rowSizes*[T](grid: BlockGrid[T]): seq[int] = grid.maxH
 
 func colSizes*[T](grid: BlockGrid[T], a, b: int): seq[int] =
   toSeq(grid.maxW.valuesBetween(a, b))
@@ -328,33 +284,17 @@ func lastRow*[T](grid: BlockGrid[T]): int =
 func rows*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxW.mapPairs(rhs).sorted()
 
+iterator itercells*[T](grid: BlockGrid[T]): ((int, int), GridCell[T]) =
+  for (pos, cell) in grid.grid.itercells():
+    yield (pos, cell)
+
 func width*[T](grid: BlockGrid[T]): int =
-  grid.maxW.mapPairs(rhs).sumjoin(
-    grid[gpoHorizontalGap].len()
-  ) +
-  max([ # Size of left edge
-    grid[gpoRightBorder].len(),
-    grid[gpoRightIntersection].len()
-  ]) +
-  max([ # Size of right edge
-    grid[gpoLeftBorder].len(),
-    grid[gpoLeftIntersection].len()
-  ])
+  let (_, hSpacing, left, right, _, _) = spacingDimensions(grid.borders)
+  grid.maxW.mapPairs(rhs).sumjoin(hSpacing) + left + right
 
 func height*[T](grid: BlockGrid[T]): int =
-  grid.maxH.mapPairs(rhs).sumjoin(
-    grid[gpoVerticalGap].len()
-  ) +
-  max([ # Size of bottom spacer
-    grid[gpoBottomBorder].len(),
-    grid[gpoBottomLeft].len(),
-    grid[gpoBottomRight].len()
-  ]) +
-  max([ # Size of top spacer
-    grid[gpoTopBorder].len(),
-    grid[gpoTopLeft].len(),
-    grid[gpoTopRight].len()
-  ])
+  let (vSpacing, _, _, _, top, bottom) = spacingDimensions(grid.borders)
+  grid.maxH.mapPairs(rhs).sumjoin(vSpacing) + top + bottom
 
 func rowHeight*[T](grid: BlockGrid[T], row: int): int = grid.maxH[row]
 func occupied*[T](cell: GridCell[T]): Size =
@@ -455,35 +395,41 @@ func makeCell*(text: StrSeq): GridCell[StrSeq] =
     h = text.len
   )
 
-func makeGrid*[T](arg: SparseGrid[GridCell[T]]): BlockGrid[T] =
+func makeGrid*[T](arg: Seq2D[GridCell[T]], default: GridCell[T], conf: TermGridConf): BlockGrid[T] =
   var maxColw: CountTable[int]
   var maxIdx: int = 0
-  for (rowIdx, row) in arg.rows:
-    for colIdx, cell in row:
-      if maxColw[colIdx] < cell.width:
-        maxColw[colIdx] = cell.width
+  let cellws: seq[int] = collect(newSeq):
+    for col in arg.itercols(default):
+      col.mapIt(it.width).max(0)
 
-      if colIdx > maxIdx:
-        maxIdx = colIdx
+  let cellhs: seq[int] = collect(newSeq):
+    for row in arg.iterrows():
+      row.mapIt(it.height).max(0)
 
   result = BlockGrid[T](
-    grid: arg,
-    maxW: maxColw.mapPairs((lhs, rhs)).toMap(),
-    maxH: toMap(arg.mapItRows(
-      it.mapPairs(rhs.height).max(0)
-    ))
+    grid: arg.toSparse(),
+    maxW: cellws.toMap(),
+    maxH: cellhs.toMap(),
+    borders: conf
   )
 
-func makeGrid*[T](arg: SparseGrid[tuple[item: T, w, h: int]]): BlockGrid[T] =
-  makeGrid(mapIt2d(arg, it.item.makeCell(it.w, it.h)))
+func makeGrid*[T](
+  arg: Seq2D[tuple[item: T, w, h: int]],
+  default: tuple[item: T, w, h: int],
+  conf: TermGridConf): BlockGrid[T] =
+  makeGrid(
+    mapIt2d(arg, it.item.makeCell(it.w, it.h)),
+    makeCell(default.item, default.w, default.h),
+    conf
+  )
 
-func makeGrid*(arg: SparseGrid[string]): BlockGrid[string] =
-  makeGrid(arg.mapIt2d(makeCell(it, it.len, 1)))
+func makeGrid*(arg: Seq2D[string], conf: TermGridConf): BlockGrid[string] =
+  makeGrid[string](arg.mapIt2d(makeCell(it, it.len, 1)), makeCell("", 0, 0), conf)
 
-func makeGrid*(arg: SparseGrid[seq[string]]): BlockGrid[seq[string]] =
+func makeGrid*(arg: Seq2D[seq[string]], conf: TermGridConf): BlockGrid[seq[string]] =
   makeGrid(arg.mapIt2d(makeCell(
     it, it.mapIt(it.len).max(0), it.len
-  )))
+  )), makeCell(@[""], 0, 0), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
   var cell = cell

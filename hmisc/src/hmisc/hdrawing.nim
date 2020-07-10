@@ -19,7 +19,8 @@ func cumsumjoin*(
 
 type
   Shape* = ref object of RootObj
-  RuneSeq = seq[Rune]
+  RuneSeq* = seq[Rune]
+  RuneBlock* = seq[RuneSeq]
   TermBuf* = object
     buf: seq[seq[Rune]]
     xDiff: int
@@ -33,18 +34,24 @@ type
 
 converter toRune*(c: char): Rune = toRunes($c)[0]
 
-const whitespaceRune: Rune = toRunes(" ")[0]
+const whitespaceRune*: Rune = toRunes(" ")[0]
+var emptyRune*: Rune
 
-func setAtPoint(buf: var TermBuf, row, col: int, rune: Rune): void =
-  for _ in buf.buf.len .. row:
+func reserve*(buf: var TermBuf, rows, cols: int): void =
+  for _ in buf.buf.len .. rows:
     buf.buf.add @[]
 
-  for r in 0 .. row:
+  for r in 0 .. rows:
     let rowLen = buf.buf[r].len
-    if rowLen - 1 < col:
-      buf.buf[r] &= whitespaceRune.repeat(col - rowLen + 1).toRunes()
+    if rowLen - 1 < cols:
+      buf.buf[r] &= whitespaceRune.repeat(cols - rowLen + 1).toRunes()
 
+
+func setAtPoint(buf: var TermBuf, row, col: int, rune: Rune): void =
+  reserve(buf, row, col)
   buf.buf[row][col] = rune
+
+
 
 func `[]=`*(buf: var TermBuf, x, y: int, rune: Rune): void =
   let y = y + buf.yDiff
@@ -203,6 +210,8 @@ method render*(line: SLine[char, int], buf: var TermBuf): void =
 
 
 method render*(rect: SRect[char, int], buf: var TermBuf): void =
+  let maxp = rect.upLeft.shiftXY(rect.width, rect.height)
+  buf.reserve(maxp.y, maxp.x)
   renderLine(
     rect.upLeft, rect.width, 0, buf, rect.config)
   renderLine(
@@ -244,8 +253,8 @@ method render*(rect: TermRect, buf: var TermBuf): void =
   if rpoBottomRight in rect.config:
     buf[rect.upLeft.shiftXY(w - 1, h - 1)] = rect.config[rpoBottomRight]
 
-func gridDimensions*(grid: TermGrid): tuple[vSpacing, hSpacing, totalW, totalH: int] =
-  let rc = grid.config
+func spacingDimensions*(rc: TermGridConf): tuple[
+  vSpacing, hSpacing, left, right, top, bottom: int] =
   result.vSpacing = (
     (gpoHorizontalGap in rc) or
     (gpoLeftIntersection in rc) or
@@ -258,6 +267,14 @@ func gridDimensions*(grid: TermGrid): tuple[vSpacing, hSpacing, totalW, totalH: 
     (gpoBottomIntersection in rc)
   ).tern(1, 0)
 
+
+func gridDimensions*(grid: TermGrid): tuple[
+  vSpacing, hSpacing, totalW, totalH: int] =
+  let rc = grid.config
+  let (vSpacing, hSpacing, _, _, _, _) = rc.spacingDimensions()
+
+  result.vSpacing = vSpacing
+  result.hSpacing = hSpacing
   result.totalW = grid.cellWidths.sumjoin(result.vSpacing)
   result.totalH = grid.cellHeights.sumjoin(result.hSpacing)
 
@@ -498,10 +515,8 @@ func newMultishape(shapes: seq[Shape]): Multishape = Multishape(shapes: shapes)
 
 
 func newTermGrid*(
-  start: (int, int), cells: seq[seq[RuneSeq]], conf: TermGridConf): Multishape =
-  let cells: Seq2d[seq[RuneSeq]] = cells.mapIt(
-    it.mapIt(($it).split('\n').mapIt(it.toRunes()))
-  ).toSeq2d()
+  start: (int, int), cells: Seq2d[RuneBlock],
+  conf: TermGridConf): Multishape =
   let cellws: seq[int] = collect(newSeq):
     for col in cells.itercols(@["".toRunes()]):
       col.mapIt(it.mapIt(it.len).max(0)).max(0)
@@ -511,6 +526,7 @@ func newTermGrid*(
       row.mapIt(it.len).max(0)
 
   let grid = newTermGrid(start, cellws, cellhs, conf)
+  let (_, _, left, right, top, bottom) = spacingDimensions(conf)
   let (vSpacing, hSpacing, totalW, totalH) = gridDimensions(grid)
   let absColPos: seq[int] = grid.cellWidths.cumsumjoin(vSpacing, true)
   let absRowPos: seq[int] = grid.cellHeights.cumsumjoin(hSpacing, true)
@@ -519,11 +535,20 @@ func newTermGrid*(
     for (pos, cell) in cells.itercells():
       Shape(newTermText(
         start = (
-          start[0] + absColPos[pos[1]] + 1,
-          start[1] + absRowPos[pos[0]] + 1
+          start[0] + absColPos[pos[1]] + left,
+          start[1] + absRowPos[pos[0]] + top
         ), cell))
 
   newMultishape(@[Shape(grid)] & cellShapes)
+
+func newTermGrid*(
+  start: (int, int), cells: seq[seq[RuneSeq]],
+  conf: TermGridConf): Multishape =
+  let cells: Seq2d[RuneBlock] = cells.mapIt(
+    it.mapIt(($it).split('\n').mapIt(it.toRunes()))
+  ).toSeq2d()
+  newTermGrid(start, cells, conf)
+
 
 
 func toString*(shape: Shape): string =
@@ -531,7 +556,24 @@ func toString*(shape: Shape): string =
   shape.render(buf)
   return $buf
 
+
+func toStringBlock*(shape: Shape): seq[string] =
+  var buf = newBuf()
+  shape.render(buf)
+  return buf.buf.mapIt($it)
+
 converter toRunes*(s: string): RuneSeq = unicode.toRunes(s)
 converter toRunes*(s: seq[string]): seq[RuneSeq] = s.mapIt(unicode.toRunes(it))
 converter toRunes*(s: seq[seq[string]]): seq[seq[RuneSeq]] =
   s.mapIt(it.mapIt(unicode.toRunes(it)))
+converter toRunes*(s: seq[seq[seq[string]]]): seq[seq[seq[RuneSeq]]] =
+  s.mapIt(it.mapIt(it.mapIt(unicode.toRunes(it))))
+
+
+func toStringBlock*(
+  list: seq[seq[string]],
+  conf: TermGridConf = makeEmptyGridBorders()): seq[string] =
+  var buf = newBuf()
+  let runes: seq[seq[RuneSeq]] = list.toRunes()
+  newTermGrid((0, 0), runes, conf).render(buf)
+  return buf.buf.mapIt($it)

@@ -22,6 +22,10 @@ func toMap*[K, V](its: seq[(K, V)]): Map[K, V] =
   for (key, val) in its:
     result[key] = val
 
+func toMap*[T](val: seq[T]): Map[int, T] =
+  for idx, it in val:
+    result[idx] = it
+
 func width*(size: Size): int = size.width
 func height*(size: Size): int = size.height
 func makeSize*(w, h: int): Size = Size(width: w, height: h)
@@ -99,6 +103,9 @@ func `[]`*[T](grid: Seq2d[T], row, col: int): T =
 
 func `[]`*[T](grid: Seq2d[T], cell: (int, int)): T =
   grid.elems[cell[0]][cell[1]]
+
+func `[]=`*[T](grid: Seq2d[T], cell: (int, int), val: T): T =
+  grid.elems[cell[0]][cell[1]] = val
 
 func concat*[T](inseq: Seq2d[T]): seq[T] = inseq.elems.concat()
 
@@ -191,11 +198,22 @@ func `[]`*[T](grid: SparseGrid[T], cell: (int, int)): T =
   grid.elems[cell[0]][cell[1]]
 
 func `[]=`*[T](grid: var SparseGrid[T], pos: (int, int), val: T): void =
-  if pos[0] notin grid.elems:
-    grid.elems[pos[0]] = initMap[int, T]()
+  static:
+    echo typeof grid
+    echo typeof pos
+    echo typeof val
+    echo typeof grid.elems
+    echo typeof grid.elems[0]
+    quit 1
+  # if pos[0] notin grid.elems:
+  #   grid.elems[pos[0]] = initMap[int, T]()
 
-  var gr = grid.elems[pos[0]]
-  gr[pos[1]] = val
+  # var gr = grid.elems[pos[0]]
+  # gr[pos[1]] = val
+  discard
+
+func `[]=`*[T](grid: var SparseGrid[T], row, col: int, val: T): void =
+  grid[(row, col)] = val
 
 template mapIt2d*[T](inseq: SparseGrid[T], op: untyped): untyped =
   type ResT = typeof((
@@ -214,6 +232,11 @@ template mapIt2d*[T](inseq: SparseGrid[T], op: untyped): untyped =
       result[(rowIdx, colIdx)] = op
 
   result
+
+func toSparse*[T](inseq: Seq2D[T]): SparseGrid[T] =
+  for (pos, cell) in inseq.itercells():
+    let (row, col) = pos
+    result[(row, col)] = cell
 
 template mapItRows*[T](inseq: SparseGrid[T], op: untyped): untyped =
   type ResT = typeof((

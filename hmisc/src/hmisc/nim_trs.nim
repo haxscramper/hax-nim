@@ -4,6 +4,7 @@
 import hashes, sequtils, tables, strformat, strutils, sugar
 import helpers, deques, intsets, halgorithm, sets
 export tables, intsets
+import hdrawing
 
 import htrie
 export htrie
@@ -349,8 +350,9 @@ func setSubpatterns*[V, F](
   matcher: var TermMatcher[V, F],
   subpatts: PattList[V, F],
   default: GenProc[V, F]): void =
-  # debugecho "Setting subpatterns"
-  discard
+  matcher.default = default
+  matcher.subpatts = subpatts
+  #[ IMPLEMENT set exported variables ]#
 
 func makeMatcher*[V, F](
   matcher: MatchProc[V, F],
@@ -676,6 +678,16 @@ proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
     of tkPlaceholder:
       "_"
 
+proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): string =
+  var top: seq[string] = case matcher.isPattern:
+    of true: @[exprRepr(matcher.patt, cb)]
+    of false: @["proc" ]
+
+  for varn, subp in matcher.subpatts:
+    top &= (@[@[varn, ": ", subp.exprRepr(cb)]]).toStringBlock()
+
+  result = top.joinl
+
 
 proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
   "{" & env.mapPairs(
@@ -688,16 +700,17 @@ proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
       of true: exprRepr(rule.gen.patt)
       of false: "proc"
 
-  let matchers = collect(newSeq):
-    for match in rule.rules:
-      case match.isPattern:
-        of true: exprRepr(match.patt, cb)
-        of false: "proc"
+  var matchers: seq[seq[string]] = collect(newSeq):
+    for idx, match in rule.rules:
+      let pref = if rule.rules.len == 1: "" else: $idx & ": "
+      @[pref] & match.exprRepr(cb)
 
-  return matchers.join(" | ") & " ~~> " & rhs
+  @[@[
+    matchers.toStringBlock().joinl(), " ~~> ", rhs
+  ]].toStringBlock().joinl()
 
 proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
-  sys.rules.mapPairs(&"{idx}: {rhs.exprRepr(cb)}").join("\n")
+  sys.rules.mapPairs(@[$idx & ": ", rhs.exprRepr(cb)]).toStringBlock().joinl()
 
 proc reduce*[V, F](
   term: Term[V, F],

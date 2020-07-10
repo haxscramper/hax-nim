@@ -196,6 +196,16 @@ suite "Nim trs primitives":
       nOp(nVar("i1"), nConst(nT(90))) : nVar("i1")
     }).exprRepr(), "0: tmkF(_i1, '90') ~~> _i1"
 
+    echo makeSystem({
+      makePatt(
+        nOp(nVar("i1"), nConst(nT(90))),
+        {
+          "i1" : nConst(nT(20)),
+          "i2" : nOp(nVar("i1"), nConst(nT(90))),
+        }
+      ) : nVar("i1")
+    }).exprRepr()
+
 suite "Nim trs reduction rule search":
   test "Rewrite constant":
     let (term, ok, _) = nConst(12).reduce(makeSystem({

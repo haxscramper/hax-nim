@@ -13,6 +13,7 @@ import hmisc/[helpers, defensive, halgorithm]
 import tables, sequtils, math, strutils, strformat, macros
 import typetraits, strutils
 import hvariant, colors, hmisc_types
+import hdrawing
 
 import graphviz_ast, html_ast
 
@@ -24,186 +25,13 @@ export hvariant
 import hpprint_types, hdrawing
 import algorithm
 
-# func makeGridItem[T](arg: T): BlockGrid[T] =
-#   BlockGrid[T](isItem: true, item: arg)
+func toString*[T](grid: BlockGrid[T], conf: TermGridConf): seq[string]
+func toString*[T](cell: GridCell[T], conf: TermGridConf): seq[string] =
+  discard
 
-func toString*(grid: BlockGrid[StrSeq]): string
-func toString*[T](cell: GridCell[T]): seq[string] =
-  let content: seq[string] =
-    case cell.isItem:
-      of true: ($cell.item).split("\n")
-      of false:
-        cell.grid
-          .toStringGrid()
-          .toString()
-          .split("\n")
-
-  # IMPLEMENT TODO implement proper handling of all cases
-  # let hasTop = (rpoTopEdge in cell.borders) or
-  #   (rpoTopLeft in cell.borders) or
-  #   (rpoTopRight in cell.borders)
-
-  # let hasBottom = (rpoBottomEdge in cell.borders) or
-  #   (rpoBottomLeft in cell.borders) or
-  #   (rpoBottomRight in cell.borders)
-
-  # let hasLeft = (rpoLeftEdge in cell.borders) or
-  #   (rpoTopLeft in cell.borders) or
-  #   (rpoBottomLeft in cell.borders)
-
-  # let hasRight = (rpoRightEdge in cell.borders) or
-  #   (rpoTopRight in cell.borders) or
-  #   (rpoBottomRight in cell.borders)
-  let topSpacer =
-    cell[rpoTopLeft] &
-    cell[rpoTopEdge].repeat(cell.width) &
-    cell[rpoTopRight]
-
-  if topSpacer.len > 0:
-    result.add topSpacer
-
-  for line in content:
-    result.add(cell[rpoLeftEdge] &
-      alignLeft(line, cell.width) & # NOTE defaultint to left padding,
-                                    # TODO: add more configuration
-                                    # options
-      cell[rpoRightEdge])
-
-  let bottomSpacer =
-    cell[rpoBottomLeft] &
-    cell[rpoBottomEdge].repeat(cell.width) &
-    cell[rpoBottomRight]
-
-  if bottomSpacer.len > 0:
-    result.add bottomSpacer
-
-
-
-func toStringGrid*[T](grid: BlockGrid[T]): BlockGrid[StrSeq] =
-  result = makeGrid(grid.grid.mapIt2d(makeCell((it.toString()))))
-  result.borders = grid.borders
-
-func toString*(grid: BlockGrid[StrSeq]): string =
-  var cellSizes: seq[tuple[
-    occupied: Size,
-    internal: Size,
-    pos: Pos
-  ]]
-
-  for (rowIdx, row) in grid.grid.rows():
-    for colIdx, cell in row:
-      cellSizes.add((
-        occupied: cell.occupied(),
-        internal: cell.internal(),
-        pos: Pos(row: rowIdx, col: colIdx)
-      ))
-
-  let sortedCells = cellSizes.sortedByIt(
-    it.occupied.width + it.occupied.height
-  )
-
-  # d grid[gpoTopLeft]
-  let topSpacer =
-    grid[gpoTopLeft] & grid.colSizes().mapPairs(
-      grid[gpoTopBorder].repeat(rhs)
-    ).join(grid[gpoTopIntersection]) &
-    grid[gpoTopRight]
-
-  let middleSpacer =
-    grid[gpoLeftIntersection] & grid.colSizes().mapPairs(
-      grid[gpoHorizontalGap].repeat(rhs)
-    ).join(grid[gpoIntersection]) &
-    grid[gpoRightIntersection]
-
-  let botSpacer =
-    grid[gpoBottomLeft] & grid.colSizes().mapPairs(
-      grid[gpoBottomBorder].repeat(rhs)
-    ).join(grid[gpoBottomIntersection]) &
-    grid[gpoBottomRight]
-
-
-  let gridW = grid.width
-  var buf: seq[seq[string]] = newSeqWith(
-    grid.height(), newSeqWith(gridW, " ")
-  )
-
-  buf[0].setIf(topSpacer.len > 0, topSpacer.toStrings())
-  buf[^1].setIf(botSpacer.len > 0, botSpacer.toStrings())
-  # for (rowIdx, row) in grid.grid.rows():
-  if middleSpacer.len > 0:
-    var cur: int
-    for row in grid.rowSizes().values():
-      cur += row + 1
-      buf[cur] = middleSpacer.toStrings()
-
-  for rowIdx, rowHeight in grid.rowSizes():
-    var xPos: int
-    for colIdx, colLen in grid.colSizes():
-      if xPos == 0:
-        for i in 0 .. rowHeight:
-          buf[xPos][i] = grid[gpoLeftBorder]
-      elif xPos == gridW - 1:
-        for i in 0 .. rowHeight:
-          buf[xPos][i] = grid[gpoRightBorder]
-
-      xPos += colLen + grid[gpoVerticalGap].len()
-
-
-
-
-  result = buf.mapIt(it.join("")).join("\n")
-
-  # var res: seq[string]
-  # # debugecho "top spacer is: ", topSpacer
-  # if topSpacer.len > 0:
-  #   res.add topSpacer
-
-  # for (rowIdx, row) in grid.grid.rows():
-  #   let rowH = grid.rowHeight(rowIdx)
-  #   var linesBuf: seq[string] = newSeqWith(rowH, "")
-  #   let startCol = grid.grid.firstColumn(rowIdx)
-  #   let padWidth = grid.totalWidth(toRange(0, startCol - 1))
-
-  #   for i in 0 ..< rowH: # Add left border for first cell
-  #     linesBuf[i] &= (startCol != 0).tern(grid[gpoLeftBorder], "")
-
-  #   block: # Add horizontal padding for empty cells
-  #     let sizes = grid.colSizes(0, startCol - 1)
-  #     for i in 0 ..< rowH:
-  #       linesBuf[i] &= sizes.mapIt(" ".repeat(it)).join(grid[gpoVerticalGap]) &
-  #         grid[gpoVerticalGap]
-
-  #   for (colIdx, cell) in grid.grid.columns(rowIdx):
-  #     let colRange = grid.colRange(toPos(rowIdx, colIdx))
-  #     let cellW = grid.totalWidth(colRange)
-
-  #     for idx, line in cell.item:
-  #       linesBuf[idx] &= grid[gpoVerticalGap].orElse(
-  #         colIdx != startCol, "") & alignLeft(line, cellW)
-
-  #     # for idx in cell.item.len() ..< rowH:
-  #     #   linesBuf[idx] &= "?".repeat(cellW)
-
-  #   # for col in grid.colSizes().valuesFrom(grid.lastCol(rowIdx)):
-  #   #   for idx in 0 ..< rowH:
-  #   #     linesBuf[idx] &= "#".repeat(col) & grid[gpoVerticalGap]
-
-  #   res.add linesBuf.join("\n")
-  #   # de grid.lastRow()
-  #   # if middleSpacer.len > 0 and rowIdx != grid.lastRow():
-  #   #   de rowIdx
-  #   res.add middleSpacer
-
-
-
-  # if botSpacer.len > 0:
-  #   res.add botSpacer
-
-  # result = res.join("\n")
-
-
-
-
+func toString*[T](grid: BlockGrid[T], conf: TermGridConf): seq[string] =
+  let cells: Seq2D[string] = grid.grid.mapIt2D(toString(it, conf))
+  newTermGrid((0, 0), cells, conf).toStringBlock()
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
@@ -487,7 +315,7 @@ proc makeChunk*(content: string): Chunk =
 proc makeChunk*(other: seq[Chunk]): Chunk =
   ## Create chunk from lines in other chunks
   result = Chunk(
-    content: other.mapIt(it.content).concat()
+    content: sequtils.concat(other.mapIt(it.content))
   )
 
   result.maxWidth = result.content.mapIt(it.len()).max(0)
@@ -831,6 +659,10 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
 
 # fold object into grid, export grid into html table, convert html
 # table into graphviz object.
+
+
+proc toHtml*(grid: Seq2D[GridCell[ObjElem]]): HtmlElem =
+  discard
 
 
 proc toHtml*(grid: SparseGrid[GridCell[ObjElem]]): HtmlElem =

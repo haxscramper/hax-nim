@@ -33,7 +33,7 @@ suite "Drawing":
         (15, 15), @["Text inside", "of unicode box"],
         makeTwoLineRectBorder()
       ).render(buf)
-      echo $buf
+      # echo $buf
 
 
     block:
@@ -67,4 +67,4 @@ suite "Drawing":
         ],
         makeThinLineGridBorders()
       ).render(buf)
-      echo $buf
+      # echo $buf

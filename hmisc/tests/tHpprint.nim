@@ -15,7 +15,9 @@ suite "Block grid":
 
   test "{makeGrid}":
     let grid = makeGrid(
-      @[@[makeCell("#", 1, 1), makeCell("@", 1, 1)]]
+      @[@[makeCell("#", 1, 1), makeCell("@", 1, 1)]],
+      makeCell("", 0, 0),
+      makeEmptyGridBorders()
     )
 
     assert grid.width == 2
@@ -27,11 +29,13 @@ suite "Block grid":
         @["[|||||]", "world"],
         @["EEEE", "#####"],
         @["eee"]
-      ]
+      ],
+      makeEmptyGridBorders()
     )
 
 
-    grid[3, 3] = makeUnicodeCell("&3333", 7, 1)
+    hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
+    # grid[3, 3] =
     # grid[4, 4] = makeUnicodeCell("&###33", 7, 1)
 
     grid.addHeader(makeCell("!!!!"))
