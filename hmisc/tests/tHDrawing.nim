@@ -33,4 +33,14 @@ suite "Drawing":
       makeTwoLineRectBorder()
     ).render(buf)
 
+    makeTermGrid(
+      (30, 20),
+      @[
+        @["HEllo", "world"],
+        @["wer", "2333"],
+        @["1222", "@@@"]
+      ],
+      makeThinLineGridBorders()
+    ).render(buf)
+
     echo $buf

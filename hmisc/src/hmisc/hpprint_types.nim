@@ -288,8 +288,6 @@ func makeUnicodeGridBorders*(): Table[GridPoint, string] =
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
-func sumjoin*(a: openarray[int], sep: int): int =
-  a.sum() + (a.len > 0).tern((a.len() - 1) * sep, 0)
 
 func totalWidth*[T](grid: BlockGrid[T], colRange: Range): int =
   ## Get total width of columns in `colRange`, including horisontal

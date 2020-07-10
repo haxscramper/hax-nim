@@ -70,11 +70,29 @@ iterator columns*[T](s: Seq2D[T], row: int): T =
   for item in s.elems[row]:
     yield item
 
+iterator iterrows*[T](s: Seq2D[T]): seq[T] =
+  for row in s.elems:
+    yield row
+
+iterator itercols*[T](s: Seq2D[T]): seq[T] =
+  let rowlen = s.elems[0].len
+  for row in s.elems:
+    assert row.len == rowlen, "Row lenths differ"
+
+  for col in 0 ..< rowlen:
+    var buf: seq[T]
+    for row in s.elems:
+      buf.add row[col]
+
+    yield buf
+
 func `[]`*[T](grid: Seq2d[T], row, col: int): T =
   grid.elems[row][col]
 
 func `[]`*[T](grid: Seq2d[T], cell: (int, int)): T =
   grid.elems[cell[0]][cell[1]]
+
+func concat*[T](inseq: Seq2d[T]): seq[T] = inseq.elems.concat()
 
 template mapIt2d*[T](inseq: Seq2d[T], op: untyped): untyped =
   type ResT = typeof((
