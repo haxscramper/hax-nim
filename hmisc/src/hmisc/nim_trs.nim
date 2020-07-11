@@ -2,15 +2,13 @@
 ## values/types from terms.
 
 import hashes, sequtils, tables, strformat, strutils, sugar
-import helpers, deques, intsets, halgorithm, sets
+import options
+import deques, intsets, sets
 export tables, intsets
-import hdrawing
 
-import htrie
-export htrie
-
-type TermPath = seq[int]
-
+import types/[htrie, hprimitives]
+import algo/[hmisc_algo, hseq_mapping]
+import helpers
 
 type
   InfoException = ref object of CatchableError
@@ -38,7 +36,7 @@ type
   VarSet* = HashSet[VarSym]
 
   SubstitutionErrorInfo* = object
-    path*: TermPath
+    path*: TreePath
     case kind*: TermKind:
       of tkVariable:
         vname*: VarSym
@@ -111,11 +109,11 @@ Example for `NimNode` and `NimNodeKind`
   MatchProc*[V, F] = proc(test: Term[V, F]): Option[TermEnv[V, F]]
 
   TermGenerator*[V, F] = object
-    case isPattern: bool
+    case isPattern*: bool
       of true:
-        patt: Term[V, F]
+        patt*: Term[V, F]
       of false:
-        gen: GenProc[V, F]
+        gen*: GenProc[V, F]
 
 
   TermMatcher*[V, F] = object
@@ -125,7 +123,7 @@ Example for `NimNode` and `NimNodeKind`
       of false:
         matcher*: MatchProc[V, F]
 
-    subpatts: Table[VarSym, TermMatcher[V, F]] ## Submatches
+    subpatts*: Table[VarSym, TermMatcher[V, F]] ## Submatches
     ## on generated variables
     varlist: VarSet ## List of generated variables
     default: GenProc[V, F] ## Generate missing variables not produced
@@ -134,10 +132,10 @@ Example for `NimNode` and `NimNodeKind`
 
 
   RulePair*[V, F] = object
-    rules: seq[TermMatcher[V, F]] # List of patterns/matchers
+    rules*: seq[TermMatcher[V, F]] # List of patterns/matchers
     first: Table[F, seq[int8]] # Functor -> Possible pattern
     matchers: seq[int8] # List of matchers
-    gen: TermGenerator[V, F] # Proc to generate final result
+    gen*: TermGenerator[V, F] # Proc to generate final result
 
   RuleId = int16
   RedSystem*[V, F] = object
@@ -159,7 +157,7 @@ type
     maxDepth: int
 
 
-proc registerUse(rs: var ReductionState, path: TermPath, id: RuleId): void =
+proc registerUse(rs: var ReductionState, path: TreePath, id: RuleId): void =
   case rs.constr:
     of rcApplyOnce:
       if path notin rs.rewPaths:
@@ -174,7 +172,7 @@ proc registerUse(rs: var ReductionState, path: TermPath, id: RuleId): void =
     else:
       discard
 
-proc canRewrite(rs: ReductionState, path: TermPath): bool =
+proc canRewrite(rs: ReductionState, path: TreePath): bool =
   path.len < rs.maxDepth and not (
     # Avoid rewriting anyting on this path
     rs.constr == rcRewriteOnce and
@@ -182,7 +180,7 @@ proc canRewrite(rs: ReductionState, path: TermPath): bool =
   )
 
 
-proc cannotUse(rs: ReductionState, path: TermPath, rule: RuleId): bool =
+proc cannotUse(rs: ReductionState, path: TreePath, rule: RuleId): bool =
     # Avoid using this rule again on the same path
     (rs.constr == rcApplyOnce) and
     (rs.rewPaths.prefixHasValue(path)) and
@@ -261,7 +259,7 @@ proc toTerm*[V, F](val: V, cb: TermImpl[V, F]): Term[V, F] =
     return makeConstant[V, F](val, cb.getSym(val))
 
 proc fromTerm*[V, F](
-  term: Term[V, F], cb: TermImpl[V, F], path: TermPath = @[0]): V =
+  term: Term[V, F], cb: TermImpl[V, F], path: TreePath = @[0]): V =
   if term.getKind() notin {tkFunctor, tkConstant}:
     raiseGenEx(
       "Cannot convert under-substituted term back to tree. " &
@@ -304,7 +302,7 @@ func makeRulePair*[V, F](
 
 type PattList*[V, F] = Table[VarSym, TermMatcher[V, F]]
 
-func varlist*[V, F](term: Term[V, F], path: TermPath = @[0]): seq[(Term[V, F], TermPath)] =
+func varlist*[V, F](term: Term[V, F], path: TreePath = @[0]): seq[(Term[V, F], TreePath)] =
   ## Output list of all variables in term
   case getKind(term):
     of tkConstant, tkPlaceholder:
@@ -551,9 +549,9 @@ func unif*[V, F](
     return some(tmpRes)
 
 iterator redexes*[V, F](
-  term: Term[V, F], ): tuple[red: Term[V, F], path: TermPath] =
+  term: Term[V, F], ): tuple[red: Term[V, F], path: TreePath] =
   ## Iterate over all redex in term
-  var que: Deque[(Term[V, F], TermPath)]
+  var que: Deque[(Term[V, F], TreePath)]
   que.addLast((term, @[0]))
   while que.len > 0:
     let (nowTerm, path) = que.popFirst()
@@ -564,7 +562,7 @@ iterator redexes*[V, F](
     yield (red: nowTerm, path: path)
 
 
-proc setAtPath*[V, F](term: var Term[V, F], path: TermPath, value: Term[V, F]): void =
+proc setAtPath*[V, F](term: var Term[V, F], path: TreePath, value: Term[V, F]): void =
   case getKind(term):
     of tkFunctor:
       if path.len == 1:
@@ -614,7 +612,7 @@ proc findApplicable*[V, F](
   system: RedSystem[V, F],
   redex: Term[V, F],
   rs: ReductionState,
-  path: TermPath): Option[(RuleId, TermEnv[V, F], RulePair[V, F])] =
+  path: TreePath): Option[(RuleId, TermEnv[V, F], RulePair[V, F])] =
   ## Return first rule in system that can be applied for given `redex`
   ## and unification environment under which rule matches with pattern
   ## in rule.
@@ -630,87 +628,6 @@ proc generate*[V, F](rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
     rule.gen.patt.substitute(env)
   else:
     rule.gen.gen(env)
-
-proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
-  let ind = "  ".repeat(depth)
-  case getKind(term):
-    of tkConstant:
-      return cb.valStrGen(getValue(term))
-        .split("\n").mapIt(ind & "cst " & it).join("\n")
-    of tkPlaceholder:
-      return ind & "plh _"
-    of tkVariable:
-      return ind & "var " & getVName(term)
-    of tkFunctor:
-      return (
-        @[ ind & "fun " & $(getFSym(term)) ] &
-        getSubt(term).mapIt(treeRepr(it, cb, depth + 1))
-      ).join("\n")
-
-proc treeRepr*[V, F](val: V, cb: TermImpl[V, F], depth: int = 0): string =
-  let ind = "  ".repeat(depth)
-  if cb.isFunctor(val):
-    return (
-      @[ ind & "fun " & $(cb.getSym(val)) ] &
-      cb.getSubt(val).mapIt(treeRepr(it, cb, depth + 1))
-    ).join("\n")
-  else:
-    return cb.valStrGen(val)
-      .split("\n").mapIt(ind & "cst " & it).join("\n")
-
-proc exprRepr*(vs: VarSym): string = "_" & vs
-proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
-  case term.getKind():
-    of tkConstant:
-      "'" & cb.valStrGen(term.value) & "'"
-    of tkVariable:
-      "_" & $term.name
-    of tkFunctor:
-      if ($getSym(term)).validIdentifier():
-        $getSym(term) & "(" & term.getSubt().mapIt(it.exprRepr(cb)).join(", ") & ")"
-      else:
-        let subt = term.getSubt()
-        case subt.len():
-          of 1: &"{term.getSym()}({subt[0]})"
-          of 2: &"{subt[0]} {term.getSym()} {subt[1]}"
-          else:
-            $term.getSym() & "(" & subt.mapIt(it.exprRepr(cb)).join(", ") & ")"
-    of tkPlaceholder:
-      "_"
-
-proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): string =
-  var top: seq[string] = case matcher.isPattern:
-    of true: @[exprRepr(matcher.patt, cb)]
-    of false: @["proc" ]
-
-  for varn, subp in matcher.subpatts:
-    top &= (@[@[varn, ": ", subp.exprRepr(cb)]]).toStringBlock()
-
-  result = top.joinl
-
-
-proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
-  "{" & env.mapPairs(
-    &"({lhs.exprRepr()} -> {rhs.exprRepr(cb)})"
-  ).join(" ") & "}"
-
-proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
-  let rhs =
-    case rule.gen.isPattern:
-      of true: exprRepr(rule.gen.patt)
-      of false: "proc"
-
-  var matchers: seq[seq[string]] = collect(newSeq):
-    for idx, match in rule.rules:
-      let pref = if rule.rules.len == 1: "" else: $idx & ": "
-      @[pref] & match.exprRepr(cb)
-
-  @[@[
-    matchers.toStringBlock().joinl(), " ~~> ", rhs
-  ]].toStringBlock().joinl()
-
-proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
-  sys.rules.mapPairs(@[$idx & ": ", rhs.exprRepr(cb)]).toStringBlock().joinl()
 
 proc reduce*[V, F](
   term: Term[V, F],

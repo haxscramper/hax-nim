@@ -1,3 +1,6 @@
+import options, macros, deques
+export deques
+
 #=================================  BFS  =================================#
 # IDEA `itemsBFS` and `itemsDFS` to iterate over nodes in tree
 # IDEA `pairsBFS` and `pairsDFS` to iterate over paths
@@ -74,27 +77,6 @@ Do BFS iteration on recursive data type and map results into sequence
 
   result
 
-
-proc mapDFSpost*[InTree, OutTree](
-  tree: InTree,
-  map: proc(n: InTree, subn: seq[OutTree]): OutTree,
-  getSubnodes: proc(tree: InTree): seq[InTree],
-  hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
-  path: seq[int] = @[0]): OutTree =
-  ## Overload without `path` for `map`
-  # TODO DOC
-  mapDFSpost(
-    tree,
-    proc(
-      n: InTree,
-      path: seq[int],
-      subn: seq[OutTree],
-      inSubn: seq[InTree]
-    ): OutTree = map(n, subn),
-    getSubnodes,
-    hasSubnodes,
-    path
-  )
 
 #*************************************************************************#
 #*********************************  DFS  *********************************#
@@ -203,6 +185,28 @@ proc mapDFSpost*[InTree, OutTree](
     getSubnodes = getSubnodes,
     hasSubnodes = hasSubnodes,
     path = path
+  )
+
+
+proc mapDFSpost*[InTree, OutTree](
+  tree: InTree,
+  map: proc(n: InTree, subn: seq[OutTree]): OutTree,
+  getSubnodes: proc(tree: InTree): seq[InTree],
+  hasSubnodes: proc(it: InTree): bool = (proc(it: InTree): bool = true),
+  path: seq[int] = @[0]): OutTree =
+  ## Overload without `path` for `map`
+  # TODO DOC
+  mapDFSpost(
+    tree,
+    proc(
+      n: InTree,
+      path: seq[int],
+      subn: seq[OutTree],
+      inSubn: seq[InTree]
+    ): OutTree = map(n, subn),
+    getSubnodes,
+    hasSubnodes,
+    path
   )
 
 #==========================  Iterative mapper  ===========================#

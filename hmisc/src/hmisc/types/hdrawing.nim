@@ -1,8 +1,11 @@
-import sequtils, strutils, math, lenientops, helpers, strformat, tables
+import sequtils, strutils, math, lenientops, strformat, tables
 import sugar
-import hmisc_types
-import halgorithm
 import unicode
+
+import hprimitives, hgeometry_primitives
+import ../algo/[halgorithm, hseq_mapping]
+import ../types/[seq2d]
+export hprimitives
 
 #===========================  terminal buffer  ===========================#
 
@@ -114,7 +117,7 @@ method render*(line: SLine[char, int], buf: var TermBuf): void =
 func newTermVline*(
   start: (int, int), length: int, c: char = '|', isDown: bool = true): auto =
   SLine[char, int](
-    angle: if isDown: (PI/2) else: 3 * (PI/2),
+    angle: Radian(if isDown: (PI/2) else: 3 * (PI/2)),
     config: c,
     start: start.makePoint(),
     length: length
@@ -123,7 +126,7 @@ func newTermVline*(
 func newTermHline*(
   start: (int, int), length: int, c: char = '-', isRight: bool = true): auto =
   SLine[char, int](
-    angle: if isRight: PI*0 else: PI,
+    angle: Radian(if isRight: PI*0 else: PI),
     config: c,
     start: start.makePoint(),
     length: length)
@@ -144,63 +147,6 @@ func newTermPoint*(start: (int, int), c: char = '+'): SPoint[char, int] =
 
 method render*(point: SPoint[char, int], buf: var TermBuf): void =
   buf[point.point] = point.config
-
-#==============================  Term text  ==============================#
-
-type
-  SText*[Num] = ref object of Shape
-    start: Point[Num]
-    width: Num
-    height: Num
-    case reflow: bool
-      of true:
-        text: string
-      of false:
-        lines: RuneBlock
-
-func newTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
-  SText[int](
-    start: makePoint(start[0], start[1]),
-    lines: text,
-    reflow: false,
-    width: toSeq(text.mapIt(it.len)).max(0),
-    height: text.len
-  )
-
-func newBoxedTermText*(start: (int, int), text: seq[RuneSeq], boxc: char = '#'): Multishape =
-  let inner = newTermText(start.shiftXY(1, 1), text)
-  Multishape(shapes: @[
-    cast[Shape](inner),
-    newTermRect(
-      start, width = inner.width + 2, height = inner.height + 2, border = boxc)
-  ])
-
-func newBoxedTermText*(
-  start: (int, int),
-  text: seq[RuneSeq],
-  conf: TermRectConf,
-  size: (int, int) = (-1, -1)): Multishape =
-  let inner = newTermText(start.shiftXY(1, 1), text)
-  Multishape(shapes: @[
-    cast[Shape](inner),
-    newTermRect(
-      start,
-      width = (size[0] == -1).tern(inner.width + 2, size[0]),
-      height = (size[1] == -1).tern(inner.height + 2, size[1]),
-      conf
-    )
-  ])
-
-method render*(text: SText[int], buf: var TermBuf): void =
-  case text.reflow:
-    of true:
-      raiseAssert("reflow text is not implemented")
-    of false:
-      for rId, row in text.lines:
-        for cId in 0 ..< min(row.len, text.width):
-          # echo &"{text.start}, ({cId}, {rId}), {text.start.shiftXY(cId, rId)}"
-          buf[text.start.shiftXY(cId, rId)] = row[cId]
-
 
 #==============================  Term rect  ==============================#
 
@@ -299,6 +245,63 @@ method render*(rect: TermRect, buf: var TermBuf): void =
     buf[rect.upLeft.shiftXY(w - 1, h - 1)] = rect.config[rpoBottomRight]
 
 
+#==============================  Term text  ==============================#
+
+type
+  SText*[Num] = ref object of Shape
+    start: Point[Num]
+    width: Num
+    height: Num
+    case reflow: bool
+      of true:
+        text: string
+      of false:
+        lines: RuneBlock
+
+func newTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
+  SText[int](
+    start: makePoint(start[0], start[1]),
+    lines: text,
+    reflow: false,
+    width: toSeq(text.mapIt(it.len)).max(0),
+    height: text.len
+  )
+
+func newBoxedTermText*(start: (int, int), text: seq[RuneSeq], boxc: char = '#'): Multishape =
+  let inner = newTermText(start.shiftXY(1, 1), text)
+  Multishape(shapes: @[
+    cast[Shape](inner),
+    newTermRect(
+      start, width = inner.width + 2, height = inner.height + 2, border = boxc)
+  ])
+
+func newBoxedTermText*(
+  start: (int, int),
+  text: seq[RuneSeq],
+  conf: TermRectConf,
+  size: (int, int) = (-1, -1)): Multishape =
+  let inner = newTermText(start.shiftXY(1, 1), text)
+  Multishape(shapes: @[
+    cast[Shape](inner),
+    newTermRect(
+      start,
+      width = (size[0] == -1).tern(inner.width + 2, size[0]),
+      height = (size[1] == -1).tern(inner.height + 2, size[1]),
+      conf
+    )
+  ])
+
+method render*(text: SText[int], buf: var TermBuf): void =
+  case text.reflow:
+    of true:
+      raiseAssert("reflow text is not implemented")
+    of false:
+      for rId, row in text.lines:
+        for cId in 0 ..< min(row.len, text.width):
+          # echo &"{text.start}, ({cId}, {rId}), {text.start.shiftXY(cId, rId)}"
+          buf[text.start.shiftXY(cId, rId)] = row[cId]
+
+
 #==============================  Term grid  ==============================#
 
 type
@@ -369,7 +372,47 @@ func makeAsciiGridBorders*(): TermGridConf =
     gpoVerticalGap : "|",
   }.mapPairs((lhs, rhs.toRunes()[0])).toTable()
 
+func spacingDimensions*(rc: TermGridConf): tuple[
+  vSpacing, hSpacing, left, right, top, bottom: int] =
+  result.vSpacing = (
+    (gpoHorizontalGap in rc) or
+    (gpoLeftIntersection in rc) or
+    (gpoRightIntersection in rc)
+  ).tern(1, 0)
+
+  result.hSpacing = (
+    (gpoVerticalGap in rc) or
+    (gpoTopIntersection in rc) or
+    (gpoBottomIntersection in rc)
+  ).tern(1, 0)
+
+
+func gridDimensions*(grid: TermGrid): tuple[
+  vSpacing, hSpacing, totalW, totalH: int] =
+  let rc = grid.config
+  let (vSpacing, hSpacing, _, _, _, _) = rc.spacingDimensions()
+
+  result.vSpacing = vSpacing
+  result.hSpacing = hSpacing
+  result.totalW = grid.cellWidths.sumjoin(result.vSpacing)
+  result.totalH = grid.cellHeights.sumjoin(result.hSpacing)
+
+
+
 func makeEmptyGridBorders*(): TermGridConf = discard
+
+func newTermGrid*(
+  start: (int, int),
+  cellws: seq[int],
+  cellhs: seq[int],
+  conf: TermGridConf): TermGrid =
+  TermGrid(
+    start: start.makePoint(),
+    cellWidths: cellws,
+    cellHeights: cellhs,
+    config: conf
+  )
+
 
 func newTermGrid*(
   start: (int, int), cells: Seq2d[RuneBlock],
@@ -406,45 +449,9 @@ func newTermGrid*(
   ).toSeq2d()
   newTermGrid(start, cells, conf)
 
-func newTermGrid*(
-  start: (int, int),
-  cellws: seq[int],
-  cellhs: seq[int],
-  conf: TermGridConf): TermGrid =
-  TermGrid(
-    start: start.makePoint(),
-    cellWidths: cellws,
-    cellHeights: cellhs,
-    config: conf
-  )
 
 
 
-
-func spacingDimensions*(rc: TermGridConf): tuple[
-  vSpacing, hSpacing, left, right, top, bottom: int] =
-  result.vSpacing = (
-    (gpoHorizontalGap in rc) or
-    (gpoLeftIntersection in rc) or
-    (gpoRightIntersection in rc)
-  ).tern(1, 0)
-
-  result.hSpacing = (
-    (gpoVerticalGap in rc) or
-    (gpoTopIntersection in rc) or
-    (gpoBottomIntersection in rc)
-  ).tern(1, 0)
-
-
-func gridDimensions*(grid: TermGrid): tuple[
-  vSpacing, hSpacing, totalW, totalH: int] =
-  let rc = grid.config
-  let (vSpacing, hSpacing, _, _, _, _) = rc.spacingDimensions()
-
-  result.vSpacing = vSpacing
-  result.hSpacing = hSpacing
-  result.totalW = grid.cellWidths.sumjoin(result.vSpacing)
-  result.totalH = grid.cellHeights.sumjoin(result.hSpacing)
 
 
 method render*(rect: TermGrid, buf: var TermBuf): void =

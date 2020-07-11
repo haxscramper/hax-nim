@@ -1,3 +1,5 @@
+import sequtils
+
 ## Sequence distance metrics
 
 proc longestCommonSubsequence*[T](x, y: seq[T]): seq[T] =

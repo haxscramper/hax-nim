@@ -1,3 +1,7 @@
+import sequtils, strutils, macros
+
+import ../types/seq2d
+
 #========================  sorting and filtering  ========================#
 
 template mergeUniqByIt*(sequence, operation: untyped): untyped =
@@ -55,32 +59,6 @@ template twoPassSortByIt*(
     secondSorted.add(equal.sortedByIt(operation2))
 
   secondSorted
-
-#=============================  predicates  ==============================#
-
-template anyOfIt*(sequence: typed, predicate: untyped): bool =
-  ## Return `true` if for any of the items in sequence `predicate`
-  ## evaluates as `true`. Otherwise return false.
-  var result = false
-  for it {.inject.} in sequence:
-    if predicate:
-      result = true
-      break
-
-  result
-
-template allOfIt*(s: untyped, op: untyped): bool =
-  ## True if for all items in `s` predicate `op` returns true.
-  not s.anyOfIt(not op)
-
-
-template subnodesEq*(lhs, rhs, field: untyped): untyped =
-  ## Check if two objects `lhs` and `rhs` has identical field `field`
-  ## by comparing all items in the field. Check if two object's fields
-  ## have identical lengths too.
-  lhs.field.len() == rhs.field.len() and
-  zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
-
 
 #===========================  transformation  ============================#
 

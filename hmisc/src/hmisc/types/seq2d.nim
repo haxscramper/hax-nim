@@ -1,3 +1,5 @@
+import sequtils
+
 type
   Seq2d*[T] = object
     elems: seq[seq[T]]

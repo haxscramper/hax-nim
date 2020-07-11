@@ -1,6 +1,5 @@
-import sugar, strutils, sequtils, strformat
-import sets
-import hmisc/[nim_trs, helpers, halgorithm]
+import sugar, strutils, sequtils, strformat, sets, options
+import hmisc/[nim_trs, nim_trs_pprint, helpers]
 
 #===========================  implementation  ============================#
 

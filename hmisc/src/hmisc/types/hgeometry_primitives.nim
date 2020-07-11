@@ -1,3 +1,5 @@
+import math, strformat, options
+
 #*************************************************************************#
 #**************************  Helper functions  ***************************#
 #*************************************************************************#
@@ -32,8 +34,8 @@ func makeSize*(w, h: int): Size = Size(width: w, height: h)
 
 type
   Point*[Num] = object
-    x: Num
-    y: Num
+    x*: Num
+    y*: Num
 
 func makePoint*[Num](x, y: Num): auto = Point[Num](x: x, y: y)
 func makePoint*[Num](pos: (Num, Num)): auto = Point[Num](x: pos[0], y: pos[1])
@@ -55,8 +57,25 @@ func shiftXY*[Num](p: (Num, Num), dx: Num, dy: Num): (Num, Num) =
 type
   Radian* = distinct float
 
-const whitespaceRune*: Rune = toRunes(" ")[0]
-var emptyRune*: Rune
+func cos*(r: Radian): float = cos(r.float)
+func sin*(r: Radian): float = cos(r.float)
+
+#===========================  2d positioning  ============================#
+
+
+type
+  RelVec* = enum
+    rpLeft
+    rpRight
+    rpBottom
+    rpTop
+
+func invert*(pos: RelVec): RelVec =
+  case pos:
+    of rpLeft: rpRight
+    of rpRight: rpLeft
+    of rpBottom: rpTop
+    of rpTop: rpBottom
 
 #=================================  Vec  =================================#
 
@@ -64,16 +83,17 @@ type
   Vec* = object
     x*, y*: float
 
-func `-`*(a, b: Vec): Vec = makeVec(a.x - b.x, a.y - b.y)
-func `+`*(a, b: Vec): Vec = makeVec(a.x + b.x, a.y + b.y)
-func `*`*(a: Vec, s: float): Vec = makeVec(a.x * s, a.y * s)
-func `*`*(s: float, a: Vec): Vec = a * s
-
 proc makeVec*(x, y: int | float): Vec =
   when x is int:
     Vec(x: x.toFloat(), y: y.toFloat())
   else:
     Vec(x: x, y: y)
+
+func `-`*(a, b: Vec): Vec = makeVec(a.x - b.x, a.y - b.y)
+func `+`*(a, b: Vec): Vec = makeVec(a.x + b.x, a.y + b.y)
+func `*`*(a: Vec, s: float): Vec = makeVec(a.x * s, a.y * s)
+func `*`*(s: float, a: Vec): Vec = a * s
+
 
 converter toVec*[N: float | int](pos: (N, N)): Vec =
   when N is int:
@@ -103,8 +123,6 @@ func flip*(v: Vec): Vec =
   ## Return reversed vector
   makeVec(-v.x, -v.y)
 
-func flip*(l: Line): Line =
-  Line(x1: l.x2, x2: l.x1, y1: l.y2, y2: l.y1)
 
 func rotate*(v: Vec, a: float): Vec =
   ## CCW rotate vector by `a` radians
@@ -203,6 +221,9 @@ func magnitude*(l: Line): float =
   l.toVec.magnitude
 
 func len*(l: Line): float = l.toVec().magnitude()
+func flip*(l: Line): Line =
+  Line(x1: l.x2, x2: l.x1, y1: l.y2, y2: l.y1)
+
 
 
 #================================  Vec3  =================================#
@@ -235,13 +256,6 @@ func norm*(a: Vec3): Vec3 = a / a.magnitude()
 func norm*(l: Line): Vec = l.toVec().norm()
 func nperp*(l: Line): Vec = l.toVec().perp().norm()
 func arg*(l: Line): float = l.toVec().arg()
-
-func invert*(pos: RelVec): RelVec =
-  case pos:
-    of rpLeft: rpRight
-    of rpRight: rpLeft
-    of rpBottom: rpTop
-    of rpTop: rpBottom
 
 func `$`*(l: Line): string = &"({l.begin()} {l.final()})"
 

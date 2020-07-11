@@ -1,3 +1,10 @@
+import tables, sequtils, sugar
+
+import hgeometry_primitives, hprimitives, hdrawing, hmap
+import sparse_grid, seq2d
+import ../algo/[hseq_mapping, halgorithm]
+export hprimitives, seq2d
+
 ## Nested table with multicol support
 
 #===========================  type definition  ===========================#
@@ -152,7 +159,7 @@ func makeUnicodeCell*[T](
 func makeCell*(text: string): GridCell[string] =
   makeCell(arg = text, w = text.len, h = 1)
 
-func makeCell*(text: StrSeq): GridCell[StrSeq] =
+func makeCell*(text: StrBlock): GridCell[StrBlock] =
   makeCell(
     text,
     w = text.mapIt(it.len).max(),
@@ -190,7 +197,8 @@ func makeGrid*[T](
 func makeGrid*(arg: Seq2D[string], conf: TermGridConf): BlockGrid[string] =
   makeGrid[string](arg.mapIt2d(makeCell(it, it.len, 1)), makeCell("", 0, 0), conf)
 
-func makeGrid*(arg: Seq2D[seq[string]], conf: TermGridConf): BlockGrid[seq[string]] =
+func makeGrid*(arg: Seq2D[StrBlock],
+               conf: TermGridConf): BlockGrid[seq[string]] =
   makeGrid(arg.mapIt2d(makeCell(
     it, it.mapIt(it.len).max(0), it.len
   )), makeCell(@[""], 0, 0), conf)

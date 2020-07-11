@@ -1,6 +1,8 @@
 import unittest
 
+import strformat, options
 import hmisc/helpers
+import hmisc/macros/iflet
 
 func empty[T](): seq[T] = discard
 
@@ -48,9 +50,6 @@ suite "Misc helper functions":
     assert some(12) == 12
     assert not (none(int) == 2)
     assert (some(12), some(2)) == (12, 2)
-
-
-import hmisc/iflet
 
 suite "If let":
   test "{iflet} Simple :macro:":
@@ -110,5 +109,3 @@ suite "If let":
       inc cnt
 
     assert cnt == 0
-
-

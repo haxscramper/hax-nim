@@ -73,18 +73,18 @@ func `[]`*[T](grid: SparseGrid[T], cell: (int, int)): T =
   grid.elems[cell[0]][cell[1]]
 
 func `[]=`*[T](grid: var SparseGrid[T], pos: (int, int), val: T): void =
-  static:
-    echo typeof grid
-    echo typeof pos
-    echo typeof val
-    echo typeof grid.elems
-    echo typeof grid.elems[0]
-    quit 1
-  # if pos[0] notin grid.elems:
-  #   grid.elems[pos[0]] = initMap[int, T]()
+  # static:
+  #   echo typeof grid
+  #   echo typeof pos
+  #   echo typeof val
+  #   echo typeof grid.elems
+  #   echo typeof grid.elems[0]
+  #   quit 1
+  if pos[0] notin grid.elems:
+    grid.elems[pos[0]] = initMap[int, T]()
 
-  # var gr = grid.elems[pos[0]]
-  # gr[pos[1]] = val
+  var gr = grid.elems[pos[0]]
+  gr[pos[1]] = val
   discard
 
 func `[]=`*[T](grid: var SparseGrid[T], row, col: int, val: T): void =

@@ -2,10 +2,9 @@ import unittest, shell
 
 import hmisc/[helpers, defensive]
 import strutils
-import hmisc/graphviz_ast
+import hmisc/types/[graphviz_ast, block_grid, hdrawing]
 
-import hmisc/[
-  hpprint, hmisc_types, hpprint_types, obj_field_macros]
+import hmisc/[hpprint]
 
 suite "Block grid":
   test "{makeCell}":
@@ -43,7 +42,7 @@ suite "Block grid":
 
     echo grid.toStringGrid().toString()
 
-    quit 0
+    # quit 0
 
 
 suite "Block labeling":

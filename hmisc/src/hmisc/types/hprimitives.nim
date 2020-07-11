@@ -8,7 +8,7 @@ import unicode
 #============================  string block  =============================#
 
 type
-  StrSeq* = seq[string]
+  StrBlock* = seq[string]
 
 #============================  rune sequence  ============================#
 
@@ -17,6 +17,10 @@ type
   RuneBlock* = seq[RuneSeq]
 
 converter toRune*(c: char): Rune = toRunes($c)[0]
+
+const whitespaceRune*: Rune = toRunes(" ")[0]
+var emptyRune*: Rune
+
 
 #=========================================================================#
 #==========================  Sequence-related  ===========================#
@@ -52,3 +56,11 @@ func isPoint*(r: Range): bool =
 func point*(r: Range): int =
   assert r.isPoint()
   r.a
+
+
+#*************************************************************************#
+#****************************  Tree-related  *****************************#
+#*************************************************************************#
+
+type
+  TreePath* = seq[int]

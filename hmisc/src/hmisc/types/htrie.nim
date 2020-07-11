@@ -1,5 +1,8 @@
 import tables, options
+import algorithm
 export tables
+
+import ../algo/hmisc_algo
 
 type
   Trie*[Key, Val] = object

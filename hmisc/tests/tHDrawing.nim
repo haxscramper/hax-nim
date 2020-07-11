@@ -1,5 +1,6 @@
 import sugar, strutils, sequtils, strformat
-import hmisc/hdrawing
+import hmisc/types/hdrawing
+import hmisc/algo/halgorithm
 
 #===========================  implementation  ============================#
 

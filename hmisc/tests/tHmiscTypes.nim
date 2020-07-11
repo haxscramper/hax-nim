@@ -1,6 +1,6 @@
 import sugar, strutils, sequtils, strformat
 
-import hmisc/hmisc_types
+import hmisc/types/[seq2d, hprimitives]
 
 import unittest
 

@@ -1,5 +1,8 @@
 ## Statically typed nim ast representation
 
+import ../helpers
+import sequtils
+
 type
   FieldBranch*[Node] = object
     # IDEA three possible parameters: `NimNode` (for compile-time
@@ -27,7 +30,6 @@ type
       of false:
         discard
 
-type
   ObjKind* = enum
     okConstant ## Literal value
     okSequence ## Sequence of items

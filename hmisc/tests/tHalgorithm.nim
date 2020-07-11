@@ -1,7 +1,9 @@
 import unittest, strutils
-import sugar, json, sequtils, tables, strformat
+import sugar, json, sequtils, tables, strformat, options
 
-import hmisc/[halgorithm, helpers, hpprint, hvariant]
+import hmisc/types/hvariant
+import hmisc/[helpers, hpprint]
+import hmisc/algo/[halgorithm, htree_mapping, hseqdistance]
 
 type
   InTest = object
