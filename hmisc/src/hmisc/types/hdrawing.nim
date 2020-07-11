@@ -581,7 +581,18 @@ func newTermMultiGrid*(
 
 func getSizes(grid: Seq2D[Option[(Size, StrBlock)]]): tuple[
   widths, heights: seq[int]] =
-  discard
+  var rowHs: seq[int] = newSeqWith(grid.rowNum, 0)
+  var colWs: seq[int] = newSeqWith(grid.colNum, 0)
+
+  for (pos, cell) in grid.iterSomeCells():
+    if cell[0] == size1x1:
+      let text = cell[1]
+      let (row, col) = pos
+      colWs[col].setMax(text.width)
+      rowHs[row].setMax(text.height)
+
+  result.widths = colWs
+  result.heights = rowHs
 
 func newTermMultiGrid*(
   start: (int, int),
@@ -591,11 +602,25 @@ func newTermMultiGrid*(
     start = start,
     cells = blocks.mapIt2d(it.isSome().tern(some(it.get[0]), none(Size))),
     widths = cellws,
-    heights = cellws,
+    heights = cellhs,
     config = config
   )
 
-  return newMultishape(@[Shape(grid)])
+  let (vertSpacing, horSpacing, totalW, totalH) = gridDimensions(grid)
+  var res: seq[Shape] = @[Shape(grid)]
+
+  let absCellX: seq[int] = cellws.cumsumjoin(horSpacing, true)
+  let absCellY: seq[int] = cellhs.cumsumjoin(vertSpacing, true)
+
+  for (pos, cell) in blocks.iterSomeCells():
+    let (size, str) = cell
+    let (row, col) = pos
+    res.add newTermText(
+      (absCellX[col] + 1, absCellY[row] + 1),
+      toRunes(str)
+    )
+
+  return newMultishape(res)
 
 method render*(grid: TermMultiGrid, buf: var TermBuf): void =
   gridRenderAux(TermGrid(grid), buf)
@@ -605,9 +630,9 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
     y0 = grid.start.y
     rc = grid.config
 
-  let (vSpacing, hSpacing, totalW, totalH) = gridDimensions(grid)
-  let absCellX: seq[int] = grid.cellWidths.cumsumjoin(vSpacing, true)
-  let absCellY: seq[int] = grid.cellHeights.cumsumjoin(hSpacing, true)
+  let (vertSpacing, horSpacing, totalW, totalH) = gridDimensions(grid)
+  let absCellX: seq[int] = grid.cellWidths.cumsumjoin(horSpacing, true)
+  let absCellY: seq[int] = grid.cellHeights.cumsumjoin(vertSpacing, true)
 
   for (pos, size) in grid.cells.iterSomeCells:
     if size != size1x1:

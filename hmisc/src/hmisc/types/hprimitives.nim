@@ -1,4 +1,4 @@
-import unicode, strutils
+import unicode, strutils, sequtils
 
 
 #=========================================================================#
@@ -11,12 +11,20 @@ type
   StrBlock* = seq[string]
 
 func toBlock*(s: string): StrBlock = s.split('\n')
+func height*(s: StrBlock): int = s.len
+func width*(s: StrBlock): int =
+  if s.len == 0: 0
+  else: s.mapIt(it.len).max()
 
 #============================  rune sequence  ============================#
 
 type
   RuneSeq* = seq[Rune]
   RuneBlock* = seq[RuneSeq]
+
+func toRunes*(s: StrBlock): RuneBlock =
+  for line in s:
+    result.add toRunes(line)
 
 converter toRune*(c: char): Rune = toRunes($c)[0]
 

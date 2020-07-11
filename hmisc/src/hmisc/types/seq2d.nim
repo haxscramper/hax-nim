@@ -17,6 +17,19 @@ func rowNum*[T](s: Seq2D[T]): int =
   ## Get number or rows in 2d sequence
   s.elems.len
 
+func colNum*[T](s: Seq2D[T], expectUniform: bool = true): int =
+  ## Get max number of columns in 2d sequence. If `expecUniform` check
+  ## that all rows have equal lentgth
+  if s.elems.len == 0:
+    result = 0
+  else:
+    result = s.elems.mapIt(it.len).max(0)
+    if expectUniform:
+      for idx, row in s.elems:
+        assert row.len == result, "Cannot get number of columns for 2d " &
+          &"sequence row {idx} has {row.len} elements, but expected " &
+          &"{result}"
+
 func len*[T](s: Seq2D[T]): int =
   s.elems.len
 
