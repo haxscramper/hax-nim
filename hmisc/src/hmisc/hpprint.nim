@@ -25,13 +25,6 @@ export hvariant
 import hpprint_types, hdrawing
 import algorithm
 
-func toString*[T](grid: BlockGrid[T], conf: TermGridConf): seq[string]
-func toString*[T](cell: GridCell[T], conf: TermGridConf): seq[string] =
-  discard
-
-func toString*[T](grid: BlockGrid[T], conf: TermGridConf): seq[string] =
-  let cells: Seq2D[string] = grid.grid.mapIt2D(toString(it, conf))
-  newTermGrid((0, 0), cells, conf).toStringBlock()
 
 func isKVpairs(obj: ObjTree): bool =
   ## Check if entry should be printed as list of key-value pairs
