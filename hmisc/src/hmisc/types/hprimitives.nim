@@ -34,7 +34,20 @@ type
     b*: int
 
 import hashes
+func makeRange*(a, b: int): Range = Range(a: a, b: b)
 func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
+func contains*(r: Range, item: int): bool =
+  r.a <= item and item <= r.b
+
+iterator items*(r: Range): int =
+  for it in r.a .. r.b:
+    yield it
+
+iterator items*(r: (Range, Range)): (int, int) =
+  for x in r[0].a .. r[0].b:
+    for y in r[1].a .. r[1].b:
+      yield (x, y)
+
 
 #==============================  Position  ===============================#
 # TODO is it possible to define custom unpacker for object? to write

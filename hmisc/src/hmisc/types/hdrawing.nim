@@ -1,11 +1,12 @@
 import sequtils, strutils, math, lenientops, strformat, tables
-import sugar
+import sugar, options
 import unicode
 
 import hprimitives, hgeometry_primitives
 import ../algo/[halgorithm, hseq_mapping]
 import ../types/[seq2d]
 export hprimitives
+import ../helpers
 
 
 import ../hcommon_converters
@@ -166,7 +167,7 @@ type
     rpoBottomRight
 
   SRect*[T, Num] = ref object of Shape
-    upLeft: Point[Num]
+    start: Point[Num]
     height: Num
     width: Num
     config: T
@@ -190,7 +191,7 @@ func newTermRect*(
   start: (int, int),
   width, height: int, border: char = '+'): SRect[char, int] =
   SRect[char, int](
-    upLeft: makePoint(start[0], start[1]),
+    start: makePoint(start[0], start[1]),
     config: border,
     width: width,
     height: height
@@ -199,54 +200,67 @@ func newTermRect*(
 func newTermRect*(
   start: (int, int), width, height: int, conf: TermRectConf): TermRect =
     TermRect(
-      upLeft: start.makePoint(),
+      start: start.makePoint(),
       height: height,
       width: width,
       config: conf
     )
 
 method render*(rect: SRect[char, int], buf: var TermBuf): void =
-  let maxp = rect.upLeft.shiftXY(rect.width, rect.height)
+  let maxp = rect.start.shiftXY(rect.width, rect.height)
   buf.reserve(maxp.y, maxp.x)
   renderLine(
-    rect.upLeft, rect.width, 0, buf, rect.config)
+    rect.start, rect.width, 0, buf, rect.config)
   renderLine(
-    rect.upLeft, 0, rect.height - 1, buf, rect.config)
+    rect.start, 0, rect.height - 1, buf, rect.config)
 
   renderLine(
-    rect.upLeft.shiftY(rect.height - 1), rect.width, 0, buf, rect.config)
+    rect.start.shiftY(rect.height - 1), rect.width, 0, buf, rect.config)
   renderLine(
-    rect.upLeft.shiftX(rect.width), 0, rect.height - 1, buf, rect.config)
+    rect.start.shiftX(rect.width), 0, rect.height - 1, buf, rect.config)
+
+func rectRenderAux(
+  start: Point[int], height, width: int, config: TermRectConf,
+  buf: var TermBuf): void =
+
+  let h = height
+  let w = width
+
+  if rpoLeftEdge in config:
+    renderLine(
+      start, 0, h - 1, buf, config[rpoLeftEdge])
+
+  if rpoRightEdge in config:
+    renderLine(
+      start.shiftX(w - 1), 0, h - 1, buf, config[rpoRightEdge])
+
+  if rpoTopEdge in config:
+    renderLine(start, w - 1, 0, buf, config[rpoTopEdge])
+
+  if rpoBottomEdge in config:
+    renderLine(start.shiftY(h - 1), w - 1, h, buf, config[rpoBottomEdge])
+
+  if rpoTopLeft in config:
+    buf[start.shiftXY(0, 0)] = config[rpoTopLeft]
+
+  if rpoTopRight in config:
+    buf[start.shiftXY(w - 1, 0)] = config[rpoTopRight]
+
+  if rpoBottomLeft in config:
+    buf[start.shiftXY(0, h - 1)] = config[rpoBottomLeft]
+
+  if rpoBottomRight in config:
+    buf[start.shiftXY(w - 1, h - 1)] = config[rpoBottomRight]
+
 
 method render*(rect: TermRect, buf: var TermBuf): void =
-  let h = rect.height
-  let w = rect.width
-
-  if rpoLeftEdge in rect.config:
-    renderLine(
-      rect.upLeft, 0, h - 1, buf, rect.config[rpoLeftEdge])
-
-  if rpoRightEdge in rect.config:
-    renderLine(
-      rect.upLeft.shiftX(w - 1), 0, h - 1, buf, rect.config[rpoRightEdge])
-
-  if rpoTopEdge in rect.config:
-    renderLine(rect.upLeft, w - 1, 0, buf, rect.config[rpoTopEdge])
-
-  if rpoBottomEdge in rect.config:
-    renderLine(rect.upLeft.shiftY(h - 1), w - 1, h, buf, rect.config[rpoBottomEdge])
-
-  if rpoTopLeft in rect.config:
-    buf[rect.upLeft.shiftXY(0, 0)] = rect.config[rpoTopLeft]
-
-  if rpoTopRight in rect.config:
-    buf[rect.upLeft.shiftXY(w - 1, 0)] = rect.config[rpoTopRight]
-
-  if rpoBottomLeft in rect.config:
-    buf[rect.upLeft.shiftXY(0, h - 1)] = rect.config[rpoBottomLeft]
-
-  if rpoBottomRight in rect.config:
-    buf[rect.upLeft.shiftXY(w - 1, h - 1)] = rect.config[rpoBottomRight]
+  rectRenderAux(
+    rect.start,
+    rect.height,
+    rect.width,
+    rect.config,
+    buf
+  )
 
 
 #==============================  Term text  ==============================#
@@ -453,12 +467,7 @@ func newTermGrid*(
   ).toSeq2d()
   newTermGrid(start, cells, conf)
 
-
-
-
-
-
-method render*(rect: TermGrid, buf: var TermBuf): void =
+func gridRenderAux(rect: TermGrid, buf: var TermBuf): void =
   let gridX = rect.start.x
   let gridY = rect.start.y
   let rc = rect.config
@@ -534,7 +543,106 @@ method render*(rect: TermGrid, buf: var TermBuf): void =
         for col in rect.cellWidths.cumsumjoin(hSpacing)[0..^2]:
           buf[gridX + col, gridY + row] = rc[gpoIntersection]
 
+
+method render*(rect: TermGrid, buf: var TermBuf): void =
+  gridRenderAux(rect, buf)
+
+#===========================  multicell grid  ============================#
+
+type
+  SMulticellGrid[T, Num] = ref object of SGrid[T, Num]
+    # start: Point[Num]
+    cells: Seq2D[Option[Size]]
+    # config: T
+    # cellWidths: seq[Num]
+    # cellHeights: seq[Num]
+
+  TermMultiGrid* = SMultiCellGrid[TermGridConf, int]
+
+func newTermMultiGrid*(
+  start: (int, int),
+  cells: Seq2D[Option[Size]],
+  widths: seq[int],
+  heights: seq[int],
+  config: TermGridConf): TermMultiGrid =
+  assert cells.len == heights.len, &"Mismatch in number of rows: cell sizes has {cells.len} " &
+    &"rows, but heights has {heights.len}"
+  for idx, row in cells:
+    assert row.len == widths.len, &"Mismatch in number of columns: row {idx} has {row.len} " &
+      &"elements, buf widths has {widths.len}"
+
+  TermMultiGrid(
+    start: start.makePoint(),
+    cells: cells,
+    cellWidths: widths,
+    cellHeights: heights,
+    config: config)
+
+func newTermMultiGrid*(
+  start: (int, int),
+  blocks: Seq2D[Option[(Size, StrBlock)]]): Multishape =
+  discard
+  # newTerm
+
+
+method render*(grid: TermMultiGrid, buf: var TermBuf): void =
+  gridRenderAux(TermGrid(grid), buf)
+
+  let
+    x0 = grid.start.x
+    y0 = grid.start.y
+    rc = grid.config
+
+  let (vSpacing, hSpacing, totalW, totalH) = gridDimensions(grid)
+  let absCellX: seq[int] = grid.cellWidths.cumsumjoin(vSpacing, true)
+  let absCellY: seq[int] = grid.cellHeights.cumsumjoin(hSpacing, true)
+
+  for (pos, size) in grid.cells.iterSomeCells:
+    if size != size1x1:
+      let (row, col) = pos
+      let
+        x = absCellX[col]
+        y = absCellY[row]
+        width = absCellX[col + size.width] - absCellX[col]
+        height = absCellY[row + size.height] - absCellY[row]
+        wRange = makeRange(x + 1, x + width - 1)
+        hRange = makeRange(y + 1, y + height - 1)
+
+      block: # Remove things in grid
+        for (x, y) in (wRange, hRange):
+          buf[x, y] = ' '
+
+      block: # Fix intersections
+        for x in absCellX:
+          for y in absCellY:
+            if (y + 1 == hRange.a) and (x in wRange):
+              if (y == y0) and (gpoTopBorder in rc):
+                buf[x, y] = rc[gpoTopBorder]
+              elif (gpoBottomIntersection in rc):
+                buf[x, y] = rc[gpoBottomIntersection]
+
+            if (x + 1 == wRange.a) and (y in hRange):
+              if x == x0 and (gpoLeftBorder in rc):
+                buf[x, y] = rc[gpoLeftBorder]
+              elif (gpoRightIntersection in rc):
+                buf[x, y] = rc[gpoRightIntersection]
+
+            if (x - 1 == wRange.b) and (y in hRange):
+              if (x - 1) == totalW and (gpoRightBorder in rc):
+                buf[x, y] = rc[gpoRightBorder]
+              elif (gpoLeftIntersection in rc):
+                buf[x, y] = rc[gpoLeftIntersection]
+
+            if (y - 1 == hRange.b) and (x in wRange):
+              if (y - 1) == totalH and (gpoBottomBorder in rc):
+                buf[x, y] = rc[gpoBottomBorder]
+              elif (gpoTopIntersection in rc):
+                buf[x, y] = rc[gpoTopIntersection]
+
+
 #==============================  ---------  ==============================#
+
+
 
 
 func toString*(shape: Shape): string =

@@ -1,5 +1,5 @@
-import sugar, strutils, sequtils, strformat
-import hmisc/types/hdrawing
+import sugar, strutils, sequtils, strformat, options
+import hmisc/types/[hdrawing, hgeometry_primitives]
 import hmisc/algo/halgorithm
 
 #===========================  implementation  ============================#
@@ -69,3 +69,21 @@ suite "Drawing":
         makeThinLineGridBorders()
       ).render(buf)
       # echo $buf
+
+  test "Multicell grid":
+    let size1x1 = makeSize(1, 1)
+    echo newTermMultiGrid(
+      (0, 0),
+      @[
+        @[some(size1x1), some(size1x1),   some(size1x1)],
+        @[some(size1x1), some(makeSize(2, 2)),           none(Size)],
+        @[some(size1x1), none(Size),      none(Size)],
+        @[some(size1x1), some(size1x1),   some(size1x1)],
+        @[some(size1x1), some(makeSize(2, 2)),           none(Size)],
+        @[some(size1x1), none(Size),      none(Size)],
+        @[some(size1x1), none(Size),      none(Size)],
+      ],
+      @[5, 5, 5],
+      @[3, 3, 3, 3, 3, 3, 3],
+      makeThinLineGridBorders(),
+    ).toString()

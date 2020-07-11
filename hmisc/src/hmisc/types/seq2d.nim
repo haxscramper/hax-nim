@@ -1,4 +1,4 @@
-import sequtils
+import sequtils, options
 
 type
   Seq2d*[T] = object
@@ -15,6 +15,9 @@ func rowlen*[T](s: Seq2D[T], row: int): void =
 
 func rowNum*[T](s: Seq2D[T]): int =
   ## Get number or rows in 2d sequence
+  s.elems.len
+
+func len*[T](s: Seq2D[T]): int =
   s.elems.len
 
 func rowAppend*[T](s: var Seq2D[T], elem: T, idx: int): void =
@@ -36,6 +39,10 @@ func makeSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
 iterator items*[T](s: Seq2d[T]): seq[T] =
   for row in s.elems:
     yield row
+
+iterator pairs*[T](s: Seq2d[T]): (int, seq[T]) =
+  for idx, row in s.elems:
+    yield (idx, row)
 
 iterator columns*[T](s: Seq2D[T], row: int): T =
   for item in s.elems[row]:
@@ -64,6 +71,11 @@ iterator itercells*[T](s: Seq2D[T]): ((int, int), T) =
   for rowId, row in s.elems:
     for colId, cell in row:
       yield((rowId, colId), cell)
+
+iterator iterSomeCells*[T](s: Seq2D[Option[T]]): ((int, int), T) =
+  for (pos, cell) in s.itercells:
+    if cell.isSome():
+      yield (pos, cell.get())
 
 func `[]`*[T](grid: Seq2d[T], row, col: int): T =
   grid.elems[row][col]
