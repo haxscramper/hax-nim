@@ -31,6 +31,11 @@ func d*(text: varargs[string, `$`]): void =
 template de*(expr: untyped, text: varargs[string, `$`]): void =
   debugecho astToStr(expr), ": ", expr, " ", text.join(" ")
 
+template dev*(expr: untyped): untyped =
+  let val = expr
+  debugecho astToStr(expr), ": ", val
+  val
+
 template subnodesEq*(lhs, rhs, field: untyped): untyped =
   ## Check if two objects `lhs` and `rhs` has identical field `field`
   ## by comparing all items in the field. Check if two object's fields

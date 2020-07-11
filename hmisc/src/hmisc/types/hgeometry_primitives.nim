@@ -18,18 +18,6 @@ func isNanOrInf*(f: float): bool = f.classify in @[fcNan, fcInf, fcNegInf]
 #***********************  Geometrical primitives  ************************#
 #*************************************************************************#
 
-#================================  Size  =================================#
-
-type
-  Size* = object
-    width: int
-    height: int
-
-const size1x1* = Size(width: 1, height: 1)
-func width*(size: Size): int = size.width
-func height*(size: Size): int = size.height
-func makeSize*(w, h: int): Size = Size(width: w, height: h)
-
 #================================  Point  ================================#
 
 type

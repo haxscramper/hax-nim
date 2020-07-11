@@ -1,5 +1,6 @@
 import math, strutils, sequtils, random, macros, options
 import std/wordwrap
+import ../types/hprimitives
 
 #=======================  small helper templates  ========================#
 
@@ -86,6 +87,9 @@ func cumsumjoin*(
     result.add(val + sep + curr)
     curr += val + sep
 
+func sumjoin*(a: openarray[int], r: Range, sep: int): int =
+  sumjoin(a[r.a .. r.b], sep)
+
 iterator `..+`*(start: int, offset: int): int =
   for i in start ..< start + offset:
     yield i
@@ -96,6 +100,10 @@ func order*[Num](a, b: Num): (Num, Num) =
 
 template last*[T](stack: var seq[T]): var T = stack[^1]
 template last*[T](stack: seq[T]): T = stack[^1]
+
+func modiv*(a, b: int): tuple[val, rem: int] =
+  result.val = a div b
+  result.rem = a mod b
 
 proc max*[T](x: openArray[T], default: T): T =
   ## The maximum value of `x`. ``T`` needs to have a ``<`` operator.

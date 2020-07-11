@@ -79,23 +79,44 @@ suite "Drawing":
       (0, 0),
       @[
         @[
-          some((ms(2, 2), sb("Hello\nWorld"))),
+          some((ms(2, 2), sb("Hello\nWorld\nreallyu long string"))),
           nn,
-          some((ms(1, 1), sb("***")))
+          some((ms(2, 2), sb(newTermMultiGrid(
+            (0, 0),
+            @[
+              @[
+                some((ms(1, 1), sb("222"))),
+                some((ms(1, 1), sb("(((---)))"))),
+                some((ms(1, 1), sb("***)"))),
+                some((ms(1, 1), sb("***")))
+              ],
+              @[
+                some((ms(1, 1), sb("222"))),
+                some((ms(1, 1), sb("((()))"))),
+                some((ms(1, 1), sb("***"))),
+                some((ms(1, 1), sb("***")))
+              ],
+            ],
+            makeThinLineGridBorders(),
+          ).toString() & "\n some random anntation"))),
+          nn
         ],
         @[
           nn,
           nn,
-          some((ms(1, 1), sb("***")))
+          nn,
+          nn
         ],
         @[
           some((ms(1, 1), sb("222"))),
           some((ms(1, 1), sb("(((---)))"))),
+          some((ms(1, 1), sb("***\n((()))"))),
           some((ms(1, 1), sb("***")))
         ],
         @[
           some((ms(1, 1), sb("222"))),
           some((ms(1, 1), sb("((()))"))),
+          some((ms(1, 1), sb("***"))),
           some((ms(1, 1), sb("***")))
         ],
       ],

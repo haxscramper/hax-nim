@@ -579,8 +579,9 @@ func newTermMultiGrid*(
     cellHeights: heights,
     config: config)
 
-func getSizes(grid: Seq2D[Option[(Size, StrBlock)]]): tuple[
-  widths, heights: seq[int]] =
+func getSizes(
+  grid: Seq2D[Option[(Size, StrBlock)]],
+  vertSpacing, horSpacing: int = 0): tuple[widths, heights: seq[int]] =
   var rowHs: seq[int] = newSeqWith(grid.rowNum, 0)
   var colWs: seq[int] = newSeqWith(grid.colNum, 0)
 
@@ -591,13 +592,45 @@ func getSizes(grid: Seq2D[Option[(Size, StrBlock)]]): tuple[
       colWs[col].setMax(text.width)
       rowHs[row].setMax(text.height)
 
+  for (pos, cell) in grid.iterSomeCells():
+    if cell[0] != size1x1:
+      let
+        (size, text) = cell
+        rowRange: Range = pos.makePos().rowRange(dev size).decRight()
+        colRange: Range = pos.makePos().colRange(dev size).decRight()
+        rowHsum: int = sumjoin(rowHs, rowRange, vertSpacing)
+        colWsum: int = sumjoin(colWs, colRange, horSpacing)
+        textW: int = text.width
+        textH: int = text.height
+
+      if colWsum < textW:
+        let diff = textW - colWsum
+        let (val, rem) = diff.modiv(colRange.len)
+        for col in colRange:
+          colWs[col] += val # NOTE for now widths is just increased on
+          # left side, but it is possible to provide more sophisticaed
+          # layout - adding left padding for shifted cells (for
+          # centering origincal content in the cell), determining how
+          # cell width should be modified (just increase width for
+          # each cell or make last/first one larger etc).
+
+        colWs[colRange.b] += rem
+
+      if rowHsum < textH:
+        let diff = textH - rowHsum
+        let (val, rem) = diff.modiv(rowRange.len)
+        for row in rowRange:
+          rowHs[row] += val
+
+        rowHs[rowRange.b] += rem
+
   result.widths = colWs
   result.heights = rowHs
 
 func newTermMultiGrid*(
   start: (int, int),
   blocks: Seq2D[Option[(Size, StrBlock)]], config: TermGridConf): Multishape =
-  let (cellws, cellhs) = getSizes(blocks)
+  let (cellws, cellhs) = getSizes(blocks, 1, 1 #[ IMPLEMENT pass vert spacing ]#)
   let grid = newTermMultiGrid(
     start = start,
     cells = blocks.mapIt2d(it.isSome().tern(some(it.get[0]), none(Size))),
