@@ -596,8 +596,8 @@ func getSizes(
     if cell[0] != size1x1:
       let
         (size, text) = cell
-        rowRange: Range = pos.makePos().rowRange(dev size).decRight()
-        colRange: Range = pos.makePos().colRange(dev size).decRight()
+        rowRange: Range = pos.makePos().rowRange(size).decRight()
+        colRange: Range = pos.makePos().colRange(size).decRight()
         rowHsum: int = sumjoin(rowHs, rowRange, vertSpacing)
         colWsum: int = sumjoin(colWs, colRange, horSpacing)
         textW: int = text.width
@@ -708,6 +708,18 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
                 buf[x, y] = rc[gpoBottomBorder]
               elif (gpoTopIntersection in rc):
                 buf[x, y] = rc[gpoTopIntersection]
+
+      block:
+        # IMPLEMENT fix multicell grid grinsections. When two cell
+        # have 2+ sections in common the last one overrides
+        # intersection. Can be fixed by introducing aux function:
+        # `cellAround` and checking row/column ranges for all such
+        # cells. Overlap can be done using another aux function:
+        # `overlapRange` for two rages. So it would look like:
+        when false:
+          for cell in curr.cellsAround():
+            if cell.rowRange().overlap(curr.rowRange()).len > 1:
+              discard
 
 
 #==============================  ---------  ==============================#

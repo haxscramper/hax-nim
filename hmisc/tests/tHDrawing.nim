@@ -79,9 +79,9 @@ suite "Drawing":
       (0, 0),
       @[
         @[
-          some((ms(2, 2), sb("Hello\nWorld\nreallyu long string"))),
+          some((ms(2, 3), sb("Hello\nWorld\nreallyu long string"))),
           nn,
-          some((ms(2, 2), sb(newTermMultiGrid(
+          some((ms(2, 3), sb(newTermMultiGrid(
             (0, 0),
             @[
               @[
@@ -99,6 +99,12 @@ suite "Drawing":
             ],
             makeThinLineGridBorders(),
           ).toString() & "\n some random anntation"))),
+          nn
+        ],
+        @[
+          nn,
+          nn,
+          nn,
           nn
         ],
         @[
