@@ -435,13 +435,14 @@ func newTermGrid*(
 func newTermGrid*(
   start: (int, int), cells: Seq2d[RuneBlock],
   conf: TermGridConf): Multishape =
-  let cellws: seq[int] = collect(newSeq):
-    for col in cells.itercols(@["".toRunes()]):
-      col.mapIt(it.mapIt(it.len).max(0)).max(0)
+  let cellws: seq[int] = cells.maximizeColIt(
+    ((expectType(it, RuneBlock); it.mapIt(it.len).max(0))),
+    @["".toRunes()]
+  )
 
-  let cellhs: seq[int] = collect(newSeq):
-    for row in cells.iterrows():
-      row.mapIt(it.len).max(0)
+  let cellhs: seq[int] = cells.maximizeRowIt(
+    ((expectType(it, RuneBlock); it.len))
+  )
 
   let grid = newTermGrid(start, cellws, cellhs, conf)
   let (_, _, left, right, top, bottom) = spacingDimensions(conf)
@@ -578,12 +579,23 @@ func newTermMultiGrid*(
     cellHeights: heights,
     config: config)
 
+func getSizes(grid: Seq2D[Option[(Size, StrBlock)]]): tuple[
+  widths, heights: seq[int]] =
+  discard
+
 func newTermMultiGrid*(
   start: (int, int),
-  blocks: Seq2D[Option[(Size, StrBlock)]]): Multishape =
-  discard
-  # newTerm
+  blocks: Seq2D[Option[(Size, StrBlock)]], config: TermGridConf): Multishape =
+  let (cellws, cellhs) = getSizes(blocks)
+  let grid = newTermMultiGrid(
+    start = start,
+    cells = blocks.mapIt2d(it.isSome().tern(some(it.get[0]), none(Size))),
+    widths = cellws,
+    heights = cellws,
+    config = config
+  )
 
+  return newMultishape(@[Shape(grid)])
 
 method render*(grid: TermMultiGrid, buf: var TermBuf): void =
   gridRenderAux(TermGrid(grid), buf)

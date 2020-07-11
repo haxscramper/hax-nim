@@ -14,6 +14,8 @@ proc colorPrint*(node: NimNode): void =
   discard staticExec("nimpretty " & file)
   echo staticExec("pygmentize -f terminal " & file)
 
+template expectType*(op, t: untyped): untyped =
+  static: assert op is t
 
 proc echoi*(indent: int, message: varargs[string, `$`]): void =
   ## Echo with indentation. `message` is joined using spaces

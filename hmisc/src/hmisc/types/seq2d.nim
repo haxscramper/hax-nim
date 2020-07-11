@@ -102,3 +102,47 @@ template mapIt2d*[T](inseq: Seq2d[T], op: untyped): untyped =
       result.addLast op
 
   result
+
+template maximizeColIt*[T](
+  inseq: Seq2d[T], op: untyped, default: T): seq[int] =
+  ## Iiterate over all columns in grid. Execute `op` for each cell in
+  ## column and save max value from each column
+  type ResType = typeof((var it {.inject.}: T; op))
+  var res: seq[ResType]
+  var idx = 0
+  for col in inseq.itercols(default):
+    var buf: seq[ResType]
+    for cell in col:
+      let it {.inject.} = cell
+      buf.add op
+
+    if buf.len == 0:
+      raiseAssert("Failed to get any from column " & $idx)
+    else:
+      res.add buf.max()
+
+    inc idx
+
+  res
+
+template maximizeRowIt*[T](
+  inseq: Seq2d[T], op: untyped): seq[int] =
+  ## Iiterate over all rows in grid. Execute `op` for each cell in
+  ## column and save max value from each column
+  type ResType = typeof((var it {.inject.}: T; op))
+  var res: seq[ResType]
+  var idx = 0
+  for col in inseq.iterrows():
+    var buf: seq[ResType]
+    for cell in col:
+      let it {.inject.} = cell
+      buf.add op
+
+    if buf.len == 0:
+      raiseAssert("Failed to get any from row " & $idx)
+    else:
+      res.add buf.max()
+
+    inc idx
+
+  res

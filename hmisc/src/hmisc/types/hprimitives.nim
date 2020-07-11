@@ -1,4 +1,4 @@
-import unicode
+import unicode, strutils
 
 
 #=========================================================================#
@@ -9,6 +9,8 @@ import unicode
 
 type
   StrBlock* = seq[string]
+
+func toBlock*(s: string): StrBlock = s.split('\n')
 
 #============================  rune sequence  ============================#
 

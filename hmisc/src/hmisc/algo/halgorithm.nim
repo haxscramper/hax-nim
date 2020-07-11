@@ -3,6 +3,10 @@ import std/wordwrap
 
 #=======================  small helper templates  ========================#
 
+template expectEqualTypes(a, b: untyped): untyped =
+  assert (a is typeof(b)), "Mismatch between types: first is `" &
+    $typeof(a) & "` and second is `" & $typeof(b) & "`"
+
 template tern*(
   predicate: bool,
   tBranch: untyped,
@@ -12,8 +16,10 @@ template tern*(
       let a = (1 == 2).tern("99", "0-")
       assert a == "0-"
 
-    if predicate: tBranch
-    else: fBranch
+    block:
+      static: expectEqualTypes(tBranch, fBranch)
+      if predicate: tBranch
+      else: fBranch
 
 template orElse*(
   value: untyped, predicate: bool, fallback: untyped): untyped =
