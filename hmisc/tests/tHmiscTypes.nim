@@ -1,6 +1,7 @@
 import sugar, strutils, sequtils, strformat
 
 import hmisc/types/[seq2d, hprimitives]
+import hmisc/hcommon_converters
 
 import unittest
 
@@ -21,7 +22,7 @@ suite "{Seq2D}":
     assert toSeq(strutils.split("Hello", "\n")) is seq[string]
     assert toSeq(grid[0, 0].split("\n")) is seq[string]
 
-    let mapped: Seq2D[StrSeq] = grid.mapIt2d(
+    let mapped: Seq2D[StrBlock] = grid.mapIt2d(
       toSeq(($it).split("\n"))
     )
 

@@ -30,7 +30,7 @@ func addLast*[T](s: var Seq2D[T], elem: T): void =
   ## Add new element to last row
   s.elems[^1].add elem
 
-converter toSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
+func makeSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
   Seq2D[T](elems: s)
 
 iterator items*[T](s: Seq2d[T]): seq[T] =

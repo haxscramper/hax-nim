@@ -1,5 +1,6 @@
 import unittest
-import hmisc/[nim_trs, halgorithm]
+import hmisc/[nim_trs]
+import hmisc/algo/halgorithm
 import strutils, sequtils, strformat, sugar, options
 
 type

@@ -1,8 +1,9 @@
 import macroutils
-import hpprint_types
-import strutils, strformat
-import macros
-import sequtils, halgorithm, helpers, hmisc_types
+import strutils, strformat, macros, sequtils
+
+import ../algo/halgorithm
+import ../helpers
+import ../types/hnim_ast
 
 proc getFields*(node: NimNode): seq[Field[NimNode]]
 

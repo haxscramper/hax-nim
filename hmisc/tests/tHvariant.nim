@@ -1,4 +1,4 @@
-import hmisc/hvariant
+import hmisc/types/hvariant
 
 import unittest, strutils
 

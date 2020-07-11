@@ -1,7 +1,6 @@
-import hmisc/nimast_trs
+import hmisc/[nimast_trs, helpers, nim_trs_pprint]
 import sequtils, strformat, strutils
-import hmisc/halgorithm
-
+import hmisc/algo/halgorithm
 import unittest
 
 type

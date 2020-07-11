@@ -1,5 +1,6 @@
 import sugar, strutils, sequtils, strformat
-import hmisc/[htrie, hpprint]
+import hmisc/[hpprint]
+import hmisc/types/htrie
 import unittest
 
 #====================  type match inforcement macro  =====================#

@@ -7,6 +7,10 @@ import ../algo/[halgorithm, hseq_mapping]
 import ../types/[seq2d]
 export hprimitives
 
+
+import ../hcommon_converters
+export hcommon_converters
+
 #===========================  terminal buffer  ===========================#
 
 type

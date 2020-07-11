@@ -1,48 +1,58 @@
 import unittest, shell
 
-import hmisc/[helpers, defensive]
+import hmisc/[helpers]
 import strutils
-import hmisc/types/[graphviz_ast, block_grid, hdrawing]
 
-import hmisc/[hpprint]
+import hmisc/types/[
+  graphviz_ast,
+  block_grid,
+  hdrawing,
+  hnim_ast,
+  htrie
+]
+
+import hmisc/macros/[obj_field_macros]
+
+import hmisc/[hpprint, hpprint_graphviz]
 
 suite "Block grid":
-  test "{makeCell}":
-    let cell = makeCell("Hello", 5, 1)
-    assert cell.width == 5
-    assert cell.height == 1
+  discard
+  # test "{makeCell}":
+  #   let cell = makeCell("Hello", 5, 1)
+  #   assert cell.width == 5
+  #   assert cell.height == 1
 
-  test "{makeGrid}":
-    let grid = makeGrid(
-      @[@[makeCell("#", 1, 1), makeCell("@", 1, 1)]],
-      makeCell("", 0, 0),
-      makeEmptyGridBorders()
-    )
+  # test "{makeGrid}":
+  #   let grid = makeGrid(
+  #     @[@[makeCell("#", 1, 1), makeCell("@", 1, 1)]],
+  #     makeCell("", 0, 0),
+  #     makeEmptyGridBorders()
+  #   )
 
-    assert grid.width == 2
-    assert grid.height == 1
+  #   assert grid.width == 2
+  #   assert grid.height == 1
 
-  test "{makeGrid} make string grid":
-    var grid = makeGrid(
-      @[
-        @["[|||||]", "world"],
-        @["EEEE", "#####"],
-        @["eee"]
-      ],
-      makeEmptyGridBorders()
-    )
+  # test "{makeGrid} make string grid":
+  #   var grid = makeGrid(
+  #     @[
+  #       @["[|||||]", "world"],
+  #       @["EEEE", "#####"],
+  #       @["eee"]
+  #     ],
+  #     makeEmptyGridBorders()
+  #   )
 
 
-    hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
-    # grid[3, 3] =
-    # grid[4, 4] = makeUnicodeCell("&###33", 7, 1)
+  #   hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
+  #   # grid[3, 3] =
+  #   # grid[4, 4] = makeUnicodeCell("&###33", 7, 1)
 
-    grid.addHeader(makeCell("!!!!"))
-    grid.borders = makeUnicodeGridBorders()
+  #   grid.addHeader(makeCell("!!!!"))
+  #   grid.borders = makeUnicodeGridBorders()
 
-    echo grid.toStringGrid().toString()
+  #   echo grid.toStringGrid().toString()
 
-    # quit 0
+  #   # quit 0
 
 
 suite "Block labeling":
@@ -766,7 +776,7 @@ suite "Object tree to dot graph":
     testgraph(@[12])
 
 
-import hmisc/[objdiff, htrie]
+import hmisc/[objdiff]
 
 suite "Object diff":
   test "diff integers":

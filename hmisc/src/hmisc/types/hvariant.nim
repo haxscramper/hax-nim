@@ -1,3 +1,5 @@
+import macros, sequtils, strutils
+
 type
   Var4*[T0, T1, T2, T3] = object
     case idx: range[0 .. 3]:

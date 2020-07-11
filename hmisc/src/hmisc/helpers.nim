@@ -35,3 +35,6 @@ template subnodesEq*(lhs, rhs, field: untyped): untyped =
   ## have identical lengths too.
   lhs.field.len() == rhs.field.len() and
   zip(lhs.field, rhs.field).allOfIt(it[0] == it[1])
+
+template fail*(msg: string): untyped =
+  raiseAssert(msg)

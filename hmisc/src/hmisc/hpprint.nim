@@ -13,6 +13,7 @@ import types/[hnim_ast]
 import helpers
 
 import strformat, tables, strutils, sequtils
+export tables
 import with, gara
 
 
@@ -287,7 +288,6 @@ proc toSimpleTree*[Obj](
 
 
 type
-
   Chunk* = object
     content: seq[string] ## Lines for chunk
     maxWidth: int ## Max line lenght in chunk

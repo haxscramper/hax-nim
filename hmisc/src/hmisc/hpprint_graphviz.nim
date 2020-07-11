@@ -1,3 +1,23 @@
+import types/[
+  hnim_ast,
+  graphviz_ast,
+  block_grid,
+  html_ast,
+  sparse_grid,
+  hvariant
+]
+
+export hvariant
+
+import hcommon_converters
+export hcommon_converters
+
+import algo/htree_mapping
+
+import hpprint
+
+import sequtils
+
 type
   DotGenConfig = object
     f1: int
@@ -13,25 +33,30 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
   # assert obj.isPrimitive
   echo &"converting object {obj.objId} to grid"
   # echo obj
-  case obj.kind:
-    of okConstant:
-      if obj.isPrimitive:
-        # REVIEW handle non-primitive constants
-        result.grid = makeGrid(
-          @[@[
-            (
-              item: makeObjElem(obj.constType),
-              w: obj.constType.len,
-              h: 1
-            ), # First cell - object type
-            (
-              item: makeObjElem(obj.strLit),
-              w: obj.strLit.len,
-              h: 1
-            ) # Secon cell - object value
-          ]])
-    else:
-      discard
+
+  #[ IMPLEMENT ]#
+  # case obj.kind:
+  #   of okConstant:
+  #     if obj.isPrimitive:
+  #       # REVIEW handle non-primitive constants
+  #       result.grid = makeGrid(
+  #         @[@[
+  #           (
+  #             item: makeObjElem(obj.constType),
+  #             w: obj.constType.len,
+  #             h: 1
+  #           ), # First cell - object type
+  #           (
+  #             item: makeObjElem(obj.strLit),
+  #             w: obj.strLit.len,
+  #             h: 1
+  #           ) # Secon cell - object value
+  #         ]],
+  #         makeCell("", 0, 0)
+  #       )
+  #   else:
+  #     discard
+  #[ IMPLEMENT ]#
 
   discard
 
@@ -105,7 +130,7 @@ proc toDotGraph*[Obj](obj: Obj, conf: DotGenConfig = DotGenConfig()): Graph =
         let (node, edges) = it.foldObject()
         @[ toVar2[Edge, Node](node) ] &
           toVar2[Edge, Node](edges) &
-          subt.concat()
+          sequtils.concat(subt)
   )
 
   result = Graph(

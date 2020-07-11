@@ -1,5 +1,7 @@
 import sugar, strutils, sequtils, strformat, algorithm
-import hmisc/[htrie, helpers, halgorithm, hpprint]
+import hmisc/[helpers, hpprint]
+import hmisc/types/htrie
+import hmisc/algo/halgorithm
 
 #================================  tests  ================================#
 

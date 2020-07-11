@@ -1,7 +1,7 @@
 ## Statically typed nim ast representation
 
 import ../helpers
-import sequtils
+import sequtils, colors
 
 type
   FieldBranch*[Node] = object
@@ -98,9 +98,17 @@ type
             kindBlocks*: seq[Field[Node]] ## Object field tree. TODO -
             ## currently not implemented
 
+  ObjElem* = object
+    text*: string
+    color*: Color
+
   ValObjTree* = ObjTree[void] ## Object tree used at runtime.
   ValField* = Field[void] ## Field used at runtime
   ValFieldBranch* = FieldBranch[void] ## Field branch used at runtime
+
+func makeObjElem*(text: string): ObjElem =
+  ObjElem(text: text)
+
 
 #==============================  operators  ==============================#
 

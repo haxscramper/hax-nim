@@ -7,7 +7,7 @@ import deques, intsets, sets
 export tables, intsets
 
 import types/[htrie, hprimitives]
-import algo/[hmisc_algo, hseq_mapping]
+import algo/[halgorithm, hseq_mapping]
 import helpers
 
 type
