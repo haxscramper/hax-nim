@@ -436,8 +436,7 @@ func newTermGrid*(
   start: (int, int), cells: Seq2d[RuneBlock],
   conf: TermGridConf): Multishape =
   let cellws: seq[int] = cells.maximizeColIt(
-    ((expectType(it, RuneBlock); it.mapIt(it.len).max(0))),
-    @["".toRunes()]
+    ((expectType(it, RuneBlock); it.mapIt(it.len).max(0)))
   )
 
   let cellhs: seq[int] = cells.maximizeRowIt(

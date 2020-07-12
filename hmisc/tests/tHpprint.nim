@@ -41,7 +41,7 @@ suite "Block grid":
           @["[|||||]", "world"],
           @["EEEE", "#####"],
           @["eee"]
-        ].toStrGrid(),
+        ].toStrGrid(@[""].toStrBlock()),
         makeThinLineGridBorders()
       ).toCell()
 

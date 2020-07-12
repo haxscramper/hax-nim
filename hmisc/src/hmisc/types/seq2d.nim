@@ -4,6 +4,7 @@ import ../algo/[halgorithm, hseq_mapping]
 
 type
   Seq2d*[T] = object
+    colNum: int
     elems: seq[seq[T]]
 
 func add*[T](s: var Seq2d[T], row: seq[T]): void =
@@ -30,18 +31,13 @@ func fillToSize*[T](grid: var Seq2D[T], size: Size, val: T): void =
     if rowlen < size.width:
       grid.elems[row] &= newSeqWith(size.width - rowlen, val)
 
-func colNum*[T](s: Seq2D[T], expectUniform: bool = true): int =
+func colNum*[T](s: Seq2D[T]): int =
   ## Get max number of columns in 2d sequence. If `expecUniform` check
   ## that all rows have equal lentgth
-  if s.elems.len == 0:
-    result = 0
-  else:
-    result = s.elems.mapIt(it.len).max()
-    if expectUniform:
-      for idx, row in s.elems:
-        assert row.len == result, "Cannot get number of columns for 2d " &
-          &"sequence row {idx} has {row.len} elements, but expected " &
-          &"{result}"
+  s.colNum
+  # if s.elems.len == 0:
+  #   result = 0
+  # else:
 
 func size*[T](s: Seq2D[T]): Size =
   makeSize(s.colNum(), s.rowNum())
@@ -62,8 +58,23 @@ func addLast*[T](s: var Seq2D[T], elem: T): void =
   ## Add new element to last row
   s.elems[^1].add elem
 
+func makeSeq2D*[T](s: seq[seq[T]], default: T): Seq2d[T] =
+  let maxlen = s.mapIt(it.len).max()
+  var inseq = s
+  for idx, row in s:
+    if row.len < maxlen:
+      inseq[idx] &= newSeqWith(maxlen - row.len, default)
+
+  Seq2D[T](elems: s, colnum: maxlen)
+
 func makeSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
-  Seq2D[T](elems: s)
+  let maxlen = s.mapIt(it.len).max()
+  for idx, row in s:
+    assert row.len == maxlen, "Cannot create 2d sequence from non-uniform " &
+      &"sequence. Row {idx} has {row.len} elements, but expected " &
+      &"{result}"
+
+  Seq2D[T](elems: s, colnum: maxlen)
 
 iterator items*[T](s: Seq2d[T]): seq[T] =
   for row in s.elems:
@@ -81,18 +92,12 @@ iterator iterrows*[T](s: Seq2D[T]): seq[T] =
   for row in s.elems:
     yield row
 
-iterator itercols*[T](s: Seq2D[T], default: T): seq[T] =
+iterator itercols*[T](s: Seq2D[T]): seq[T] =
   let rowlen = s.elems.mapIt(it.len).max()
-  # for row in s.elems:
-  #   assert row.len == rowlen, "Row lenths differ"
-
   for col in 0 ..< rowlen:
     var buf: seq[T]
     for row in s.elems:
-      if col > row.len - 1:
-        buf.add default
-      else:
-        buf.add row[col]
+      buf.add row[col]
 
     yield buf
 
@@ -141,14 +146,13 @@ template mapIt2d*[T](inseq: Seq2d[T], op: untyped): untyped =
 
   result
 
-template maximizeColIt*[T](
-  inseq: Seq2d[T], op: untyped, default: T): seq[int] =
+template maximizeColIt*[T](inseq: Seq2d[T], op: untyped): seq[int] =
   ## Iiterate over all columns in grid. Execute `op` for each cell in
   ## column and save max value from each column
   type ResType = typeof((var it {.inject.}: T; op))
   var res: seq[ResType]
   var idx = 0
-  for col in inseq.itercols(default):
+  for col in inseq.itercols():
     var buf: seq[ResType]
     for cell in col:
       let it {.inject.} = cell
@@ -198,8 +202,11 @@ template checkIfIt*[T](grid: Seq2d[Option[T]], pos: Pos, op: untyped): bool =
   else:
     false
 
-func toStrGrid*(grid: seq[seq[string]]): Seq2D[StrBlock] =
-  Seq2d[StrBlock](elems: grid.mapIt(it.mapIt(it.split("\n"))))
+func toStrGrid*(grid: seq[seq[string]], default: StrBlock): Seq2D[StrBlock] =
+  makeSeq2d(
+    grid.mapIt(it.mapIt(it.split("\n"))),
+    default
+  )
 
 #===========================  multicell grid  ============================#
 
