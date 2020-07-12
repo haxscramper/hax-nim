@@ -28,7 +28,7 @@ func fillToSize*[T](grid: var Seq2D[T], size: Size, val: T): void =
 
     let rowlen = grid.elems[row].len
     if rowlen < size.width:
-      grid.elems[row] &= newSeqWith(size.width - rowlen + 1, val)
+      grid.elems[row] &= newSeqWith(size.width - rowlen, val)
 
 func colNum*[T](s: Seq2D[T], expectUniform: bool = true): int =
   ## Get max number of columns in 2d sequence. If `expecUniform` check
@@ -209,6 +209,7 @@ type
     elems*: Seq2D[Option[T]]
     lookup: MulticellLookup
 
+
 func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
   result = grid.mapIt2d(none((Pos, Size)))
   for (pos, size) in grid.iterSomeCells():
@@ -235,6 +236,10 @@ func `[]=`*[T](grid: var MulticellGrid[T], pos: Pos, val: (Size, T)): void =
 func fillToSize*[T](grid: var MulticellGrid[T], size: Size): void =
   grid.elems.fillToSize(size, none(T))
   grid.lookup.fillToSize(size, none(tuple[pos: Pos, size: Size]))
+
+func makeMulticell*[T](rows, cols: int): MulticellGrid[T] =
+  result.fillToSize(makeSize(h = rows, w = cols))
+
 
 iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
   var (row, col) = pos.unpack

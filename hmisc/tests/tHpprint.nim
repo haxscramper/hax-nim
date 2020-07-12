@@ -1,4 +1,4 @@
-import unittest, shell
+import unittest, shell, sugar
 
 import hmisc/[helpers]
 import strutils
@@ -34,16 +34,18 @@ suite "Block grid":
   #   assert grid.height == 1
 
   test "{makeGrid} make string grid":
-    # var grid = makeGrid(3, 3)
-    echo makeGrid(
-      @[
-        @["[|||||]", "world"],
-        @["EEEE", "#####"],
-        @["eee"]
-      ].toStrGrid(),
-      makeThinLineGridBorders()
-    ).toStringBlock().join("\n")
+    var grid = makeGrid[StrBlock](3, 3, makeThinLineGridBorders())
+    for (pos, cell) in grid.itercells():
+      grid[pos] = makeGrid(
+        @[
+          @["[|||||]", "world"],
+          @["EEEE", "#####"],
+          @["eee"]
+        ].toStrGrid(),
+        makeThinLineGridBorders()
+      ).toCell()
 
+    echo grid.toStringBlock().join("\n")
 
   #   hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
   #   # grid[3, 3] =

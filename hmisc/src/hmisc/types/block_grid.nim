@@ -75,10 +75,6 @@ func lastRow*[T](grid: BlockGrid[T]): int =
 func rows*[T](grid: BlockGrid[T]): seq[int] =
   grid.maxW.mapPairs(rhs).sorted()
 
-iterator itercells*[T](grid: BlockGrid[T]): ((int, int), GridCell[T]) =
-  for (pos, cell) in grid.grid.itercells():
-    yield (pos, cell)
-
 func width*[T](grid: BlockGrid[T]): int =
   let (_, hSpacing, left, right, _, _) = spacingDimensions(grid.borders)
   grid.maxW.mapPairs(rhs).sumjoin(hSpacing) + left + right
@@ -112,11 +108,16 @@ func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
 
   return toRange((start, finish))
 
-func `[]=`*[T](
-  grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
-    grid.grid[(row, col)] = cell
-    grid.maxW.maxOrSet(col, cell.width)
-    grid.maxH.maxOrSet(row, cell.height)
+func `[]=`*[T](grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
+  grid.grid[makePos(row, col)] = (cell.size, cell)
+
+func `[]=`*[T](grid: var BlockGrid[T], pos: Pos, cell: GridCell[T]): void =
+  d &"Setting cell at position {pos}"
+  grid.grid[pos] = (cell.size, cell)
+
+iterator itercells*[T](grid: BlockGrid[T]): (Pos, Option[GridCell[T]]) =
+  for (pos, cell) in grid.grid.elems.itercells():
+    yield (makePos(pos), cell)
 
 #============================  constructors  =============================#
 
@@ -137,6 +138,10 @@ func makeCell*[T](
     vertPolicy: policies[0],
     horizPolicy: policies[1]
   )
+
+func toCell*[T](
+  grid: BlockGrid[T], size: Size = size1x1): GridCell[T] =
+  GridCell[T](isItem: false, grid: grid, size: size)
 
 func makeUnicodeCell*[T](
   arg: T, w, h: int,
@@ -161,8 +166,12 @@ func makeCell*(text: StrBlock): GridCell[StrBlock] =
 func makeGrid*[T](arg: MulticellGrid[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
   result = BlockGrid[T](grid: arg, borders: conf)
 
+func makeGrid*[T](rows, cols: int, borders: TermGridConf): BlockGrid[T] =
+  result.borders = borders
+  result.grid = makeMulticell[GridCell[T]](rows, cols)
+
 func makeGrid*(arg: Seq2D[StrBlock],
-               conf: TermGridConf): BlockGrid[seq[string]] =
+               conf: TermGridConf): BlockGrid[StrBlock] =
   makeGrid(arg.mapIt2d(some(makeCell(it))).toMulticell(), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
@@ -174,18 +183,28 @@ func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
 
 #==========================  string conversion  ==========================#
 
-func toStringBlock*[T](grid: BlockGrid[T]): seq[string]
-func toStringBlock*[T](cell: GridCell[T]): seq[string] =
-  case cell.isItem:
-    of true: ($cell.item).split("\n")
-    of false: cell.grid.toStringBlock()
+func toStringBlock*[T](
+  grid: BlockGrid[T],
+  toStr: (proc(it: T): StrBlock) = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock
 
-func toStringBlock*[T](grid: BlockGrid[T]): StrBlock =
+func toStringBlock*[T](
+  cell: GridCell[T],
+  toStr: proc(it: T): StrBlock = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock =
+  case cell.isItem:
+    of true:
+      result = toStr(cell.item)
+    of false:
+      result = cell.grid.toStringBlock()
+
+func toStringBlock*[T](
+  grid: BlockGrid[T],
+  toStr: proc(it: T): StrBlock = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock =
+
   let cells: Seq2D[Option[(Size, StrBlock)]] = grid.grid.elems.mapIt2D(
     block:
       expectType(it, Option[GridCell[T]])
       if it.isSome():
-        some((it.get().size, it.get().toStringBlock()))
+        some((it.get().size, it.get().toStringBlock(toStr)))
       else:
         none((Size, StrBlock))
   )

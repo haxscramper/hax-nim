@@ -11,6 +11,7 @@ type
   StrBlock* = seq[string]
 
 func toBlock*(s: string): StrBlock = s.split('\n')
+func toBlock*(s: seq[string]): StrBlock = StrBlock(s)
 func height*(s: StrBlock): int = s.len
 func width*(s: StrBlock): int =
   if s.len == 0: 0
