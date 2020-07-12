@@ -82,6 +82,10 @@ func point*(r: Range): int =
   assert r.isPoint()
   r.a
 
+func isValid*(r: Range): bool = r.b >= r.a
+func overlap*(r1, r2: Range): Range =
+  result = makeRange(max(r1.a, r2.a), min(r1.b, r2.b))
+func `$`*(r: Range): string = &"[{r.a}, {r.b}]"
 func len*(r: Range): int = r.b - r.a + 1
 
 iterator items*(r: Range): int =
@@ -93,6 +97,14 @@ iterator items*(r: (Range, Range)): (int, int) =
     for y in r[1].a .. r[1].b:
       yield (x, y)
 
+iterator `[]`*[T](s: seq[T], r: Range): T =
+  for it in s[r.a .. r.b]:
+    yield it
+
+iterator inrange*(s: seq[int], r: Range): int =
+  for v in s[r.a] .. s[r.b]:
+    yield v
+
 #==============================  Position  ===============================#
 # TODO is it possible to define custom unpacker for object? to write
 #      `let (row, col) = Pos()`
@@ -102,13 +114,44 @@ type
     row*: int
     col*: int
 
+
+
+
 func makePos*(row, col: int): Pos = Pos(row: row, col: col)
 func makePos*(pos: (int, int)): Pos = Pos(row: pos[0], col: pos[1])
+func isValid*(pos: Pos): bool = (pos.row >= 0) and (pos.col >= 0)
+
+
+func shiftRC*(pos: Pos, dRow: int = 1, dCol: int = 1): Pos =
+  makePos(pos.row + dRow, pos.col + dCol)
+
+func shiftRc*(pos: Pos, dRC: (int, int) = (1, 1)): Pos =
+  makePos(pos.row + dRC[0], pos.col + dRC[1])
+
+func shiftC*(pos: Pos, dCol: int = 1): Pos = shiftRC(pos, 0, dCol)
+func shiftR*(pos: Pos, dRow: int = 1): Pos = shiftRC(pos, dRow, 0)
+converter toPos*(pos: (int, int)): Pos = makePos(pos)
+func unpack*(pos: Pos): tuple[row, col: int] = (pos.row, pos.col)
+func `==`(a, b: Pos): bool = (a.row == b.row) and (a.col == b.col)
+
+type
+  RelPos* = enum
+    rpLeft
+    rpRight
+    rpBottom
+    rpTop
+
+func toDiffRC*(rp: RelPos): (int, int) =
+  case rp:
+    of rpLeft: (0, -1)
+    of rpRight: (0, 1)
+    of rpBottom: (1, 0)
+    of rpTop: (-1, 0)
 
 #==============================  compound  ===============================#
 
 func rowRange*(pos: Pos, size: Size): Range =
-  makeRange(pos.row, size.height)
+  makeRange(pos.row, pos.row + size.height)
 
 func colRange*(pos: Pos, size: Size): Range =
   makeRange(pos.col, pos.col + size.width)

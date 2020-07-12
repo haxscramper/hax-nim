@@ -710,16 +710,21 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
                 buf[x, y] = rc[gpoTopIntersection]
 
       block:
+        d "--------"
         # IMPLEMENT fix multicell grid grinsections. When two cell
         # have 2+ sections in common the last one overrides
         # intersection. Can be fixed by introducing aux function:
         # `cellAround` and checking row/column ranges for all such
         # cells. Overlap can be done using another aux function:
         # `overlapRange` for two rages. So it would look like:
-        when false:
-          for cell in curr.cellsAround():
-            if cell.rowRange().overlap(curr.rowRange()).len > 1:
-              discard
+        let lookup = makeLookup(grid.cells)
+        for (pos, size) in grid.cells.iterSomeCells():
+          for (cellPos, cellSize, relPos) in lookup.cellsAround(pos):
+            let rowOverlap = cellPos.rowRange(cellSize).overlap(pos.rowRange(size))
+            let colRange = cellPos.colRange(cellSize)
+            if rowOverlap.len > 1:
+              de cellPos, relPos, "rows:", rowOverlap
+              # d "rows:", pos.rowRange(size), cellPos.rowRange(cellSize)
 
 
 #==============================  ---------  ==============================#

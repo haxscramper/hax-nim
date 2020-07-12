@@ -4,7 +4,7 @@ import algo/[halgorithm, hseq_mapping]
 export halgorithm
 export hseq_mapping
 import sequtils
-
+include hdebug_misc
 
 proc colorPrint*(node: NimNode): void =
   # TODO convert nim ast into adequately readable form without using
@@ -24,17 +24,6 @@ proc echoi*(indent: int, message: varargs[string, `$`]): void =
 proc echoi*(message: varargs[string, `$`]): void =
   ## Echo with message joined by spaces
   echo message.join(" ")
-
-func d*(text: varargs[string, `$`]): void =
-  debugecho text.join(" ")
-
-template de*(expr: untyped, text: varargs[string, `$`]): void =
-  debugecho astToStr(expr), ": ", expr, " ", text.join(" ")
-
-template dev*(expr: untyped): untyped =
-  let val = expr
-  debugecho astToStr(expr), ": ", val
-  val
 
 template subnodesEq*(lhs, rhs, field: untyped): untyped =
   ## Check if two objects `lhs` and `rhs` has identical field `field`

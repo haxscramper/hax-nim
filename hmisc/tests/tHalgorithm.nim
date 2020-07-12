@@ -483,6 +483,23 @@ suite "Simple sequence templates":
     var tmp: seq[int]
     assert not tmp.anyOfIt(it > 9)
 
+  test "{deduplicateByIt} deduplicate ingeters :template:":
+    let s = @[(1, 2), (1, 3), (1, 2)]
+    let dedupl = s.deduplicateIt(it[0])
+    assertEq dedupl, @[(1, 2)]
+
+  test "{deduplicateByIt} deduplicate without sorting :template:":
+    type
+      T = object
+        f1: int
+      U = object
+        f1: T
+        f2: float
+
+    let s = @[U(), U(f1: T(f1: 1)), U(f2: 3.9)]
+    let dedupl = s.deduplicateIt(it.f1)
+    assertEq dedupl, @[U(), U(f1: T(f1: 1))]
+
 import math
 
 suite "Misc algorithms":

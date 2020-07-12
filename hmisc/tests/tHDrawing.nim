@@ -75,6 +75,7 @@ suite "Drawing":
     proc ms(a, b: int): auto = makeSize(a, b)
     let nn = none((Size, StrBlock))
     proc sb(s: string): StrBlock = s.toBlock()
+    echo overlap(makeRange(1, 2), makeRange(3, 4))
     echo newTermMultiGrid(
       (0, 0),
       @[

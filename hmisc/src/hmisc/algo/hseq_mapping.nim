@@ -1,6 +1,6 @@
 import sequtils, strutils, macros
-
-import ../types/seq2d
+import algorithm
+export algorithm
 
 #========================  sorting and filtering  ========================#
 
@@ -38,6 +38,43 @@ template mergeUniqByIt*(sequence, operation: untyped): untyped =
 
   result.add equal
   result
+
+template deduplicateIt*[T](
+  inseq: seq[T], op: untyped, isSorted: bool = false): seq[T] =
+  ## Deduplicate values in sequence. If not `isSorted` and value of op
+  ## cannot be compared (no operator `<` is defined) naive O(n^2)
+  ## deduplication is used. Otherwise items are sorted and
+  ## deduplicated in O(nlogn)
+  type OpType = typeof((var it {.inject.}: T; op))
+  var res: seq[T] = @[]
+  if isSorted or compiles(( var a: OpType; a < a )):
+    let s =
+      if isSorted:
+        inseq
+      else:
+        when compiles(( var a: OpType; a < a )):
+          inseq.sortedByIt(op)
+        else:
+          @[]
+
+    if s.len > 0:
+      var prev: OpType = ((let it {.inject.} = s[0]; op))
+      res.add(s[0])
+      for i in 1..s.high:
+        let opres: OpType = ((let it {.inject.} = s[i]; op))
+        if opres != prev:
+          prev = opres
+          res.add(s[i - 1])
+  else:
+    var opres: seq[OpType]
+    for itm in items(inseq):
+      let it {.inject.} = itm
+      let opval = op
+      if not opres.contains(opval):
+        opres.add opval
+        res.add itm
+
+  res
 
 template twoPassSortByIt*(
   sequence, operation1, operation2: untyped

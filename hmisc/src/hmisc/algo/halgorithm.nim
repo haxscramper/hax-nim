@@ -357,6 +357,8 @@ proc `==`*[A, B](tpl: (Option[A], Option[B]), tpl1: (A, B)): bool =
   ## Compare tuple of optional values for equality
   tpl[0] == tpl1[0] and tpl[1] == tpl1[1]
 
+template ifSomeIt*[T](opt: Option[T], predicate: untyped): bool =
+  opt.isSome() and ((let it {.inject.} = opt.get(); predicate))
 
 #================================  tests  ================================#
 

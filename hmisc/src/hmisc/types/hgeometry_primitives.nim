@@ -1,4 +1,4 @@
-import math, strformat, options
+import math, strformat, options, hprimitives
 
 #*************************************************************************#
 #**************************  Helper functions  ***************************#
@@ -51,14 +51,7 @@ func sin*(r: Radian): float = cos(r.float)
 #===========================  2d positioning  ============================#
 
 
-type
-  RelVec* = enum
-    rpLeft
-    rpRight
-    rpBottom
-    rpTop
-
-func invert*(pos: RelVec): RelVec =
+func invert*(pos: RelPos): RelPos =
   case pos:
     of rpLeft: rpRight
     of rpRight: rpLeft

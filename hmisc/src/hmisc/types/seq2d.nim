@@ -1,4 +1,6 @@
-import sequtils, options
+import sequtils, options, hprimitives, strformat
+import ../hdebug_misc
+import ../algo/[halgorithm, hseq_mapping]
 
 type
   Seq2d*[T] = object
@@ -23,12 +25,15 @@ func colNum*[T](s: Seq2D[T], expectUniform: bool = true): int =
   if s.elems.len == 0:
     result = 0
   else:
-    result = s.elems.mapIt(it.len).max(0)
+    result = s.elems.mapIt(it.len).max()
     if expectUniform:
       for idx, row in s.elems:
         assert row.len == result, "Cannot get number of columns for 2d " &
           &"sequence row {idx} has {row.len} elements, but expected " &
           &"{result}"
+
+func size*[T](s: Seq2D[T]): Size =
+  makeSize(s.colNum(), s.rowNum())
 
 func len*[T](s: Seq2D[T]): int =
   s.elems.len
@@ -96,8 +101,14 @@ func `[]`*[T](grid: Seq2d[T], row, col: int): T =
 func `[]`*[T](grid: Seq2d[T], cell: (int, int)): T =
   grid.elems[cell[0]][cell[1]]
 
-func `[]=`*[T](grid: Seq2d[T], cell: (int, int), val: T): T =
+func `[]`*[T](grid: Seq2d[T], pos: Pos): T =
+  grid.elems[pos.row][pos.col]
+
+func `[]=`*[T](grid: var Seq2d[T], cell: (int, int), val: T): void =
   grid.elems[cell[0]][cell[1]] = val
+
+func `[]=`*[T](grid: var Seq2d[T], row, col: int, val: T): void =
+  grid.elems[row][col] = val
 
 func concat*[T](inseq: Seq2d[T]): seq[T] = inseq.elems.concat()
 
@@ -159,3 +170,76 @@ template maximizeRowIt*[T](
     inc idx
 
   res
+
+func contains*[T](grid: Seq2D[T], pos: Pos): bool =
+  (pos.row < grid.elems.len) and (pos.col < grid.elems[pos.row].len)
+
+template checkIfIt*[T](grid: Seq2d[Option[T]], pos: Pos, op: untyped): bool =
+  ## If `pos.isValid() and (pos in grid) and grid[pos].isSome()`
+  ## run predicate. `it: T` is injected in scope.
+  if (pos.isValid()) and (pos in grid) and (grid[pos].isSome()):
+    let it {.inject} = grid[pos].get()
+    static: assert ((op) is bool)
+    op
+  else:
+    false
+
+
+#===========================  multicell grid  ============================#
+
+type
+  MulticellLookup* = Seq2D[Option[tuple[pos: Pos, size: Size]]]
+
+func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
+  result = grid.mapIt2d(none((Pos, Size)))
+  for (pos, size) in grid.iterSomeCells():
+    for (row, col) in (
+      pos.rowRange(size).decRight(),
+      pos.colRange(size).decRight()
+    ):
+      if result[row, col].isSome():
+        raiseAssert &"Cannot set cell at position {pos}: {(row, col)} is already occupied"
+      else:
+        result[row, col] = some((pos.makePos(), size))
+
+iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
+  var (row, col) = pos.unpack
+  if lookup[row, col].isSome():
+    let start = lookup[row, col].get()
+    for (row, col) in (
+      start.pos.rowRange(start.size).decRight(),
+      start.pos.colRange(start.size).decRight()
+    ):
+      yield (makePos(row, col), start.size)
+  # while true:
+  #   if lookup[row, col].isSome() and (lookup[row, col].get() == pos):
+  #     yield makePos(row, col)
+  #   else:
+  #     break
+
+  #   inc col # Iterate over row
+  #   if (lookup[row, col].isNone()) or (lookup[row, col].get() != pos):
+  #     col = pos.col # Go to start
+  #     inc row # Next row
+
+
+
+iterator cellsAround*(lookup: MulticellLookup, pos: Pos): tuple[
+  pos: Pos, size: Size, rp: RelPos] =
+  let (row, col) = pos.unpack
+
+  if lookup[row, col].isSome():
+    let startCell: Pos = lookup[row, col].get().pos
+    var fringes: seq[(Pos, RelPos)]
+    for (subPos, size) in lookup.subcells(pos):
+      for shift in @[rpLeft, rpRight, rpBottom, rpTop]:
+        let adjacent = subPos.shiftRC(shift.toDiffRC())
+        if lookup.checkIfIt(adjacent, it.pos != startCell):
+          fringes.add (lookup[adjacent].get().pos, shift)
+
+    for adjPos in fringes.deduplicateIt(it[0]):
+      yield (
+        pos: adjPos[0],
+        size: lookup[adjPos[0]].get().size,
+        rp: adjPos[1]
+      )
