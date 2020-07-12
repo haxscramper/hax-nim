@@ -67,6 +67,14 @@ func decRight*(r: Range, diff: int = 1): Range =
        &" -> [{r.a}, {r.b - diff}]"
   makeRange(r.a, r.b - diff)
 
+
+func incLeft*(r: Range, diff: int = 1): Range =
+  ## Shift left side of range by one.
+  assert r.a + diff <= r.b,
+     &"Cannot shift right range side past left side: [{r.a}, {r.b}]" &
+       &" -> [{r.a + diff}, {r.b}]"
+  makeRange(r.a + diff, r.b)
+
 func contains*(r: Range, item: int): bool =
   r.a <= item and item <= r.b
 
@@ -77,6 +85,8 @@ func middles*(r: Range): int =
 func isPoint*(r: Range): bool =
   ## If range starts is equal to end
   (r.a == r.b)
+
+func unpack*(r: Range): (int, int) = (r.a, r.b)
 
 func point*(r: Range): int =
   assert r.isPoint()
@@ -101,8 +111,10 @@ iterator `[]`*[T](s: seq[T], r: Range): T =
   for it in s[r.a .. r.b]:
     yield it
 
-iterator inrange*(s: seq[int], r: Range): int =
-  for v in s[r.a] .. s[r.b]:
+iterator inrange*(s: seq[int], r: Range, lDiff, rDiff: int = 0): int =
+  ## Iterate over all values between `s[r.a]` to `s[r.b]`. Shift
+  ## left/right edge of the range by `l/rDiff` respectively.
+  for v in (s[r.a] + lDiff) .. (s[r.b] + rDiff):
     yield v
 
 #==============================  Position  ===============================#
@@ -151,10 +163,14 @@ func toDiffRC*(rp: RelPos): (int, int) =
 #==============================  compound  ===============================#
 
 func rowRange*(pos: Pos, size: Size): Range =
-  makeRange(pos.row, pos.row + size.height)
+  ## Get *indices* of rows that multicell of `size` at `pos` would
+  ## occupy
+  makeRange(pos.row, pos.row + size.height - 1)
 
 func colRange*(pos: Pos, size: Size): Range =
-  makeRange(pos.col, pos.col + size.width)
+  ## Get *indices* of columns that multicell of `size` at `pos` would
+  ## occupy
+  makeRange(pos.col, pos.col + size.width - 1)
 
 
 

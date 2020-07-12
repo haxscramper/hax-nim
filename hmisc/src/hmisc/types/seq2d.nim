@@ -194,8 +194,8 @@ func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
   result = grid.mapIt2d(none((Pos, Size)))
   for (pos, size) in grid.iterSomeCells():
     for (row, col) in (
-      pos.rowRange(size).decRight(),
-      pos.colRange(size).decRight()
+      pos.rowRange(size),
+      pos.colRange(size)
     ):
       if result[row, col].isSome():
         raiseAssert &"Cannot set cell at position {pos}: {(row, col)} is already occupied"
@@ -207,8 +207,8 @@ iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
   if lookup[row, col].isSome():
     let start = lookup[row, col].get()
     for (row, col) in (
-      start.pos.rowRange(start.size).decRight(),
-      start.pos.colRange(start.size).decRight()
+      start.pos.rowRange(start.size),
+      start.pos.colRange(start.size)
     ):
       yield (makePos(row, col), start.size)
   # while true:

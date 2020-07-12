@@ -596,8 +596,8 @@ func getSizes(
     if cell[0] != size1x1:
       let
         (size, text) = cell
-        rowRange: Range = pos.makePos().rowRange(size).decRight()
-        colRange: Range = pos.makePos().colRange(size).decRight()
+        rowRange: Range = pos.makePos().rowRange(size)
+        colRange: Range = pos.makePos().colRange(size)
         rowHsum: int = sumjoin(rowHs, rowRange, vertSpacing)
         colWsum: int = sumjoin(colWs, colRange, horSpacing)
         textW: int = text.width
@@ -710,21 +710,24 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
                 buf[x, y] = rc[gpoTopIntersection]
 
       block:
-        d "--------"
-        # IMPLEMENT fix multicell grid grinsections. When two cell
-        # have 2+ sections in common the last one overrides
-        # intersection. Can be fixed by introducing aux function:
-        # `cellAround` and checking row/column ranges for all such
-        # cells. Overlap can be done using another aux function:
-        # `overlapRange` for two rages. So it would look like:
         let lookup = makeLookup(grid.cells)
         for (pos, size) in grid.cells.iterSomeCells():
           for (cellPos, cellSize, relPos) in lookup.cellsAround(pos):
             let rowOverlap = cellPos.rowRange(cellSize).overlap(pos.rowRange(size))
             let colRange = cellPos.colRange(cellSize)
             if rowOverlap.len > 1:
-              de cellPos, relPos, "rows:", rowOverlap
-              # d "rows:", pos.rowRange(size), cellPos.rowRange(cellSize)
+              let (minColX, maxColX) = cellPos.colRange(cellSize).unpack()
+
+              # NOTE this is under-implmenented: need to cover all
+              # cases (cell on top/bottom and left/right).
+              for rowY in absCellY.inrange(rowOverlap, 1):
+                case relPos:
+                  of rpRight:
+                    if gpoVerticalGap in rc:
+                      buf[absCellX[maxColX - 1], rowY] = rc[gpoVerticalGap]
+                  else:
+                    discard
+
 
 
 #==============================  ---------  ==============================#
