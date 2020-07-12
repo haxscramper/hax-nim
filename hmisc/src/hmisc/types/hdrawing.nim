@@ -667,6 +667,7 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
   let absCellY: seq[int] = grid.cellHeights.cumsumjoin(vertSpacing, true)
 
   for (pos, size) in grid.cells.iterSomeCells:
+    # de size, pos
     if size != size1x1:
       let (row, col) = pos
       let

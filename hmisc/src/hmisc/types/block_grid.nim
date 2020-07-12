@@ -88,6 +88,7 @@ func occupied*[T](cell: GridCell[T]): Size =
   makeSize(w = cell.cols, h = cell.rows)
 
 func internal*[T](cell: GridCell[T]): Size = cell.size
+func colNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.colNum()
 
 converter toRange*(elems: (int, int)): Range =
   Range(a: elems[0], b: elems[1])
@@ -178,11 +179,12 @@ func makeGrid*(arg: Seq2D[StrBlock],
   ).toMulticell(), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
-  var cell = cell
-  cell.vertPolicy = spExpanding
-  cell.horizPolicy = spExpanding
-
-  grid.grid.prepend(@[cell])
+  assert cell.size.height() == 1
+  grid.grid.addHeader(
+    colIdx = 0,
+    width = cell.size.width(),
+    val = cell
+  )
 
 #==========================  string conversion  ==========================#
 

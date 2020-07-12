@@ -56,6 +56,37 @@ func newRow*[T](s: var Seq2D[T]): void =
   var tmp: seq[T]
   s.elems.add tmp
 
+func insertRow*[T](grid: var Seq2D[T], row: seq[T], idx: int = 0): void =
+  ##[
+
+Insert new row in the 2d grid.
+
+`row` length MUST be equal to number of columns in `grid`. `idx` is
+the index of new row. `idx` MUST be in range `[0, grid.rowNum()]`
+(inclsive)
+
+  ]##
+  assert row.len == grid.colNum()
+  if idx == 0:
+    grid.elems = row & grid.elems
+  elif idx == grid.rowNum():
+    grid.elems = grid.elems & row
+  else:
+    discard #[ IMPLEMENT ]#
+
+func insertCol*[T](grid: var Seq2D[T], col: seq[T], idx: int = 0): void =
+  ##[
+
+Insert new col in the 2d grid.
+
+`col` length MUST be equal to number of rows in `grid`. `idx` is the
+index of new column. `idx` MUST be in range `[0, grid.colNum()]`
+(inclusive)
+
+  ]##
+  #[ IMPLEMENT ]#
+  discard
+
 func addLast*[T](s: var Seq2D[T], elem: T): void =
   ## Add new element to last row
   s.elems[^1].add elem
@@ -240,7 +271,9 @@ func toStrGrid*(grid: seq[seq[string]], default: StrBlock): Seq2D[StrBlock] =
     default
   )
 
-#===========================  multicell grid  ============================#
+#*************************************************************************#
+#***************************  multicell grid  ****************************#
+#*************************************************************************#
 
 type
   MulticellLookup* = Seq2D[Option[tuple[pos: Pos, size: Size]]]
@@ -248,6 +281,7 @@ type
     elems*: Seq2D[Option[T]]
     lookup: MulticellLookup
 
+#=============================  constructor  =============================#
 
 func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
   result = grid.mapIt2d(none((Pos, Size)))
@@ -261,6 +295,11 @@ func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
       else:
         result[row, col] = some((pos.makePos(), size))
 
+
+
+#==============================  accessor  ===============================#
+
+
 func `[]=`*[T](grid: var MulticellGrid[T], pos: Pos, val: (Size, T)): void =
   for (row, col) in (pos.rowRange(val[0]), pos.colRange(val[0])):
     if grid.lookup[row, col].isSome():
@@ -272,15 +311,8 @@ func `[]=`*[T](grid: var MulticellGrid[T], pos: Pos, val: (Size, T)): void =
 
   grid.elems[pos] = some(val[1])
 
-func fillToSize*[T](grid: var MulticellGrid[T], size: Size): void =
-  grid.elems.fillToSize(size, none(T))
-  grid.lookup.fillToSize(size, none(tuple[pos: Pos, size: Size]))
-
-func makeMulticell*[T](rows, cols: int): MulticellGrid[T] =
-  result.fillToSize(makeSize(h = rows, w = cols))
-
-
 iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
+  ## Iterate over all subcells occupied by grid at position `pos`
   var (row, col) = pos.unpack
   if lookup[row, col].isSome():
     let start = lookup[row, col].get()
@@ -293,6 +325,7 @@ iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
 
 iterator cellsAround*(lookup: MulticellLookup, pos: Pos): tuple[
   pos: Pos, size: Size, rp: RelPos] =
+  ## Iterate over all cells adjacent to cell at `pos`
   let (row, col) = pos.unpack
 
   if lookup[row, col].isSome():
@@ -310,3 +343,30 @@ iterator cellsAround*(lookup: MulticellLookup, pos: Pos): tuple[
         size: lookup[adjPos[0]].get().size,
         rp: adjPos[1]
       )
+
+#============================  modification  =============================#
+
+func fillToSize*[T](grid: var MulticellGrid[T], size: Size): void =
+  grid.elems.fillToSize(size, none(T))
+  grid.lookup.fillToSize(size, none(tuple[pos: Pos, size: Size]))
+
+func makeMulticell*[T](rows, cols: int): MulticellGrid[T] =
+  ## Make empty multicell grid
+  result.fillToSize(makeSize(h = rows, w = cols))
+
+func addHeader*[T](grid: var MulticellGrid[T], colIdx, width: int, val: T): void =
+  ##[
+
+Prepend header cell to grid.
+
+  ]##
+  #[ IMPLEMENT ]#
+  var newrow = newSeqWith(
+    grid.elems.colNum(), none(T))
+
+  var newLookup = newSeqWith(
+    grid.lookup.colNum(), none(tuple[pos: Pos, size: Size]))
+
+  grid.elems.insertRow(newRow, 0)
+  grid.lookup.insertRow(newLookup, 0)
+  grid[makePos(row = 0, col = colIdx)] = (makeSize(w = width, h = 1), val)

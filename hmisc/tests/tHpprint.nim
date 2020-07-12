@@ -42,8 +42,17 @@ suite "Block grid":
           @["EEEE", "####"],
           @["eee"]
         ].toStrGrid(@[""].toStrBlock()),
-        makeEmptyGridBorders()
+        makeAsciiGridBorders()
       ).toCell()
+
+    grid.addHeader(makeCell[StrBlock](
+      @["! ANNOTATION !"].toStrBlock(),
+      (3, 1)
+    ))
+    grid.addHeader(makeCell[StrBlock](
+      @["! ANNOTATION 2 !"].toStrBlock(),
+      (3, 1)
+    ))
 
     echo grid.toStringBlock(
       (bl: StrBlock) => (bl)
