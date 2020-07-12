@@ -112,7 +112,6 @@ func `[]=`*[T](grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
   grid.grid[makePos(row, col)] = (cell.size, cell)
 
 func `[]=`*[T](grid: var BlockGrid[T], pos: Pos, cell: GridCell[T]): void =
-  d &"Setting cell at position {pos}"
   grid.grid[pos] = (cell.size, cell)
 
 iterator itercells*[T](grid: BlockGrid[T]): (Pos, Option[GridCell[T]]) =
@@ -172,7 +171,11 @@ func makeGrid*[T](rows, cols: int, borders: TermGridConf): BlockGrid[T] =
 
 func makeGrid*(arg: Seq2D[StrBlock],
                conf: TermGridConf): BlockGrid[StrBlock] =
-  makeGrid(arg.mapIt2d(some(makeCell(it))).toMulticell(), conf)
+  makeGrid(mapIt2d(
+    arg,
+    some(makeCell(it)),
+    @[""].toBlock()
+  ).toMulticell(), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
   var cell = cell
@@ -194,7 +197,7 @@ func toStringBlock*[T](
     of true:
       result = toStr(cell.item)
     of false:
-      result = cell.grid.toStringBlock()
+      result = cell.grid.toStringBlock(toStr)
 
 func toStringBlock*[T](
   grid: BlockGrid[T],
@@ -207,6 +210,8 @@ func toStringBlock*[T](
         some((it.get().size, it.get().toStringBlock(toStr)))
       else:
         none((Size, StrBlock))
+    ,
+    none((Size, StrBlock))
   )
 
   newTermMultiGrid((0, 0), cells, grid.borders).toStringBlock()

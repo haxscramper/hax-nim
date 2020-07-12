@@ -38,14 +38,16 @@ suite "Block grid":
     for (pos, cell) in grid.itercells():
       grid[pos] = makeGrid(
         @[
-          @["[|||||]", "world"],
-          @["EEEE", "#####"],
+          @["[||||", "world\neee"],
+          @["EEEE", "####"],
           @["eee"]
         ].toStrGrid(@[""].toStrBlock()),
-        makeThinLineGridBorders()
+        makeEmptyGridBorders()
       ).toCell()
 
-    echo grid.toStringBlock().join("\n")
+    echo grid.toStringBlock(
+      (bl: StrBlock) => (bl)
+    ).join("\n")
 
   #   hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
   #   # grid[3, 3] =

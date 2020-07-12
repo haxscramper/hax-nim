@@ -4,7 +4,7 @@ import ../algo/[halgorithm, hseq_mapping]
 
 type
   Seq2d*[T] = object
-    colNum: int
+    colWidth: int
     elems: seq[seq[T]]
 
 func add*[T](s: var Seq2d[T], row: seq[T]): void =
@@ -23,6 +23,7 @@ func rowNum*[T](s: Seq2D[T]): int =
 func fillToSize*[T](grid: var Seq2D[T], size: Size, val: T): void =
   ## Make sure `grid` is of `size` (or lagrger). Fill missing elements
   ## using `val`.
+  grid.colWidth = size.width
   for row in 0 ..< size.height:
     if not (row < grid.elems.len):
       grid.elems.add @[]
@@ -34,10 +35,11 @@ func fillToSize*[T](grid: var Seq2D[T], size: Size, val: T): void =
 func colNum*[T](s: Seq2D[T]): int =
   ## Get max number of columns in 2d sequence. If `expecUniform` check
   ## that all rows have equal lentgth
-  s.colNum
-  # if s.elems.len == 0:
-  #   result = 0
-  # else:
+  result = s.colWidth
+  for idx, row in s.elems:
+    assert row.len == result,
+      &"Invariant invalidated: [idx].len: {row.len}, column: {result}"
+
 
 func size*[T](s: Seq2D[T]): Size =
   makeSize(s.colNum(), s.rowNum())
@@ -65,16 +67,16 @@ func makeSeq2D*[T](s: seq[seq[T]], default: T): Seq2d[T] =
     if row.len < maxlen:
       inseq[idx] &= newSeqWith(maxlen - row.len, default)
 
-  Seq2D[T](elems: s, colnum: maxlen)
+  Seq2D[T](elems: inseq, colWidth: maxlen)
 
 func makeSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
   let maxlen = s.mapIt(it.len).max()
   for idx, row in s:
     assert row.len == maxlen, "Cannot create 2d sequence from non-uniform " &
       &"sequence. Row {idx} has {row.len} elements, but expected " &
-      &"{result}"
+      &"{maxlen}"
 
-  Seq2D[T](elems: s, colnum: maxlen)
+  Seq2D[T](elems: s, colWidth: maxlen)
 
 iterator items*[T](s: Seq2d[T]): seq[T] =
   for row in s.elems:
@@ -130,21 +132,51 @@ func `[]=`*[T](grid: var Seq2d[T], pos: Pos, val: T): void =
   grid.elems[pos.row][pos.col] = val
 
 func concat*[T](inseq: Seq2d[T]): seq[T] = inseq.elems.concat()
-
 template mapIt2d*[T](inseq: Seq2d[T], op: untyped): untyped =
   type ResT = typeof((
     block:
       var it {.inject.}: T
       op))
 
-  var result: Seq2d[ResT]
+  var result: seq[seq[ResT]]
   for row in inseq.elems:
-    result.newRow
+    result.add @[]
     for col in row:
       let it {.inject.} = col
-      result.addLast op
+      result[^1].add op
 
-  result
+  var res: Seq2D[ResT]
+  try:
+    res = makeSeq2D(result)
+  except AssertionError:
+    {.noSideEffect.}:
+      let msg = getCurrentExceptionMsg()
+      let info = instantiationInfo()
+      raiseAssert(
+        msg & ". Template `mapIt2D` instantiated on line: " & $info.line &
+          ", file: " & $info.filename)
+
+  res
+
+
+template mapIt2d*[T](inseq: Seq2d[T], op: untyped, default: typed): untyped =
+  type ResT = typeof((var it {.inject.}: T; op))
+  var res: seq[seq[ResT]]
+  for row in inseq.elems:
+    res.add @[]
+    for col in row:
+      let it {.inject.} = col
+      res[^1].add op
+
+  makeSeq2D(
+    res,
+    when default is ResT:
+      default
+    else:
+      let it {.inject.}: T = default
+      let defOp = op
+      defOp
+  )
 
 template maximizeColIt*[T](inseq: Seq2d[T], op: untyped): seq[int] =
   ## Iiterate over all columns in grid. Execute `op` for each cell in
