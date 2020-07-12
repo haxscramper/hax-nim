@@ -18,7 +18,7 @@ template tern*(
       assert a == "0-"
 
     block:
-      static: expectEqualTypes(tBranch, fBranch)
+      # static: expectEqualTypes(tBranch, fBranch)
       if predicate: tBranch
       else: fBranch
 

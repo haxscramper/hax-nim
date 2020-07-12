@@ -48,6 +48,8 @@ const size1x1* = Size(width: 1, height: 1)
 func width*(size: Size): int = size.width
 func height*(size: Size): int = size.height
 func makeSize*(w, h: int): Size = Size(width: w, height: h)
+func makeSize*(widthHeight: (int, int)): Size =
+  Size(width: widthHeight[0], height: widthHeight[1])
 
 
 #================================  Range  ================================#
@@ -126,12 +128,14 @@ type
     row*: int
     col*: int
 
-
-
-
 func makePos*(row, col: int): Pos = Pos(row: row, col: col)
 func makePos*(pos: (int, int)): Pos = Pos(row: pos[0], col: pos[1])
 func isValid*(pos: Pos): bool = (pos.row >= 0) and (pos.col >= 0)
+func expandSize*(pos: Pos, size: Size): Size =
+  makeSize(
+    h = pos.row + size.height,
+    w = pos.col + size.width
+  )
 
 
 func shiftRC*(pos: Pos, dRow: int = 1, dCol: int = 1): Pos =

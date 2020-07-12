@@ -13,7 +13,8 @@ import hmisc/types/[
 
 import hmisc/macros/[obj_field_macros]
 
-import hmisc/[hpprint, hpprint_graphviz]
+import hmisc/[hpprint, hpprint_graphviz, hcommon_converters]
+import hmisc/types/seq2d
 
 suite "Block grid":
   discard
@@ -32,15 +33,16 @@ suite "Block grid":
   #   assert grid.width == 2
   #   assert grid.height == 1
 
-  # test "{makeGrid} make string grid":
-  #   var grid = makeGrid(
-  #     @[
-  #       @["[|||||]", "world"],
-  #       @["EEEE", "#####"],
-  #       @["eee"]
-  #     ],
-  #     makeEmptyGridBorders()
-  #   )
+  test "{makeGrid} make string grid":
+    # var grid = makeGrid(3, 3)
+    echo makeGrid(
+      @[
+        @["[|||||]", "world"],
+        @["EEEE", "#####"],
+        @["eee"]
+      ].toStrGrid(),
+      makeThinLineGridBorders()
+    ).toStringBlock().join("\n")
 
 
   #   hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))

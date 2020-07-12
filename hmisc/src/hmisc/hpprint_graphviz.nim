@@ -3,7 +3,7 @@ import types/[
   graphviz_ast,
   block_grid,
   html_ast,
-  sparse_grid,
+  seq2d,
   hvariant
 ]
 
@@ -64,11 +64,7 @@ proc toGrid*(obj: ObjTree, topId: NodeId): tuple[
 # table into graphviz object.
 
 
-proc toHtml*(grid: Seq2D[GridCell[ObjElem]]): HtmlElem =
-  discard
-
-
-proc toHtml*(grid: SparseGrid[GridCell[ObjElem]]): HtmlElem =
+proc toHtml*(grid: MulticellGrid[GridCell[ObjElem]]): HtmlElem =
   discard
 
 proc toTable*(grid: BlockGrid[ObjElem]): HtmlElem

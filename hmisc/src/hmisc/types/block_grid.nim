@@ -1,9 +1,9 @@
-import tables, sequtils, sugar
+import tables, sequtils, sugar, options
 
-import hgeometry_primitives, hprimitives, hdrawing, hmap
-import sparse_grid, seq2d
+import hgeometry_primitives, hprimitives, hdrawing
+import seq2d
+import ../hdebug_misc
 import ../algo/[hseq_mapping, halgorithm]
-export hprimitives, seq2d
 
 ## Nested table with multicol support
 
@@ -15,9 +15,7 @@ type
     spFixed
 
   GridCell*[T] = object
-    valid: bool
-    rows: int
-    cols: int
+    size: Size
     vertPolicy: SizePolicy
     horizPolicy: SizePolicy
     borders*: Table[RectPoint, string]
@@ -25,15 +23,12 @@ type
     case isItem*: bool
       of true:
         item*: T
-        size: Size ## Item size
       of false:
         grid*: BlockGrid[T]
 
   BlockGrid*[T] = object
     borders*: TermGridConf
-    grid*: SparseGrid[GridCell[T]] ## row[col[cell]]
-    maxH: Map[int, int] ## Max height in each row
-    maxW: Map[int, int] ## Max width in each column
+    grid*: MulticellGrid[GridCell[T]]
 
 
 #=========================  accessor functions  ==========================#
@@ -125,16 +120,20 @@ func `[]=`*[T](
 
 #============================  constructors  =============================#
 
+func toMulticell*[T](grid: Seq2D[Option[GridCell[T]]]): MulticellGrid[GridCell[T]] =
+  for (pos, cell) in grid.iterSomeCells():
+    result.fillToSize(pos.makePos().expandSize(cell.size))
+    result[pos.makePos()] = (cell.size, cell)
+
 func makeCell*[T](
-  arg: T, w, h: int,
-  sizes: (int, int) = (1, 1),
+  arg: T,
+  cellSize: (int, int) = (1, 1),
   policies: (SizePolicy, SizePolicy) = (spExpanding, spExpanding)
                 ): GridCell[T] =
   GridCell[T](
     isItem: true,
-    item: arg, size: makeSize(w, h),
-    rows: sizes[0],
-    cols: sizes[1],
+    item: arg,
+    size: makeSize(cellSize),
     vertPolicy: policies[0],
     horizPolicy: policies[1]
   )
@@ -156,52 +155,15 @@ func makeUnicodeCell*[T](
   result = makeCell(arg, w + 2, h + 2, sizes)
   result.borders = borderTable
 
-func makeCell*(text: string): GridCell[string] =
-  makeCell(arg = text, w = text.len, h = 1)
-
 func makeCell*(text: StrBlock): GridCell[StrBlock] =
-  makeCell(
-    text,
-    w = text.mapIt(it.len).max(),
-    h = text.len
-  )
+  makeCell(text, (1, 1))
 
-func makeGrid*[T](arg: Seq2D[GridCell[T]], default: GridCell[T], conf: TermGridConf): BlockGrid[T] =
-  var maxColw: CountTable[int]
-  var maxIdx: int = 0
-  let cellws: seq[int] = collect(newSeq):
-    for col in arg.itercols(default):
-      col.mapIt(it.width).max(0)
-
-  let cellhs: seq[int] = collect(newSeq):
-    for row in arg.iterrows():
-      row.mapIt(it.height).max(0)
-
-  result = BlockGrid[T](
-    grid: arg.toSparse(),
-    maxW: cellws.toMap(),
-    maxH: cellhs.toMap(),
-    borders: conf
-  )
-
-func makeGrid*[T](
-  arg: Seq2D[tuple[item: T, w, h: int]],
-  default: tuple[item: T, w, h: int],
-  conf: TermGridConf): BlockGrid[T] =
-  makeGrid(
-    mapIt2d(arg, it.item.makeCell(it.w, it.h)),
-    makeCell(default.item, default.w, default.h),
-    conf
-  )
-
-func makeGrid*(arg: Seq2D[string], conf: TermGridConf): BlockGrid[string] =
-  makeGrid[string](arg.mapIt2d(makeCell(it, it.len, 1)), makeCell("", 0, 0), conf)
+func makeGrid*[T](arg: MulticellGrid[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
+  result = BlockGrid[T](grid: arg, borders: conf)
 
 func makeGrid*(arg: Seq2D[StrBlock],
                conf: TermGridConf): BlockGrid[seq[string]] =
-  makeGrid(arg.mapIt2d(makeCell(
-    it, it.mapIt(it.len).max(0), it.len
-  )), makeCell(@[""], 0, 0), conf)
+  makeGrid(arg.mapIt2d(some(makeCell(it))).toMulticell(), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
   var cell = cell
@@ -212,10 +174,20 @@ func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
 
 #==========================  string conversion  ==========================#
 
-func toString*[T](grid: BlockGrid[T], conf: TermGridConf): seq[string]
-func toString*[T](cell: GridCell[T], conf: TermGridConf): seq[string] =
-  discard
+func toStringBlock*[T](grid: BlockGrid[T]): seq[string]
+func toStringBlock*[T](cell: GridCell[T]): seq[string] =
+  case cell.isItem:
+    of true: ($cell.item).split("\n")
+    of false: cell.grid.toStringBlock()
 
-func toString*[T](grid: BlockGrid[T], conf: TermGridConf): seq[string] =
-  let cells: Seq2D[string] = grid.grid.mapIt2D(toString(it, conf))
-  newTermGrid((0, 0), cells, conf).toStringBlock()
+func toStringBlock*[T](grid: BlockGrid[T]): StrBlock =
+  let cells: Seq2D[Option[(Size, StrBlock)]] = grid.grid.elems.mapIt2D(
+    block:
+      expectType(it, Option[GridCell[T]])
+      if it.isSome():
+        some((it.get().size, it.get().toStringBlock()))
+      else:
+        none((Size, StrBlock))
+  )
+
+  newTermMultiGrid((0, 0), cells, grid.borders).toStringBlock()

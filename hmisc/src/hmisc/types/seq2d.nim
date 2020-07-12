@@ -1,4 +1,4 @@
-import sequtils, options, hprimitives, strformat
+import sequtils, options, hprimitives, strformat, strutils
 import ../hdebug_misc
 import ../algo/[halgorithm, hseq_mapping]
 
@@ -18,6 +18,17 @@ func rowlen*[T](s: Seq2D[T], row: int): void =
 func rowNum*[T](s: Seq2D[T]): int =
   ## Get number or rows in 2d sequence
   s.elems.len
+
+func fillToSize*[T](grid: var Seq2D[T], size: Size, val: T): void =
+  ## Make sure `grid` is of `size` (or lagrger). Fill missing elements
+  ## using `val`.
+  for row in 0 ..< size.height:
+    if not (row < grid.elems.len):
+      grid.elems.add @[]
+
+    let rowlen = grid.elems[row].len
+    if rowlen < size.width:
+      grid.elems[row] &= newSeqWith(size.width - rowlen + 1, val)
 
 func colNum*[T](s: Seq2D[T], expectUniform: bool = true): int =
   ## Get max number of columns in 2d sequence. If `expecUniform` check
@@ -110,6 +121,9 @@ func `[]=`*[T](grid: var Seq2d[T], cell: (int, int), val: T): void =
 func `[]=`*[T](grid: var Seq2d[T], row, col: int, val: T): void =
   grid.elems[row][col] = val
 
+func `[]=`*[T](grid: var Seq2d[T], pos: Pos, val: T): void =
+  grid.elems[pos.row][pos.col] = val
+
 func concat*[T](inseq: Seq2d[T]): seq[T] = inseq.elems.concat()
 
 template mapIt2d*[T](inseq: Seq2d[T], op: untyped): untyped =
@@ -184,11 +198,16 @@ template checkIfIt*[T](grid: Seq2d[Option[T]], pos: Pos, op: untyped): bool =
   else:
     false
 
+func toStrGrid*(grid: seq[seq[string]]): Seq2D[StrBlock] =
+  Seq2d[StrBlock](elems: grid.mapIt(it.mapIt(it.split("\n"))))
 
 #===========================  multicell grid  ============================#
 
 type
   MulticellLookup* = Seq2D[Option[tuple[pos: Pos, size: Size]]]
+  MulticellGrid*[T] = object
+    elems*: Seq2D[Option[T]]
+    lookup: MulticellLookup
 
 func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
   result = grid.mapIt2d(none((Pos, Size)))
@@ -202,6 +221,21 @@ func makeLookup*(grid: Seq2d[Option[Size]]): MulticellLookup =
       else:
         result[row, col] = some((pos.makePos(), size))
 
+func `[]=`*[T](grid: var MulticellGrid[T], pos: Pos, val: (Size, T)): void =
+  for (row, col) in (pos.rowRange(val[0]), pos.colRange(val[0])):
+    if grid.lookup[row, col].isSome():
+      raiseAssert &"Cannot set cell at position {pos}: " &
+       &"{(row, col)} is already occupied"
+
+  for (row, col) in (pos.rowRange(val[0]), pos.colRange(val[0])):
+    grid.lookup[row, col] = some((pos, val[0]))
+
+  grid.elems[pos] = some(val[1])
+
+func fillToSize*[T](grid: var MulticellGrid[T], size: Size): void =
+  grid.elems.fillToSize(size, none(T))
+  grid.lookup.fillToSize(size, none(tuple[pos: Pos, size: Size]))
+
 iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
   var (row, col) = pos.unpack
   if lookup[row, col].isSome():
@@ -211,17 +245,6 @@ iterator subcells*(lookup: MulticellLookup, pos: Pos): (Pos, Size) =
       start.pos.colRange(start.size)
     ):
       yield (makePos(row, col), start.size)
-  # while true:
-  #   if lookup[row, col].isSome() and (lookup[row, col].get() == pos):
-  #     yield makePos(row, col)
-  #   else:
-  #     break
-
-  #   inc col # Iterate over row
-  #   if (lookup[row, col].isNone()) or (lookup[row, col].get() != pos):
-  #     col = pos.col # Go to start
-  #     inc row # Next row
-
 
 
 iterator cellsAround*(lookup: MulticellLookup, pos: Pos): tuple[
