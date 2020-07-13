@@ -41,16 +41,16 @@ var emptyRune*: Rune
 #================================  Size  =================================#
 
 type
-  Size* = object
+  ArrSize* = object
     width: int
     height: int
 
-const size1x1* = Size(width: 1, height: 1)
-func width*(size: Size): int = size.width
-func height*(size: Size): int = size.height
-func makeSize*(w, h: int): Size = Size(width: w, height: h)
-func makeSize*(widthHeight: (int, int)): Size =
-  Size(width: widthHeight[0], height: widthHeight[1])
+const size1x1* = ArrSize(width: 1, height: 1)
+func width*(size: ArrSize): int = size.width
+func height*(size: ArrSize): int = size.height
+func makeArrSize*(w, h: int): ArrSize = ArrSize(width: w, height: h)
+func makeArrSize*(widthHeight: (int, int)): ArrSize =
+  ArrSize(width: widthHeight[0], height: widthHeight[1])
 
 
 #================================  Range  ================================#
@@ -125,31 +125,31 @@ iterator inrange*(s: seq[int], r: Range, lDiff, rDiff: int = 0): int =
 #      `let (row, col) = Pos()`
 
 type
-  Pos* = object
+  ArrPos* = object
     row*: int
     col*: int
 
-func makePos*(row, col: int): Pos = Pos(row: row, col: col)
-func makePos*(pos: (int, int)): Pos = Pos(row: pos[0], col: pos[1])
-func isValid*(pos: Pos): bool = (pos.row >= 0) and (pos.col >= 0)
-func expandSize*(pos: Pos, size: Size): Size =
-  makeSize(
+func makeArrPos*(row, col: int): ArrPos = ArrPos(row: row, col: col)
+func makeArrPos*(pos: (int, int)): ArrPos = ArrPos(row: pos[0], col: pos[1])
+func isValid*(pos: ArrPos): bool = (pos.row >= 0) and (pos.col >= 0)
+func expandSize*(pos: ArrPos, size: ArrSize): ArrSize =
+  makeArrSize(
     h = pos.row + size.height,
     w = pos.col + size.width
   )
 
 
-func shiftRC*(pos: Pos, dRow: int = 1, dCol: int = 1): Pos =
-  makePos(pos.row + dRow, pos.col + dCol)
+func shiftRC*(pos: ArrPos, dRow: int = 1, dCol: int = 1): ArrPos =
+  makeArrPos(pos.row + dRow, pos.col + dCol)
 
-func shiftRc*(pos: Pos, dRC: (int, int) = (1, 1)): Pos =
-  makePos(pos.row + dRC[0], pos.col + dRC[1])
+func shiftRc*(pos: ArrPos, dRC: (int, int) = (1, 1)): ArrPos =
+  makeArrPos(pos.row + dRC[0], pos.col + dRC[1])
 
-func shiftC*(pos: Pos, dCol: int = 1): Pos = shiftRC(pos, 0, dCol)
-func shiftR*(pos: Pos, dRow: int = 1): Pos = shiftRC(pos, dRow, 0)
-converter toPos*(pos: (int, int)): Pos = makePos(pos)
-func unpack*(pos: Pos): tuple[row, col: int] = (pos.row, pos.col)
-func `==`(a, b: Pos): bool = (a.row == b.row) and (a.col == b.col)
+func shiftC*(pos: ArrPos, dCol: int = 1): ArrPos = shiftRC(pos, 0, dCol)
+func shiftR*(pos: ArrPos, dRow: int = 1): ArrPos = shiftRC(pos, dRow, 0)
+converter toArrPos*(pos: (int, int)): ArrPos = makeArrPos(pos)
+func unpack*(pos: ArrPos): tuple[row, col: int] = (pos.row, pos.col)
+func `==`(a, b: ArrPos): bool = (a.row == b.row) and (a.col == b.col)
 
 type
   RelPos* = enum
@@ -167,12 +167,12 @@ func toDiffRC*(rp: RelPos): (int, int) =
 
 #==============================  compound  ===============================#
 
-func rowRange*(pos: Pos, size: Size): Range =
+func rowRange*(pos: ArrPos, size: ArrSize): Range =
   ## Get *indices* of rows that multicell of `size` at `pos` would
   ## occupy
   makeRange(pos.row, pos.row + size.height - 1)
 
-func colRange*(pos: Pos, size: Size): Range =
+func colRange*(pos: ArrPos, size: ArrSize): Range =
   ## Get *indices* of columns that multicell of `size` at `pos` would
   ## occupy
   makeRange(pos.col, pos.col + size.width - 1)

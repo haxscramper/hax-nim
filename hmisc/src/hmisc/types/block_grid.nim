@@ -15,7 +15,7 @@ type
     spFixed
 
   GridCell*[T] = object
-    size: Size
+    size: ArrSize
     vertPolicy: SizePolicy
     horizPolicy: SizePolicy
     borders*: Table[RectPoint, string]
@@ -84,25 +84,25 @@ func height*[T](grid: BlockGrid[T]): int =
   grid.maxH.mapPairs(rhs).sumjoin(vSpacing) + top + bottom
 
 func rowHeight*[T](grid: BlockGrid[T], row: int): int = grid.maxH[row]
-func occupied*[T](cell: GridCell[T]): Size =
-  makeSize(w = cell.cols, h = cell.rows)
+func occupied*[T](cell: GridCell[T]): ArrSize =
+  makeArrSize(w = cell.cols, h = cell.rows)
 
-func internal*[T](cell: GridCell[T]): Size = cell.size
+func internal*[T](cell: GridCell[T]): ArrSize = cell.size
 func colNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.colNum()
 
 converter toRange*(elems: (int, int)): Range =
   Range(a: elems[0], b: elems[1])
 
 func toRange*(a, b: int): Range = Range(a: a, b: b)
-func toPos*(row, col: int): Pos = Pos(row: row, col: col)
+func toPos*(row, col: int): ArrPos = ArrPos(row: row, col: col)
 
-func colRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
+func colRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): Range =
   let start = pos.col
   var finish = pos.col
 
   return toRange((start, finish))
 
-func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
+func rowRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): Range =
   let start = pos.row
   var finish = pos.row
 
@@ -110,21 +110,21 @@ func rowRange*[T](grid: BlockGrid[T], pos: Pos | tuple[row, col: int]): Range =
   return toRange((start, finish))
 
 func `[]=`*[T](grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
-  grid.grid[makePos(row, col)] = (cell.size, cell)
+  grid.grid[makeArrPos(row, col)] = (cell.size, cell)
 
-func `[]=`*[T](grid: var BlockGrid[T], pos: Pos, cell: GridCell[T]): void =
+func `[]=`*[T](grid: var BlockGrid[T], pos: ArrPos, cell: GridCell[T]): void =
   grid.grid[pos] = (cell.size, cell)
 
-iterator itercells*[T](grid: BlockGrid[T]): (Pos, Option[GridCell[T]]) =
+iterator itercells*[T](grid: BlockGrid[T]): (ArrPos, Option[GridCell[T]]) =
   for (pos, cell) in grid.grid.elems.itercells():
-    yield (makePos(pos), cell)
+    yield (makeArrPos(pos), cell)
 
 #============================  constructors  =============================#
 
 func toMulticell*[T](grid: Seq2D[Option[GridCell[T]]]): MulticellGrid[GridCell[T]] =
   for (pos, cell) in grid.iterSomeCells():
-    result.fillToSize(pos.makePos().expandSize(cell.size))
-    result[pos.makePos()] = (cell.size, cell)
+    result.fillToSize(pos.makeArrPos().expandSize(cell.size))
+    result[pos.makeArrPos()] = (cell.size, cell)
 
 func makeCell*[T](
   arg: T,
@@ -134,13 +134,13 @@ func makeCell*[T](
   GridCell[T](
     isItem: true,
     item: arg,
-    size: makeSize(cellSize),
+    size: makeArrSize(cellSize),
     vertPolicy: policies[0],
     horizPolicy: policies[1]
   )
 
 func toCell*[T](
-  grid: BlockGrid[T], size: Size = size1x1): GridCell[T] =
+  grid: BlockGrid[T], size: ArrSize = size1x1): GridCell[T] =
   GridCell[T](isItem: false, grid: grid, size: size)
 
 func makeUnicodeCell*[T](
@@ -205,15 +205,15 @@ func toStringBlock*[T](
   grid: BlockGrid[T],
   toStr: proc(it: T): StrBlock = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock =
 
-  let cells: Seq2D[Option[(Size, StrBlock)]] = grid.grid.elems.mapIt2D(
+  let cells: Seq2D[Option[(ArrSize, StrBlock)]] = grid.grid.elems.mapIt2D(
     block:
       expectType(it, Option[GridCell[T]])
       if it.isSome():
         some((it.get().size, it.get().toStringBlock(toStr)))
       else:
-        none((Size, StrBlock))
+        none((ArrSize, StrBlock))
     ,
-    none((Size, StrBlock))
+    none((ArrSize, StrBlock))
   )
 
   newTermMultiGrid((0, 0), cells, grid.borders).toStringBlock()

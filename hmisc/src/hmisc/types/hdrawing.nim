@@ -552,7 +552,7 @@ method render*(rect: TermGrid, buf: var TermBuf): void =
 type
   SMulticellGrid[T, Num] = ref object of SGrid[T, Num]
     # start: Point[Num]
-    cells: Seq2D[Option[Size]]
+    cells: Seq2D[Option[ArrSize]]
     # config: T
     # cellWidths: seq[Num]
     # cellHeights: seq[Num]
@@ -561,7 +561,7 @@ type
 
 func newTermMultiGrid*(
   start: (int, int),
-  cells: Seq2D[Option[Size]],
+  cells: Seq2D[Option[ArrSize]],
   widths: seq[int],
   heights: seq[int],
   config: TermGridConf): TermMultiGrid =
@@ -579,7 +579,7 @@ func newTermMultiGrid*(
     config: config)
 
 func getSizes(
-  grid: Seq2D[Option[(Size, StrBlock)]],
+  grid: Seq2D[Option[(ArrSize, StrBlock)]],
   vertSpacing, horSpacing: int = 0): tuple[widths, heights: seq[int]] =
   var rowHs: seq[int] = newSeqWith(grid.rowNum, 0)
   var colWs: seq[int] = newSeqWith(grid.colNum, 0)
@@ -595,8 +595,8 @@ func getSizes(
     if cell[0] != size1x1:
       let
         (size, text) = cell
-        rowRange: Range = pos.makePos().rowRange(size)
-        colRange: Range = pos.makePos().colRange(size)
+        rowRange: Range = pos.makeArrPos().rowRange(size)
+        colRange: Range = pos.makeArrPos().colRange(size)
         rowHsum: int = sumjoin(rowHs, rowRange, vertSpacing)
         colWsum: int = sumjoin(colWs, colRange, horSpacing)
         textW: int = text.width
@@ -628,11 +628,11 @@ func getSizes(
 
 func newTermMultiGrid*(
   start: (int, int),
-  blocks: Seq2D[Option[(Size, StrBlock)]], config: TermGridConf): Multishape =
+  blocks: Seq2D[Option[(ArrSize, StrBlock)]], config: TermGridConf): Multishape =
   let (cellws, cellhs) = getSizes(blocks, 1, 1 #[ IMPLEMENT pass vert spacing ]#)
   let grid = newTermMultiGrid(
     start = start,
-    cells = blocks.mapIt2d(it.isSome().tern(some(it.get[0]), none(Size))),
+    cells = blocks.mapIt2d(it.isSome().tern(some(it.get[0]), none(ArrSize))),
     widths = cellws,
     heights = cellhs,
     config = config
