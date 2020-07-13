@@ -58,6 +58,8 @@ suite "Block grid":
       (bl: StrBlock) => (bl)
     ).join("\n")
 
+    quit 0
+
   #   hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
   #   # grid[3, 3] =
   #   # grid[4, 4] = makeUnicodeCell("&###33", 7, 1)

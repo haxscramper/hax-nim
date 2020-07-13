@@ -714,10 +714,13 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
         for (pos, size) in grid.cells.iterSomeCells():
           for (cellPos, cellSize, relPos) in lookup.cellsAround(pos):
             let rowOverlap = cellPos.rowRange(cellSize).overlap(pos.rowRange(size))
-            let colRange = cellPos.colRange(cellSize)
-            if rowOverlap.len > 1:
-              let (minColX, maxColX) = cellPos.colRange(cellSize).unpack()
+            let colOverlap = cellPos.colRange(cellSize).overlap(pos.colRange(size))
 
+            let rowRange = cellPos.rowRange(cellSize)
+            let colRange = cellPos.colRange(cellSize)
+
+            if rowOverlap.len > 1:
+              let (minColX, maxColX) = colRange.unpack()
               # NOTE this is under-implmenented: need to cover all
               # cases (cell on top/bottom and left/right).
               for rowY in absCellY.inrange(rowOverlap, 1):
@@ -725,6 +728,16 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
                   of rpRight:
                     if gpoVerticalGap in rc:
                       buf[absCellX[maxColX - 1], rowY] = rc[gpoVerticalGap]
+                  else:
+                    discard
+
+            if colRange.len > 1:
+              let (minRow, maxRow) = rowRange.unpack()
+              for colX in absCellX.inrange(colOverlap, 1):
+                case relPos:
+                  of rpBottom:
+                    if gpoHorizontalGap in rc:
+                      buf[colX, absCellY[maxRow]] = rc[gpoHorizontalGap]
                   else:
                     discard
 
