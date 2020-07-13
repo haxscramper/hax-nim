@@ -54,9 +54,7 @@ suite "Block grid":
       (3, 1)
     ))
 
-    echo grid.toStringBlock(
-      (bl: StrBlock) => (bl)
-    ).join("\n")
+    echo grid.toTermBuf()
 
     quit 0
 

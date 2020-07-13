@@ -182,32 +182,25 @@ func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
 
 #==========================  string conversion  ==========================#
 
-func toStringBlock*[T](
-  grid: BlockGrid[T],
-  toStr: (proc(it: T): StrBlock) = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock
+func toTermBuf*[T](grid: BlockGrid[T]): TermBuf
 
-func toStringBlock*[T](
-  cell: GridCell[T],
-  toStr: proc(it: T): StrBlock = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock =
+func toTermBuf*[T](cell: GridCell[T]): TermBuf =
   case cell.isItem:
     of true:
-      result = toStr(cell.item)
+      result = toTermBuf(cell.item)
     of false:
-      result = cell.grid.toStringBlock(toStr)
+      result = cell.grid.toTermBuf()
 
-func toStringBlock*[T](
-  grid: BlockGrid[T],
-  toStr: proc(it: T): StrBlock = (proc(it: T): StrBlock = ($it).split("\n"))): StrBlock =
-
-  let cells: Seq2D[Option[(ArrSize, StrBlock)]] = grid.grid.elems.mapIt2D(
+func toTermBuf*[T](grid: BlockGrid[T]): TermBuf =
+  let cells: Seq2D[Option[(ArrSize, TermBuf)]] = grid.grid.elems.mapIt2D(
     block:
       expectType(it, Option[GridCell[T]])
       if it.isSome():
-        some((it.get().size, it.get().toStringBlock(toStr)))
+        some((it.get().size, it.get().toTermBuf()))
       else:
-        none((ArrSize, StrBlock))
+        none((ArrSize, TermBuf))
     ,
-    none((ArrSize, StrBlock))
+    none((ArrSize, TermBuf))
   )
 
-  newTermMultiGrid((0, 0), cells, grid.borders).toStringBlock()
+  newTermMultiGrid((0, 0), cells, grid.borders).toTermBuf()

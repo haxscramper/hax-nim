@@ -12,14 +12,36 @@ import ../helpers
 import ../hcommon_converters
 export hcommon_converters
 
-#===========================  terminal buffer  ===========================#
+#*************************************************************************#
+#***************************  terminal buffer  ***************************#
+#*************************************************************************#
 
 type
   TermBuf* = object
-    buf: seq[seq[Rune]]
+    buf: seq[seq[Rune]] #[ IMPLEMENT replace with 2d sequence ]#
     xDiff: int
     yDiff: int
 
+#============================  constructors  =============================#
+
+func toTermBuf*(strs: StrBlock): TermBuf =
+  #[ IMPLEMENT ]#
+  discard
+
+
+func toTermBuf*(strs: RuneBlock): TermBuf =
+  #[ IMPLEMENT ]#
+  discard
+
+func newBuf*(offset: (int, int) = (0, 0)): TermBuf =
+  TermBuf(xDiff: offset[0], yDiff: offset[1])
+
+#==============================  accessors  ==============================#
+
+func width*(buf: TermBuf): int = discard #[ IMPLEMENT ]#
+func height*(buf: TermBuf): int = discard #[ IMPLEMENT ]#
+
+# REFACTOR remove when using `seq2d`
 func reserve*(buf: var TermBuf, rows, cols: int): void =
   for _ in buf.buf.len .. rows:
     buf.buf.add @[]
@@ -44,10 +66,21 @@ func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
 func `[]=`*(buf: var TermBuf, pos: Point[int], c: Rune): void =
   buf[pos.x, pos.y] = c
 
-func newBuf*(offset: (int, int) = (0, 0)): TermBuf =
-  TermBuf(xDiff: offset[0], yDiff: offset[1])
+
+#==============================  modifiers  ==============================#
+
+func renderOnto*(buf: TermBuf, other: var TermBuf, pos: Point[int]): void =
+  #[ IMPLEMENT ]#
+  discard
+
+
+#=============================  converters  ==============================#
 
 func `$`*(buf: TermBuf): string = buf.buf.join("\n")
+
+#*************************************************************************#
+#*************************  primitive rendering  *************************#
+#*************************************************************************#
 
 func renderLine(x0, y0, x1, y1: int, buf: var TermBuf, rune: Rune): void =
   # de x0, y0, x1, y1
@@ -268,21 +301,29 @@ method render*(rect: TermRect, buf: var TermBuf): void =
 type
   SText*[Num] = ref object of Shape
     start: Point[Num]
-    width: Num
-    height: Num
     case reflow: bool
       of true:
         text: string
+        maxWidth: Num
+        maxHeight: Num
       of false:
-        lines: RuneBlock
+        lines: TermBuf
 
-func newTermText*(start: (int, int), text: seq[RuneSeq]): SText[int] =
+func width*(text: SText[int]): int = discard #[ IMPLEMENT ]#
+func height*(text: SText[int]): int = discard #[ IMPLEMENT ]#
+
+func newTermText*(start: (int, int), text: RuneBlock): SText[int] =
+  SText[int](
+    start: makePoint(start[0], start[1]),
+    lines: text.toTermBuf(),
+    reflow: false
+  )
+
+func newTermText*(start: (int, int), text: TermBuf): SText[int] =
   SText[int](
     start: makePoint(start[0], start[1]),
     lines: text,
-    reflow: false,
-    width: toSeq(text.mapIt(it.len)).max(0),
-    height: text.len
+    reflow: false
   )
 
 func newBoxedTermText*(start: (int, int), text: seq[RuneSeq], boxc: char = '#'): Multishape =
@@ -314,10 +355,11 @@ method render*(text: SText[int], buf: var TermBuf): void =
     of true:
       raiseAssert("reflow text is not implemented")
     of false:
-      for rId, row in text.lines:
-        for cId in 0 ..< min(row.len, text.width):
-          # echo &"{text.start}, ({cId}, {rId}), {text.start.shiftXY(cId, rId)}"
-          buf[text.start.shiftXY(cId, rId)] = row[cId]
+      text.lines.renderOnto(buf, text.start)
+      # for rId, row in text.lines:
+      #   for cId in 0 ..< min(row.len, text.width):
+      #     # echo &"{text.start}, ({cId}, {rId}), {text.start.shiftXY(cId, rId)}"
+      #     buf[text.start.shiftXY(cId, rId)] = row[cId]
 
 
 #==============================  Term grid  ==============================#
@@ -433,15 +475,10 @@ func newTermGrid*(
 
 
 func newTermGrid*(
-  start: (int, int), cells: Seq2d[RuneBlock],
+  start: (int, int), cells: Seq2d[TermBuf],
   conf: TermGridConf): Multishape =
-  let cellws: seq[int] = cells.maximizeColIt(
-    ((expectType(it, RuneBlock); it.mapIt(it.len).max(0)))
-  )
-
-  let cellhs: seq[int] = cells.maximizeRowIt(
-    ((expectType(it, RuneBlock); it.len))
-  )
+  let cellws: seq[int] = cells.maximizeColIt(it.width)
+  let cellhs: seq[int] = cells.maximizeRowIt(it.height)
 
   let grid = newTermGrid(start, cellws, cellhs, conf)
   let (_, _, left, right, top, bottom) = spacingDimensions(conf)
@@ -459,13 +496,14 @@ func newTermGrid*(
 
   newMultishape(@[Shape(grid)] & cellShapes)
 
-func newTermGrid*(
-  start: (int, int), cells: seq[seq[RuneSeq]],
-  conf: TermGridConf): Multishape =
-  let cells: Seq2d[RuneBlock] = cells.mapIt(
-    it.mapIt(($it).split('\n').mapIt(it.toRunes()))
-  ).toSeq2d()
-  newTermGrid(start, cells, conf)
+# # REFACTOR remove
+# func newTermGrid*(
+#   start: (int, int), cells: seq[seq[RuneSeq]],
+#   conf: TermGridConf): Multishape =
+#   let cells: Seq2d[RuneBlock] = cells.mapIt(
+#     it.mapIt(($it).split('\n').mapIt(it.toRunes()))
+#   ).toSeq2d()
+#   newTermGrid(start, cells, conf)
 
 func gridRenderAux(rect: TermGrid, buf: var TermBuf): void =
   let gridX = rect.start.x
@@ -579,7 +617,7 @@ func newTermMultiGrid*(
     config: config)
 
 func getSizes(
-  grid: Seq2D[Option[(ArrSize, StrBlock)]],
+  grid: Seq2D[Option[(ArrSize, TermBuf)]],
   vertSpacing, horSpacing: int = 0): tuple[widths, heights: seq[int]] =
   var rowHs: seq[int] = newSeqWith(grid.rowNum, 0)
   var colWs: seq[int] = newSeqWith(grid.colNum, 0)
@@ -628,7 +666,7 @@ func getSizes(
 
 func newTermMultiGrid*(
   start: (int, int),
-  blocks: Seq2D[Option[(ArrSize, StrBlock)]], config: TermGridConf): Multishape =
+  blocks: Seq2D[Option[(ArrSize, TermBuf)]], config: TermGridConf): Multishape =
   let (cellws, cellhs) = getSizes(blocks, 1, 1 #[ IMPLEMENT pass vert spacing ]#)
   let grid = newTermMultiGrid(
     start = start,
@@ -645,12 +683,9 @@ func newTermMultiGrid*(
   let absCellY: seq[int] = cellhs.cumsumjoin(vertSpacing, true)
 
   for (pos, cell) in blocks.iterSomeCells():
-    let (size, str) = cell
+    let (size, buf) = cell
     let (row, col) = pos
-    res.add newTermText(
-      (absCellX[col] + 1, absCellY[row] + 1),
-      toRunes(str)
-    )
+    res.add newTermText((absCellX[col] + 1, absCellY[row] + 1), buf)
 
   return newMultishape(res)
 
@@ -759,18 +794,14 @@ func toStringBlock*(shape: Shape): seq[string] =
   shape.render(buf)
   return buf.buf.mapIt($it)
 
+func toTermBuf*(shape: Shape): TermBuf =
+  var buf = newBuf()
+  shape.render(buf)
+  return buf
+
 converter toRunes*(s: string): RuneSeq = unicode.toRunes(s)
 converter toRunes*(s: seq[string]): seq[RuneSeq] = s.mapIt(unicode.toRunes(it))
 converter toRunes*(s: seq[seq[string]]): seq[seq[RuneSeq]] =
   s.mapIt(it.mapIt(unicode.toRunes(it)))
 converter toRunes*(s: seq[seq[seq[string]]]): seq[seq[seq[RuneSeq]]] =
   s.mapIt(it.mapIt(it.mapIt(unicode.toRunes(it))))
-
-
-func toStringBlock*(
-  list: seq[seq[string]],
-  conf: TermGridConf = makeEmptyGridBorders()): seq[string] =
-  var buf = newBuf()
-  let runes: seq[seq[RuneSeq]] = list.toRunes()
-  newTermGrid((0, 0), runes, conf).render(buf)
-  return buf.buf.mapIt($it)
