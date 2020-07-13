@@ -33,6 +33,7 @@ func shiftX*[Num](p: Point[Num], dx: Num): Point[Num] =
 func shiftY*[Num](p: Point[Num], dy: Num): Point[Num] =
   makePoint[Num](p.x, p.y + dy)
 
+func unpack*[Num](p: Point[Num]): (Num, Num) = (p.x, p.y)
 
 func shiftXY*[Num](p: Point[Num], dx: Num, dy: Num): Point[Num] =
   makePoint[Num](p.x + dx, p.y + dy)

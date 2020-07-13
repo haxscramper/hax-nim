@@ -18,50 +18,41 @@ export hcommon_converters
 
 type
   TermBuf* = object
-    buf: seq[seq[Rune]] #[ IMPLEMENT replace with 2d sequence ]#
+    buf: Seq2d[Rune]
     xDiff: int
     yDiff: int
 
 #============================  constructors  =============================#
 
 func toTermBuf*(strs: StrBlock): TermBuf =
-  #[ IMPLEMENT ]#
-  discard
-
+  TermBuf(buf: strs.mapIt(it.toRunes()).makeSeq2D(whitespaceRune))
 
 func toTermBuf*(strs: RuneBlock): TermBuf =
-  #[ IMPLEMENT ]#
-  discard
+  TermBuf(buf: strs.makeSeq2D(whitespaceRune))
 
 func newBuf*(offset: (int, int) = (0, 0)): TermBuf =
   TermBuf(xDiff: offset[0], yDiff: offset[1])
 
 #==============================  accessors  ==============================#
 
-func width*(buf: TermBuf): int = discard #[ IMPLEMENT ]#
-func height*(buf: TermBuf): int = discard #[ IMPLEMENT ]#
+func width*(buf: TermBuf): int =
+  buf.buf.colNum()
 
-# REFACTOR remove when using `seq2d`
+func height*(buf: TermBuf): int = buf.buf.rowNum()
+
 func reserve*(buf: var TermBuf, rows, cols: int): void =
-  for _ in buf.buf.len .. rows:
-    buf.buf.add @[]
-
-  for r in 0 .. rows:
-    let rowLen = buf.buf[r].len
-    if rowLen - 1 < cols:
-      buf.buf[r] &= whitespaceRune.repeat(cols - rowLen + 1).toRunes()
+  buf.buf.fillToSize(
+    makeArrSize(w = cols + 1, h = rows + 1),
+    whitespaceRune)
 
 func setAtPoint(buf: var TermBuf, row, col: int, rune: Rune): void =
   reserve(buf, row, col)
-  buf.buf[row][col] = rune
+  buf.buf[row, col] = rune
 
 func `[]=`*(buf: var TermBuf, x, y: int, rune: Rune): void =
   let y = y + buf.yDiff
   let x = x + buf.xDiff
   buf.setAtPoint(y, x, rune)
-
-func `[]=`*(buf: var TermBuf, x, y: int, c: char): void =
-  buf[x, y] = toRunes($c)[0]
 
 func `[]=`*(buf: var TermBuf, pos: Point[int], c: Rune): void =
   buf[pos.x, pos.y] = c
@@ -70,13 +61,15 @@ func `[]=`*(buf: var TermBuf, pos: Point[int], c: Rune): void =
 #==============================  modifiers  ==============================#
 
 func renderOnto*(buf: TermBuf, other: var TermBuf, pos: Point[int]): void =
-  #[ IMPLEMENT ]#
-  discard
+  let (x, y) = pos.unpack()
+  for row in 0 ..< buf.height:
+    for col in 0 ..< buf.width:
+      other[x + col, y + row] = buf.buf[row, col]
 
 
 #=============================  converters  ==============================#
 
-func `$`*(buf: TermBuf): string = buf.buf.join("\n")
+func toString*(buf: TermBuf): string = buf.buf.join("\n")
 
 #*************************************************************************#
 #*************************  primitive rendering  *************************#

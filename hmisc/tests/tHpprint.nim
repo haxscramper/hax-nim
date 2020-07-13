@@ -34,27 +34,30 @@ suite "Block grid":
   #   assert grid.height == 1
 
   test "{makeGrid} make string grid":
-    var grid = makeGrid[StrBlock](3, 3, makeThinLineGridBorders())
-    for (pos, cell) in grid.itercells():
-      grid[pos] = makeGrid(
-        @[
-          @["[||||", "world\neee"],
-          @["EEEE", "####"],
-          @["eee"]
-        ].toStrGrid(@[""].toStrBlock()),
-        makeAsciiGridBorders()
-      ).toCell()
+    printCpuTime:
+      printCpuTime:
+        var grid = makeGrid[StrBlock](3, 3, makeThinLineGridBorders())
+        for (pos, cell) in grid.itercells():
+          grid[pos] = makeGrid(
+            @[
+              @["[||||", "world\neee"],
+              @["EEEE", "####"],
+              @["eee"]
+            ].toStrGrid(@[""].toStrBlock()),
+            makeAsciiGridBorders()
+          ).toCell()
 
-    grid.addHeader(makeCell[StrBlock](
-      @["! ANNOTATION !"].toStrBlock(),
-      (3, 1)
-    ))
-    grid.addHeader(makeCell[StrBlock](
-      @["! ANNOTATION 2 !"].toStrBlock(),
-      (3, 1)
-    ))
+        grid.addHeader(makeCell[StrBlock](
+          @["! ANNOTATION !"].toStrBlock(),
+          (3, 1)
+        ))
+        grid.addHeader(makeCell[StrBlock](
+          @["! ANNOTATION 2 !"].toStrBlock(),
+          (3, 1)
+        ))
 
-    echo grid.toTermBuf()
+      printCpuTime:
+        echo grid.toTermBuf().toString()
 
     quit 0
 

@@ -1,17 +1,12 @@
 import sequtils, options, hprimitives, strformat, strutils
 import ../hdebug_misc
 import ../algo/[halgorithm, hseq_mapping]
+import unicode
 
 type
   Seq2d*[T] = object
     colWidth: int
     elems: seq[seq[T]]
-
-func add*[T](s: var Seq2d[T], row: seq[T]): void =
-  s.elems.add row
-
-func prepend*[T](s: var Seq2D[T], row: seq[T]): void =
-  s.elems = row & s.elems
 
 func rowlen*[T](s: Seq2D[T], row: int): void =
   s.elems[row].len
@@ -23,7 +18,9 @@ func rowNum*[T](s: Seq2D[T]): int =
 func fillToSize*[T](grid: var Seq2D[T], size: ArrSize, val: T): void =
   ## Make sure `grid` is of `size` (or lagrger). Fill missing elements
   ## using `val`.
-  grid.colWidth = size.width
+  if grid.colWidth < size.width:
+    grid.colWidth = size.width
+
   for row in 0 ..< size.height:
     if not (row < grid.elems.len):
       grid.elems.add @[]
@@ -38,7 +35,7 @@ func colNum*[T](s: Seq2D[T]): int =
   result = s.colWidth
   for idx, row in s.elems:
     assert row.len == result,
-      &"Invariant invalidated: [idx].len: {row.len}, column: {result}"
+      &"Invariant invalidated: [{idx}].len: {row.len}, expected {result}"
 
 
 func size*[T](s: Seq2D[T]): ArrSize =
@@ -46,15 +43,6 @@ func size*[T](s: Seq2D[T]): ArrSize =
 
 func len*[T](s: Seq2D[T]): int =
   s.elems.len
-
-func rowAppend*[T](s: var Seq2D[T], elem: T, idx: int): void =
-  ## Add element to `idx` row
-  s.elems[idx].add elem
-
-func newRow*[T](s: var Seq2D[T]): void =
-  ## Add new row
-  var tmp: seq[T]
-  s.elems.add tmp
 
 func insertRow*[T](grid: var Seq2D[T], row: seq[T], idx: int = 0): void =
   ##[
@@ -72,7 +60,7 @@ the index of new row. `idx` MUST be in range `[0, grid.rowNum()]`
   elif idx == grid.rowNum():
     grid.elems = grid.elems & row
   else:
-    discard #[ IMPLEMENT ]#
+    raiseAssert("#[ IMPLEMENT ]#")
 
 func insertCol*[T](grid: var Seq2D[T], col: seq[T], idx: int = 0): void =
   ##[
@@ -84,12 +72,7 @@ index of new column. `idx` MUST be in range `[0, grid.colNum()]`
 (inclusive)
 
   ]##
-  #[ IMPLEMENT ]#
-  discard
-
-func addLast*[T](s: var Seq2D[T], elem: T): void =
-  ## Add new element to last row
-  s.elems[^1].add elem
+  raiseAssert("#[ IMPLEMENT ]#")
 
 func makeSeq2D*[T](s: seq[seq[T]], default: T): Seq2d[T] =
   let maxlen = s.mapIt(it.len).max()
@@ -270,6 +253,10 @@ func toStrGrid*(grid: seq[seq[string]], default: StrBlock): Seq2D[StrBlock] =
     grid.mapIt(it.mapIt(it.split("\n"))),
     default
   )
+
+func join*(grid: Seq2D[Rune], rowsep: string = "\n"): string =
+  grid.elems.mapIt($it).join("\n")
+
 
 #*************************************************************************#
 #***************************  multicell grid  ****************************#
