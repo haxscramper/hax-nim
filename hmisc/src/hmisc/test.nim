@@ -90,3 +90,20 @@ block:
 
         thisIdentifierIsCertainlyNotDefined:
           nope
+
+#===================  explicit genric parametrization  ===================#
+
+block:
+  type U[T] = object
+  proc gen[T](arg: U[T]) = discard; gen[int](U[int]())
+
+static:
+  echo compiles(
+    block:
+      type U[T] = object
+      proc gen[T](arg: U[T]) = discard; gen[int](U[int]())
+      echo typeof U
+      assert compiles(1 = 2)
+  )
+
+  echo compiles(1 = 2)

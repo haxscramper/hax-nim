@@ -1,5 +1,11 @@
 import sugar, strutils, sequtils, strformat, options
-import hmisc/types/[hdrawing, hgeometry_primitives, hprimitives]
+import hmisc/types/[
+  hdrawing,
+  hgeometry_primitives,
+  hprimitives,
+  hterm_buf
+]
+
 import hmisc/algo/halgorithm
 
 #===========================  implementation  ============================#
@@ -52,30 +58,28 @@ suite "Drawing":
                 @["HEllo", "world"],
                 @["wer", "2333"],
                 @["1222", "Hello"]
-              ],
+              ].toTermBufGrid(),
               makeThinLineGridBorders()
-            ).toString(),
+            ).toTermBuf().toString(),
             newTermGrid(
               (0, 0),
               @[
                 @["HEllo", "world"],
                 @["wer", "2333"],
                 @["1222", "Hello"]
-              ],
+              ].toTermBufGrid(),
               makeEmptyGridBorders()
-            ).toString()
+            ).toTermBuf().toString()
           ]
-        ],
+        ].toTermBufGrid(),
         makeThinLineGridBorders()
       ).render(buf)
       # echo $buf
 
   test "Multicell grid":
-    let size1x1 = makeSize(1, 1)
-    proc ms(a, b: int): auto = makeSize(a, b)
-    let nn = none((Size, StrBlock))
-    proc sb(s: string): StrBlock = s.toBlock()
-    echo overlap(makeRange(1, 2), makeRange(3, 4))
+    proc ms(a, b: int): auto = makeArrSize(a, b)
+    let nn = none((ArrSize, TermBuf))
+    proc sb(s: string): TermBuf = s.toTermBuf()
     echo newTermMultiGrid(
       (0, 0),
       @[
@@ -98,8 +102,8 @@ suite "Drawing":
                 some((ms(1, 1), sb("***")))
               ],
             ],
-            makeThinLineGridBorders(),
-          ).toString() & "\n some random anntation"))),
+            makeAsciiGridBorders(),
+          ).toTermBuf().toString() & "\nSome annotation"))),
           nn
         ],
         @[
@@ -127,5 +131,5 @@ suite "Drawing":
           some((ms(1, 1), sb("***")))
         ],
       ],
-      makeThinLineGridBorders(),
-    ).toString()
+      makeAsciiGridBorders(),
+    ).toTermBuf().toString()

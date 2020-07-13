@@ -26,17 +26,56 @@ type
   DotGenConfig = object
     f1: int
 
+  GridConvConfig = object
+    ## Configuration for converting `ObjTree` into `BlockGrid`
+    retainDisabledFields: bool
+
+  GridConvStageKind = enum
+    gcskStandaloneConstant
+    gcskAnonTupleName
+
+  GridConvStage = object
+    ## Description of current tree -> grid conversion stage
+    kind: GridConvStageKind
+
 type
   ObjGrid[Conf] = BlockGrid[ObjElem[Conf]]
   ObjCell[Conf] = GridCell[ObjElem[Conf]]
   ObjRow[Conf] = BlockGridRow[ObjElem[Conf]]
 
+func initObjElemConf(
+  obj: ObjTree, config: GridConvConfig,
+  stage: GridConvStage, res: var TermTextConf): void =
+  discard
+
+func makeElemConf*[Conf](
+  obj: ValObjTree, config: GridConvConfig, stage: GridConvStage): Conf =
+  initObjElemConf(obj, config, stage, result)
+
 func toCells*[Conf](obj: ValObjTree): tuple[ctype, value: ObjCell[Conf]] =
   ## Convert constant to row
   assert obj.kind == okConstant
   return (
-    makeCell(makeObjElem[Conf](obj.constType, makeTermConf())),
-    makeCell(makeObjElem[Conf](obj.strLit, makeTermConf())),
+    makeCell(makeObjElem[Conf](
+      obj.constType,
+      makeElemConf[Conf](
+        obj,
+        GridConvConfig(), #[ IMPLEMENT ]#
+        stage = GridConvStage(
+          kind: gcskStandaloneConstant
+        )
+      )
+    )),
+    makeCell(makeObjElem[Conf](
+      obj.strLit,
+      makeElemConf[Conf](
+        obj,
+        GridConvConfig(), #[ IMPLEMENT ]#
+        stage = GridConvStage(
+          kind: gcskStandaloneConstant
+        )
+      )
+    )),
   )
 
 proc toGrid*[Conf](obj: ValObjTree): tuple[
@@ -65,7 +104,16 @@ proc toGrid*[Conf](obj: ValObjTree): tuple[
           discard
         else: # Anon. tuple
           result.grid = makeGrid[ObjElem[Conf]](
-            makeCell(makeObjElem[Conf](obj.name & "+", makeTermConf()), (2, 1)),
+            makeCell(makeObjElem[Conf](
+              obj.name & "+",
+              makeElemConf[Conf](
+                obj,
+                GridConvConfig(), #[ IMPLEMENT ]#
+                stage = GridConvStage(
+                  kind: gcskAnonTupleName
+                )
+              )
+            ), (2, 1)),
             makeThinLineGridBorders()
           )
 

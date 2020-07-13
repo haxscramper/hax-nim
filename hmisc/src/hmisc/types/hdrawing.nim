@@ -718,10 +718,10 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
 
 
 
-func toString*(shape: Shape): string =
-  var buf = newBuf()
-  shape.render(buf)
-  return $buf
+# func toString*(shape: Shape): string =
+#   var buf = newBuf()
+#   shape.render(buf)
+#   return $buf
 
 
 func toStringBlock*(shape: Shape): seq[string] =

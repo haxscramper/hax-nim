@@ -16,11 +16,18 @@ type
 
 #============================  constructors  =============================#
 
-func makeTermConf*(): TermTextConf = discard
+# func makeTermConf*(): TermTextConf = discard
 
 func toTermBuf*(str: string): TermBuf =
   TermBuf(buf: str.split("\n").mapIt(
     it.toRunes()).makeSeq2D(whitespaceRune))
+
+func toTermBuf*(strs: seq[seq[string]]): TermBuf =
+  TermBuf(buf: strs.mapIt(it.toRunes().concat()).makeSeq2D(whitespaceRune))
+
+func toTermBufGrid*(strs: seq[seq[string]]): Seq2D[TermBuf] =
+  strs.makeSeq2D("").mapIt2D(it.toTermBuf())
+  # TermBuf(buf: strs.mapIt(it.toRunes().concat()).makeSeq2D(whitespaceRune))
 
 func toTermBuf*(strs: StrBlock): TermBuf =
   TermBuf(buf: strs.mapIt(it.toRunes()).makeSeq2D(whitespaceRune))

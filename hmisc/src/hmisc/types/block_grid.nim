@@ -15,6 +15,8 @@ type
     spFixed
 
   GridCell*[T] = object
+    # TODO add support for cell configuration: additional annotations
+    # etc.
     size: ArrSize
     vertPolicy: SizePolicy
     horizPolicy: SizePolicy
