@@ -87,7 +87,7 @@ func cumsumjoin*(
     result.add(val + sep + curr)
     curr += val + sep
 
-func sumjoin*(a: openarray[int], r: Range, sep: int): int =
+func sumjoin*(a: openarray[int], r: ArrRange, sep: int): int =
   sumjoin(a[r.a .. r.b], sep)
 
 iterator `..+`*(start: int, offset: int): int =

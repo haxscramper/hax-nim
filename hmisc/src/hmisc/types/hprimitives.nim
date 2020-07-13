@@ -56,65 +56,65 @@ func makeArrSize*(widthHeight: (int, int)): ArrSize =
 #================================  Range  ================================#
 
 type
-  Range* = object
+  ArrRange* = object
     a*: int
     b*: int
 
 import hashes
-func makeRange*(a, b: int): Range = Range(a: a, b: b)
-func hash*(r: Range): Hash = hash(r.a) !& hash(r.b)
-func decRight*(r: Range, diff: int = 1): Range =
+func makeArrRange*(a, b: int): ArrRange = ArrRange(a: a, b: b)
+func hash*(r: ArrRange): Hash = hash(r.a) !& hash(r.b)
+func decRight*(r: ArrRange, diff: int = 1): ArrRange =
   ## Shift right side of range by one.
   assert r.b - diff >= r.a,
      &"Cannot shift right range side past left side: [{r.a}, {r.b}]" &
        &" -> [{r.a}, {r.b - diff}]"
-  makeRange(r.a, r.b - diff)
+  makeArrRange(r.a, r.b - diff)
 
 
-func incLeft*(r: Range, diff: int = 1): Range =
+func incLeft*(r: ArrRange, diff: int = 1): ArrRange =
   ## Shift left side of range by one.
   assert r.a + diff <= r.b,
      &"Cannot shift right range side past left side: [{r.a}, {r.b}]" &
        &" -> [{r.a + diff}, {r.b}]"
-  makeRange(r.a + diff, r.b)
+  makeArrRange(r.a + diff, r.b)
 
-func contains*(r: Range, item: int): bool =
+func contains*(r: ArrRange, item: int): bool =
   r.a <= item and item <= r.b
 
-func middles*(r: Range): int =
+func middles*(r: ArrRange): int =
   ## Number of gaps in between range points
   (r.b - r.a - 1)
 
-func isPoint*(r: Range): bool =
+func isPoint*(r: ArrRange): bool =
   ## If range starts is equal to end
   (r.a == r.b)
 
-func unpack*(r: Range): (int, int) = (r.a, r.b)
+func unpack*(r: ArrRange): (int, int) = (r.a, r.b)
 
-func point*(r: Range): int =
+func point*(r: ArrRange): int =
   assert r.isPoint()
   r.a
 
-func isValid*(r: Range): bool = r.b >= r.a
-func overlap*(r1, r2: Range): Range =
-  result = makeRange(max(r1.a, r2.a), min(r1.b, r2.b))
-func `$`*(r: Range): string = &"[{r.a}, {r.b}]"
-func len*(r: Range): int = r.b - r.a + 1
+func isValid*(r: ArrRange): bool = r.b >= r.a
+func overlap*(r1, r2: ArrRange): ArrRange =
+  result = makeArrRange(max(r1.a, r2.a), min(r1.b, r2.b))
+func `$`*(r: ArrRange): string = &"[{r.a}, {r.b}]"
+func len*(r: ArrRange): int = r.b - r.a + 1
 
-iterator items*(r: Range): int =
+iterator items*(r: ArrRange): int =
   for it in r.a .. r.b:
     yield it
 
-iterator items*(r: (Range, Range)): (int, int) =
+iterator items*(r: (ArrRange, ArrRange)): (int, int) =
   for x in r[0].a .. r[0].b:
     for y in r[1].a .. r[1].b:
       yield (x, y)
 
-iterator `[]`*[T](s: seq[T], r: Range): T =
+iterator `[]`*[T](s: seq[T], r: ArrRange): T =
   for it in s[r.a .. r.b]:
     yield it
 
-iterator inrange*(s: seq[int], r: Range, lDiff, rDiff: int = 0): int =
+iterator inrange*(s: seq[int], r: ArrRange, lDiff, rDiff: int = 0): int =
   ## Iterate over all values between `s[r.a]` to `s[r.b]`. Shift
   ## left/right edge of the range by `l/rDiff` respectively.
   for v in (s[r.a] + lDiff) .. (s[r.b] + rDiff):
@@ -167,15 +167,15 @@ func toDiffRC*(rp: RelPos): (int, int) =
 
 #==============================  compound  ===============================#
 
-func rowRange*(pos: ArrPos, size: ArrSize): Range =
+func rowRange*(pos: ArrPos, size: ArrSize): ArrRange =
   ## Get *indices* of rows that multicell of `size` at `pos` would
   ## occupy
-  makeRange(pos.row, pos.row + size.height - 1)
+  makeArrRange(pos.row, pos.row + size.height - 1)
 
-func colRange*(pos: ArrPos, size: ArrSize): Range =
+func colRange*(pos: ArrPos, size: ArrSize): ArrRange =
   ## Get *indices* of columns that multicell of `size` at `pos` would
   ## occupy
-  makeRange(pos.col, pos.col + size.width - 1)
+  makeArrRange(pos.col, pos.col + size.width - 1)
 
 
 

@@ -36,14 +36,14 @@ type
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 
-func totalWidth*[T](grid: BlockGrid[T], colRange: Range): int =
+func totalWidth*[T](grid: BlockGrid[T], colRange: ArrRange): int =
   ## Get total width of columns in `colRange`, including horisontal
   ## grid gap
   toSeq(grid.maxW.valuesBetween(colRange.a, colRange.b)).sumjoin(
     grid[gpoHorizontalGap].len()
   )
 
-func totalHeight*[T](grid: BlockGrid[T], rowRange: Range): int =
+func totalHeight*[T](grid: BlockGrid[T], rowRange: ArrRange): int =
   ## Get total height of the rows in `rowRange`, including vertical
   ## grid gap.
   toSeq(grid.maxH.valuesBetween(rowRange.a, rowRange.b)).sumjoin(
@@ -90,19 +90,19 @@ func occupied*[T](cell: GridCell[T]): ArrSize =
 func internal*[T](cell: GridCell[T]): ArrSize = cell.size
 func colNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.colNum()
 
-converter toRange*(elems: (int, int)): Range =
-  Range(a: elems[0], b: elems[1])
+converter toRange*(elems: (int, int)): ArrRange =
+  ArrRange(a: elems[0], b: elems[1])
 
-func toRange*(a, b: int): Range = Range(a: a, b: b)
+func toRange*(a, b: int): ArrRange = ArrRange(a: a, b: b)
 func toPos*(row, col: int): ArrPos = ArrPos(row: row, col: col)
 
-func colRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): Range =
+func colRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): ArrRange =
   let start = pos.col
   var finish = pos.col
 
   return toRange((start, finish))
 
-func rowRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): Range =
+func rowRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): ArrRange =
   let start = pos.row
   var finish = pos.row
 

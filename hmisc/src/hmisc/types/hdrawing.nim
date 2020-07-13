@@ -595,8 +595,8 @@ func getSizes(
     if cell[0] != size1x1:
       let
         (size, text) = cell
-        rowRange: Range = pos.makeArrPos().rowRange(size)
-        colRange: Range = pos.makeArrPos().colRange(size)
+        rowRange: ArrRange = pos.makeArrPos().rowRange(size)
+        colRange: ArrRange = pos.makeArrPos().colRange(size)
         rowHsum: int = sumjoin(rowHs, rowRange, vertSpacing)
         colWsum: int = sumjoin(colWs, colRange, horSpacing)
         textW: int = text.width
@@ -675,8 +675,8 @@ method render*(grid: TermMultiGrid, buf: var TermBuf): void =
         y = absCellY[row]
         width = absCellX[col + size.width] - absCellX[col]
         height = absCellY[row + size.height] - absCellY[row]
-        wRange = makeRange(x + 1, x + width - 1)
-        hRange = makeRange(y + 1, y + height - 1)
+        wRange = makeArrRange(x + 1, x + width - 1)
+        hRange = makeArrRange(y + 1, y + height - 1)
 
       block: # Remove things in grid
         for (x, y) in (wRange, hRange):
