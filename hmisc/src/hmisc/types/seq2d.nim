@@ -311,29 +311,16 @@ func `[]=`*[T](grid: var MulticellGrid[T], rect: ArrRect, val: T): void =
 
   grid.elems[rect.pos] = some(val)
 
-iterator subcells*(lookup: MulticellLookup, pos: ArrPos): (ArrPos, ArrSize) =
-  ## Iterate over all subcells occupied by grid at position `pos`
-  # REFACTOR TODO isn't this iterator useless with new rects? I can
-  # just iterate over all items in rectangle itself.
-  var (row, col) = pos.unpack
-  if lookup[row, col].isSome():
-    let rect = lookup[row, col].get()
-    for (row, col) in rect.itercells():
-      yield (makeArrPos(row, col), rect.size)
-
-
 iterator cellsAround*(lookup: MulticellLookup, pos: ArrPos): tuple[
   pos: ArrPos, size: ArrSize, rp: RelPos] =
   ## Iterate over all cells adjacent to cell at `pos`
-  let (row, col) = pos.unpack
-
-  if lookup[row, col].isSome():
-    let startCell: ArrPos = lookup[row, col].get().pos
+  if lookup[pos].isSome():
     var fringes: seq[(ArrPos, RelPos)]
-    for (subPos, size) in lookup.subcells(pos):
+    let rect = lookup[pos].get()
+    for (row, col) in rect.itercells():
       for shift in @[rpLeft, rpRight, rpBottom, rpTop]:
-        let adjacent = subPos.shiftRC(shift.toDiffRC())
-        if lookup.checkIfIt(adjacent, it.pos != startCell):
+        let adjacent = makeArrPos(row, col).shiftRC(shift.toDiffRC())
+        if lookup.checkIfIt(adjacent, it.pos != rect.pos):
           fringes.add (lookup[adjacent].get().pos, shift)
 
     for adjPos in fringes.deduplicateIt(it[0]):
