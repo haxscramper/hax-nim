@@ -176,17 +176,17 @@ func makeGrid*[T](arg: Seq2D[T], conf: TermGridConf): BlockGrid[T] =
 func makeGrid*[T](arg: Seq2D[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
   BlockGrid[T](grid: arg.toMulticell(), borders: conf)
 
+
+func makeGrid*[T](header: GridCell[T], conf: TermGridConf): BlockGrid[T] =
+  BlockGrid[T](
+    grid: toMulticell(header, header.size),
+    borders: conf
+  )
+
 func makeGrid*[T](rows, cols: int, borders: TermGridConf): BlockGrid[T] =
   result.borders = borders
   result.grid = makeMulticell[GridCell[T]](rows, cols)
 
-# func makeGrid*(arg: Seq2D[StrBlock],
-#                conf: TermGridConf): BlockGrid[StrBlock] =
-#   makeGrid(mapIt2d(
-#     arg,
-#     some(makeCell(it)),
-#     @[""].toBlock()
-#   ).toMulticell(), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
   assert cell.size.height() == 1

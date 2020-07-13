@@ -64,8 +64,19 @@ proc toGrid*[Conf](obj: ValObjTree): tuple[
         if obj.namedFields: # Named tuple
           discard
         else: # Anon. tuple
-          d "Anon tuple"
-          discard
+          result.grid = makeGrid[ObjElem[Conf]](
+            makeCell(makeObjElem[Conf](obj.name & "+", makeTermConf()), (2, 1)),
+            makeThinLineGridBorders()
+          )
+
+          for (name, value) in obj.fldPairs:
+            case value.kind:
+              of okConstant:
+                let (ctype, value) = toCells[Conf](value)
+                result.grid.appendRow(@[ctype, value])
+
+              else:
+                discard
 
 
 proc toPGrid*[T](obj: T): string =

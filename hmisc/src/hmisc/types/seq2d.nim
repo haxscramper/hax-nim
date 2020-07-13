@@ -355,3 +355,7 @@ func toMulticell*[T](grid: Seq2D[T]): MulticellGrid[T] =
   result.fillToSize(grid.size())
   for (pos, cell) in grid.itercells():
     result[makeArrRect(pos, size1x1)] = cell
+
+func toMulticell*[T](header: T, size: ArrSize): MulticellGrid[T] =
+  result.fillToSize(size)
+  result[makeArrRect(makeArrPos(0, 0), size)] = header
