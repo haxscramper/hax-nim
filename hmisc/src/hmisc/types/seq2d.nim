@@ -276,7 +276,7 @@ func toStrGrid*(grid: seq[seq[string]], default: StrBlock): Seq2D[StrBlock] =
 #*************************************************************************#
 
 type
-  MulticellLookup* = Seq2D[Option[tuple[pos: ArrPos, size: ArrSize]]]
+  MulticellLookup* = Seq2D[Option[ArrRect]]
   MulticellGrid*[T] = object
     elems*: Seq2D[Option[T]]
     lookup: MulticellLookup
@@ -284,7 +284,7 @@ type
 #=============================  constructor  =============================#
 
 func makeLookup*(grid: Seq2d[Option[ArrSize]]): MulticellLookup =
-  result = grid.mapIt2d(none((ArrPos, ArrSize)))
+  result = grid.mapIt2d(none((ArrRect)))
   for (pos, size) in grid.iterSomeCells():
     for (row, col) in (
       pos.rowRange(size),
@@ -293,34 +293,33 @@ func makeLookup*(grid: Seq2d[Option[ArrSize]]): MulticellLookup =
       if result[row, col].isSome():
         raiseAssert &"Cannot set cell at position {pos}: {(row, col)} is already occupied"
       else:
-        result[row, col] = some((pos.makeArrPos(), size))
+        result[row, col] = some(makeArrrect(pos, size))
 
 
 
 #==============================  accessor  ===============================#
 
 
-func `[]=`*[T](grid: var MulticellGrid[T], pos: ArrPos, val: (ArrSize, T)): void =
-  for (row, col) in (pos.rowRange(val[0]), pos.colRange(val[0])):
+func `[]=`*[T](grid: var MulticellGrid[T], rect: ArrRect, val: T): void =
+  for (row, col) in rect.itercells():
     if grid.lookup[row, col].isSome():
-      raiseAssert &"Cannot set cell at position {pos}: " &
+      raiseAssert &"Cannot set cell at rec {rect}: " &
        &"{(row, col)} is already occupied"
 
-  for (row, col) in (pos.rowRange(val[0]), pos.colRange(val[0])):
-    grid.lookup[row, col] = some((pos, val[0]))
+  for (row, col) in rect.itercells():
+    grid.lookup[row, col] = some(rect)
 
-  grid.elems[pos] = some(val[1])
+  grid.elems[rect.pos] = some(val)
 
 iterator subcells*(lookup: MulticellLookup, pos: ArrPos): (ArrPos, ArrSize) =
   ## Iterate over all subcells occupied by grid at position `pos`
+  # REFACTOR TODO isn't this iterator useless with new rects? I can
+  # just iterate over all items in rectangle itself.
   var (row, col) = pos.unpack
   if lookup[row, col].isSome():
-    let start = lookup[row, col].get()
-    for (row, col) in (
-      start.pos.rowRange(start.size),
-      start.pos.colRange(start.size)
-    ):
-      yield (makeArrPos(row, col), start.size)
+    let rect = lookup[row, col].get()
+    for (row, col) in rect.itercells():
+      yield (makeArrPos(row, col), rect.size)
 
 
 iterator cellsAround*(lookup: MulticellLookup, pos: ArrPos): tuple[
@@ -348,7 +347,7 @@ iterator cellsAround*(lookup: MulticellLookup, pos: ArrPos): tuple[
 
 func fillToSize*[T](grid: var MulticellGrid[T], size: ArrSize): void =
   grid.elems.fillToSize(size, none(T))
-  grid.lookup.fillToSize(size, none(tuple[pos: ArrPos, size: ArrSize]))
+  grid.lookup.fillToSize(size, none(ArrRect))
 
 func makeMulticell*[T](rows, cols: int): MulticellGrid[T] =
   ## Make empty multicell grid
@@ -360,13 +359,9 @@ func addHeader*[T](grid: var MulticellGrid[T], colIdx, width: int, val: T): void
 Prepend header cell to grid.
 
   ]##
-  #[ IMPLEMENT ]#
-  var newrow = newSeqWith(
-    grid.elems.colNum(), none(T))
-
-  var newLookup = newSeqWith(
-    grid.lookup.colNum(), none(tuple[pos: ArrPos, size: ArrSize]))
+  var newrow = newSeqWith(grid.elems.colNum(), none(T))
+  var newLookup = newSeqWith(grid.lookup.colNum(), none(ArrRect))
 
   grid.elems.insertRow(newRow, 0)
   grid.lookup.insertRow(newLookup, 0)
-  grid[makeArrPos(row = 0, col = colIdx)] = (makeArrSize(w = width, h = 1), val)
+  grid[makeArrRect((0, colIdx), w = width, h = 1)] = val

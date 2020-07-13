@@ -90,12 +90,6 @@ func occupied*[T](cell: GridCell[T]): ArrSize =
 func internal*[T](cell: GridCell[T]): ArrSize = cell.size
 func colNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.colNum()
 
-converter toRange*(elems: (int, int)): ArrRange =
-  ArrRange(a: elems[0], b: elems[1])
-
-func toRange*(a, b: int): ArrRange = ArrRange(a: a, b: b)
-func toPos*(row, col: int): ArrPos = ArrPos(row: row, col: col)
-
 func colRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): ArrRange =
   let start = pos.col
   var finish = pos.col
@@ -113,7 +107,7 @@ func `[]=`*[T](grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
   grid.grid[makeArrPos(row, col)] = (cell.size, cell)
 
 func `[]=`*[T](grid: var BlockGrid[T], pos: ArrPos, cell: GridCell[T]): void =
-  grid.grid[pos] = (cell.size, cell)
+  grid.grid[makeArrRect(pos, cell.size)] = cell
 
 iterator itercells*[T](grid: BlockGrid[T]): (ArrPos, Option[GridCell[T]]) =
   for (pos, cell) in grid.grid.elems.itercells():
@@ -124,7 +118,7 @@ iterator itercells*[T](grid: BlockGrid[T]): (ArrPos, Option[GridCell[T]]) =
 func toMulticell*[T](grid: Seq2D[Option[GridCell[T]]]): MulticellGrid[GridCell[T]] =
   for (pos, cell) in grid.iterSomeCells():
     result.fillToSize(pos.makeArrPos().expandSize(cell.size))
-    result[pos.makeArrPos()] = (cell.size, cell)
+    result[makeArrRect(pos, cell.size)] = cell
 
 func makeCell*[T](
   arg: T,

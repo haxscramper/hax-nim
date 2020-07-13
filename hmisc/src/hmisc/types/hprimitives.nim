@@ -62,6 +62,7 @@ type
 
 import hashes
 func makeArrRange*(a, b: int): ArrRange = ArrRange(a: a, b: b)
+func toRange*(a, b: int): ArrRange = ArrRange(a: a, b: b)
 func hash*(r: ArrRange): Hash = hash(r.a) !& hash(r.b)
 func decRight*(r: ArrRange, diff: int = 1): ArrRange =
   ## Shift right side of range by one.
@@ -131,6 +132,7 @@ type
 
 func makeArrPos*(row, col: int): ArrPos = ArrPos(row: row, col: col)
 func makeArrPos*(pos: (int, int)): ArrPos = ArrPos(row: pos[0], col: pos[1])
+func toPos*(row, col: int): ArrPos = ArrPos(row: row, col: col)
 func isValid*(pos: ArrPos): bool = (pos.row >= 0) and (pos.col >= 0)
 func expandSize*(pos: ArrPos, size: ArrSize): ArrSize =
   makeArrSize(
@@ -164,6 +166,36 @@ func toDiffRC*(rp: RelPos): (int, int) =
     of rpRight: (0, 1)
     of rpBottom: (1, 0)
     of rpTop: (-1, 0)
+
+
+#===============================  ArrRect  ===============================#
+
+type
+  ArrRect* = object
+    pos*: ArrPos
+    size*: ArrSize
+
+func makeArrRect*(pos: (int, int), w, h: int): ArrRect =
+  ArrRect(
+    pos: ArrPos(row: pos[0], col: pos[1]),
+    size: ArrSize(width: w, height: h)
+  )
+
+func makeArrRect*(pos: (int, int), size: ArrSize): ArrRect =
+  ArrRect(pos: ArrPos(row: pos[0], col: pos[1]), size: size)
+
+func makeArrRect*(pos: ArrPos, size: ArrSize): ArrRect =
+  ArrRect(pos: pos, size: size)
+
+func rowRange*(rect: ArrRect): ArrRange =
+  makeArrRange(rect.pos.row, rect.pos.row + rect.size.height - 1)
+
+func colRange*(rect: ArrRect): ArrRange =
+  makeArrRange(rect.pos.col, rect.pos.col + rect.size.width - 1)
+
+iterator itercells*(rect: ArrRect): (int, int) =
+  for (row, col) in (rect.rowRange(), rect.colRange):
+    yield (row, col)
 
 #==============================  compound  ===============================#
 
