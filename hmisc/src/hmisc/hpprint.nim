@@ -661,14 +661,16 @@ func getSubnodes*(it: ObjTree): seq[ObjTree] =
           "IMPLEMENT Sectioned objects are not supported RN")
 
 
-proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
-  var counter =
-    iterator(): int {.closure.} =
-      var cnt: int = 0
-      while true:
-        yield cnt
-        inc cnt
+func makeCounter*(): iterator(): int {.closure.} =
+   result = iterator(): int {.closure.} =
+              var cnt: int = 0
+              while true:
+                yield cnt
+                inc cnt
 
+
+proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
+  var counter = makeCounter()
   var conf = objectPPrintConf
   conf.maxWidth = maxWidth
   prettyString(toSimpleTree(obj, counter), conf, ident)

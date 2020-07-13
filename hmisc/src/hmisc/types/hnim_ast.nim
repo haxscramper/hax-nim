@@ -39,6 +39,14 @@ type
     ## different types for fields (and values). List name is optional
     ## (unnamed object), field name is optional (unnamed fields)
 
+
+
+
+  ObjRelationKind = enum
+    orkComposition
+    orkReference
+    orkPointer
+
   ObjTree*[Node] = object
     ##[
 
@@ -98,16 +106,27 @@ type
             kindBlocks*: seq[Field[Node]] ## Object field tree. TODO -
             ## currently not implemented
 
-  ObjElem* = object
-    text*: string
-    color*: Color
+
+
+
+  ObjElem*[Conf] = object
+    case isValue: bool
+      of true:
+        text*: string
+        config*: Conf
+      of false:
+        relType*: ObjRelationKind
+        targetId*: int
+
+
+
 
   ValObjTree* = ObjTree[void] ## Object tree used at runtime.
   ValField* = Field[void] ## Field used at runtime
   ValFieldBranch* = FieldBranch[void] ## Field branch used at runtime
 
-func makeObjElem*(text: string): ObjElem =
-  ObjElem(text: text)
+func makeObjElem*[Conf](text: string, conf: Conf): ObjElem[Conf] =
+  ObjElem[Conf](isValue: true, text: text, config: conf)
 
 
 #==============================  operators  ==============================#

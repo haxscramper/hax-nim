@@ -1,4 +1,4 @@
-import sequtils, options, hprimitives, strformat, strutils
+import sequtils, options, hprimitives, strformat, strutils, sugar
 import ../hdebug_misc
 import ../algo/[halgorithm, hseq_mapping]
 import unicode
@@ -75,22 +75,24 @@ index of new column. `idx` MUST be in range `[0, grid.colNum()]`
   raiseAssert("#[ IMPLEMENT ]#")
 
 func makeSeq2D*[T](s: seq[seq[T]], default: T): Seq2d[T] =
-  let maxlen = s.mapIt(it.len).max()
-  var inseq = s
-  for idx, row in s:
-    if row.len < maxlen:
-      inseq[idx] &= newSeqWith(maxlen - row.len, default)
+  if s.len != 0:
+    let maxlen = s.mapIt(it.len).max()
+    var inseq = s
+    for idx, row in s:
+      if row.len < maxlen:
+        inseq[idx] &= newSeqWith(maxlen - row.len, default)
 
-  Seq2D[T](elems: inseq, colWidth: maxlen)
+    return Seq2D[T](elems: inseq, colWidth: maxlen)
 
 func makeSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
-  let maxlen = s.mapIt(it.len).max()
-  for idx, row in s:
-    assert row.len == maxlen, "Cannot create 2d sequence from non-uniform " &
-      &"sequence. Row {idx} has {row.len} elements, but expected " &
-      &"{maxlen}"
+  if s.len != 0:
+    let maxlen = s.mapIt(it.len).max()
+    for idx, row in s:
+      assert row.len == maxlen, "Cannot create 2d sequence from non-uniform " &
+        &"sequence. Row {idx} has {row.len} elements, but expected " &
+        &"{maxlen}"
 
-  Seq2D[T](elems: s, colWidth: maxlen)
+    return Seq2D[T](elems: s, colWidth: maxlen)
 
 iterator items*[T](s: Seq2d[T]): seq[T] =
   for row in s.elems:
@@ -339,3 +341,17 @@ Prepend header cell to grid.
   grid.elems.insertRow(newRow, 0)
   grid.lookup.insertRow(newLookup, 0)
   grid[makeArrRect((0, colIdx), w = width, h = 1)] = val
+
+func insertRow*[T](
+  grid: var MulticellGrid[T], rowIdx: int, row: seq[T]): void =
+  let newrows: seq[Option[ArrRect]] = collect(newSeq):
+    for it in 0 ..< row.len:
+      some(makeArrRect((rowIdx, it), size1x1))
+
+  grid.elems.insertRow(row.mapIt(some(it)), rowIdx)
+  grid.lookup.insertRow(newrows, rowIdx)
+
+func toMulticell*[T](grid: Seq2D[T]): MulticellGrid[T] =
+  result.fillToSize(grid.size())
+  for (pos, cell) in grid.itercells():
+    result[makeArrRect(pos, size1x1)] = cell

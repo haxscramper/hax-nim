@@ -17,60 +17,30 @@ import hmisc/[hpprint, hpprint_graphviz, hcommon_converters]
 import hmisc/types/seq2d
 
 suite "Block grid":
-  discard
-  # test "{makeCell}":
-  #   let cell = makeCell("Hello", 5, 1)
-  #   assert cell.width == 5
-  #   assert cell.height == 1
-
-  # test "{makeGrid}":
-  #   let grid = makeGrid(
-  #     @[@[makeCell("#", 1, 1), makeCell("@", 1, 1)]],
-  #     makeCell("", 0, 0),
-  #     makeEmptyGridBorders()
-  #   )
-
-  #   assert grid.width == 2
-  #   assert grid.height == 1
-
   test "{makeGrid} make string grid":
-    printCpuTime:
-      printCpuTime:
-        var grid = makeGrid[StrBlock](3, 3, makeThinLineGridBorders())
-        for (pos, cell) in grid.itercells():
-          grid[pos] = makeGrid(
-            @[
-              @["[||||", "world\neee"],
-              @["EEEE", "####"],
-              @["eee"]
-            ].toStrGrid(@[""].toStrBlock()),
-            makeAsciiGridBorders()
-          ).toCell()
+    var grid = makeGrid[StrBlock](3, 3, makeThinLineGridBorders())
+    for (pos, cell) in grid.itercells():
+      grid[pos] = makeGrid(
+        @[
+          @["[||||", "world\neee"],
+          @["EEEE", "####"],
+          @["eee"]
+        ].toStrGrid(@[""].toStrBlock()),
+        makeAsciiGridBorders()
+      ).toCell()
 
-        grid.addHeader(makeCell[StrBlock](
-          @["! ANNOTATION !"].toStrBlock(),
-          (3, 1)
-        ))
-        grid.addHeader(makeCell[StrBlock](
-          @["! ANNOTATION 2 !"].toStrBlock(),
-          (3, 1)
-        ))
+    grid.addHeader(makeCell[StrBlock](
+      @["! ANNOTATION !"].toStrBlock(),
+      (3, 1)
+    ))
+    grid.addHeader(makeCell[StrBlock](
+      @["! ANNOTATION 2 !"].toStrBlock(),
+      (3, 1)
+    ))
 
-      printCpuTime:
-        echo grid.toTermBuf().toString()
-
-    quit 0
-
-  #   hpprint_types.`[]=`(grid, 3, 3, makeUnicodeCell("&3333", 7, 1))
-  #   # grid[3, 3] =
-  #   # grid[4, 4] = makeUnicodeCell("&###33", 7, 1)
-
-  #   grid.addHeader(makeCell("!!!!"))
-  #   grid.borders = makeUnicodeGridBorders()
-
-  #   echo grid.toStringGrid().toString()
-
-  #   # quit 0
+  test "Convert object tree into grid":
+    echo toPGrid("Hello")
+    echo toPGrid(("Hello", 12, 1.2))
 
 
 suite "Block labeling":
@@ -158,10 +128,6 @@ suite "Block labeling":
     except:
       fail("Wrong exception")
 
-
-suite "Compile-time object passthrough":
-  test "Regular const value":
-    discard
 
 suite "Case object field iteration":
   discard
@@ -788,10 +754,12 @@ suite "Object tree to dot graph":
       echo str
 
   test "Integer":
-    testgraph(12)
+    discard
+    # testgraph(12)
 
   test "Integer sequence":
-    testgraph(@[12])
+    discard
+    # testgraph(@[12])
 
 
 import hmisc/[objdiff]

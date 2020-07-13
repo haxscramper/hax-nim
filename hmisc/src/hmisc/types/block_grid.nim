@@ -1,7 +1,7 @@
 import tables, sequtils, sugar, options
 
 import hgeometry_primitives, hprimitives, hdrawing
-import seq2d
+import seq2d, hterm_buf
 import ../hdebug_misc
 import ../algo/[hseq_mapping, halgorithm]
 
@@ -29,6 +29,8 @@ type
   BlockGrid*[T] = object
     borders*: TermGridConf
     grid*: MulticellGrid[GridCell[T]]
+
+  BlockGridRow*[T] = seq[GridCell[T]]
 
 
 #=========================  accessor functions  ==========================#
@@ -89,6 +91,8 @@ func occupied*[T](cell: GridCell[T]): ArrSize =
 
 func internal*[T](cell: GridCell[T]): ArrSize = cell.size
 func colNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.colNum()
+func rowNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.rowNum()
+func size*[T](grid: BlockGrid[T]): ArrSize = grid.grid.elems.size()
 
 func colRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): ArrRange =
   let start = pos.col
@@ -122,7 +126,7 @@ func toMulticell*[T](grid: Seq2D[Option[GridCell[T]]]): MulticellGrid[GridCell[T
 
 func makeCell*[T](
   arg: T,
-  cellSize: (int, int) = (1, 1),
+  cellSize: (int, int) = (1, 1), # TODO replace with `ArrSize`
   policies: (SizePolicy, SizePolicy) = (spExpanding, spExpanding)
                 ): GridCell[T] =
   GridCell[T](
@@ -157,20 +161,32 @@ func makeUnicodeCell*[T](
 func makeCell*(text: StrBlock): GridCell[StrBlock] =
   makeCell(text, (1, 1))
 
-func makeGrid*[T](arg: MulticellGrid[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
+func makeGrid*[T](
+  arg: MulticellGrid[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
   result = BlockGrid[T](grid: arg, borders: conf)
+
+func makeGrid*[T](arg: Seq2D[T], conf: TermGridConf): BlockGrid[T] =
+  BlockGrid[T](
+    grid: arg.mapIt2d(
+      makeCell(it)
+    ).toMulticell(),
+    borders: conf
+  )
+
+func makeGrid*[T](arg: Seq2D[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
+  BlockGrid[T](grid: arg.toMulticell(), borders: conf)
 
 func makeGrid*[T](rows, cols: int, borders: TermGridConf): BlockGrid[T] =
   result.borders = borders
   result.grid = makeMulticell[GridCell[T]](rows, cols)
 
-func makeGrid*(arg: Seq2D[StrBlock],
-               conf: TermGridConf): BlockGrid[StrBlock] =
-  makeGrid(mapIt2d(
-    arg,
-    some(makeCell(it)),
-    @[""].toBlock()
-  ).toMulticell(), conf)
+# func makeGrid*(arg: Seq2D[StrBlock],
+#                conf: TermGridConf): BlockGrid[StrBlock] =
+#   makeGrid(mapIt2d(
+#     arg,
+#     some(makeCell(it)),
+#     @[""].toBlock()
+#   ).toMulticell(), conf)
 
 func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
   assert cell.size.height() == 1
@@ -179,6 +195,12 @@ func addHeader*[T](grid: var BlockGrid[T], cell: GridCell[T]): void =
     width = cell.size.width(),
     val = cell
   )
+
+func appendRow*[T](grid: var BlockGrid[T], row: seq[GridCell[T]]): void =
+  for cell in row:
+    assert cell.size.height() == 1
+
+  grid.grid.insertRow(rowIdx = grid.rowNum(), row)
 
 #==========================  string conversion  ==========================#
 
@@ -193,6 +215,8 @@ func toTermBuf*[T](cell: GridCell[T]): TermBuf =
 
 func toTermBuf*[T](grid: BlockGrid[T]): TermBuf =
   let cells: Seq2D[Option[(ArrSize, TermBuf)]] = grid.grid.elems.mapIt2D(
+    # REVIEW grid is seq2d internally. there is no need for `default`
+    # on mapping.
     block:
       expectType(it, Option[GridCell[T]])
       if it.isSome():

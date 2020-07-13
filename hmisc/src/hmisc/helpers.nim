@@ -34,3 +34,21 @@ template subnodesEq*(lhs, rhs, field: untyped): untyped =
 
 template fail*(msg: string): untyped =
   raiseAssert(msg)
+
+template nnil*(): untyped =
+  defer:
+    let iinfo = instantiationInfo()
+    when result is seq:
+      for idx, val in result:
+        when val is ref:
+          assert (val != nil)
+        else:
+          for name, fld in val.fieldPairs():
+            when fld is ref:
+              if fld.isNil:
+                raiseAssert("Non-nil return assert on line " &
+                  $iinfo.line & ". Error idx: " & $idx & " fld name: " &
+                  name & ". Item type is " & $typeof(val)
+                )
+    else:
+      assert (result != nil)
