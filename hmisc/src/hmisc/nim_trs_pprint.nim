@@ -52,6 +52,7 @@ proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
     of tkPlaceholder:
       "_"
 
+proc exprReprImpl*[V, F](matchers: MatcherList[V, F], cb: TermImpl): TermBuf
 proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): TermBuf =
   let header = matcher.isPattern.tern(
     exprRepr(matcher.patt, cb), "proc"
@@ -66,7 +67,7 @@ proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): TermBuf =
     subvars.appendRow(
       @[
         (varn & ": ").toTermBufFast(),
-        subp.exprRepr(cb)
+        subp.exprReprImpl(cb)
       ],
       emptyTermBuf
     )
@@ -86,28 +87,36 @@ proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F], forceOneLine: bool 
       &"({lhs.exprRepr()} -> {rhs.exprRepr(cb)})"
     ).join(" ") & "}"
 
+proc exprReprImpl*[V, F](matchers: MatcherList[V, F], cb: TermImpl): TermBuf =
+  var blocks: Seq2D[TermBuf]
+  for idx, patt in matchers.patterns:
+    let pref: string = if matchers.patterns.len == 1: "" else: $idx & ": "
+    let bufs = @[pref.toTermBufFast(), patt.exprRepr(cb)]
+    blocks.appendRow(bufs, emptyTermBuf)
+
+  return blocks.toTermBuf()
+
 proc exprReprImpl*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): TermBuf =
   let rhs: TermBuf = rule.gen.isPattern.tern(
     exprRepr(rule.gen.patt),
     "proc"
   ).toTermBufFast()
 
-  var matchers: Seq2D[TermBuf]
-  for idx, match in rule.rules:
-    let pref: string = if rule.rules.len == 1: "" else: $idx & ": "
-    let bufs = @[pref.toTermBufFast(), match.exprRepr(cb)]
-    # # pprint bufs
-    # echo newTermGrid(
-    #   (0,0),
-    #   makeSeq2D(bufs),
-    #   makeThinLineGridBorders()
-    # ).toStringBlock().join("\n")
+  # var matchers: Seq2D[TermBuf]
+  # for idx, match in rule.matchers:
+  #   let pref: string = if rule.rules.len == 1: "" else: $idx & ": "
+  #   let bufs = @[pref.toTermBufFast(), match.exprReprImpl(cb)]
+  #   # # pprint bufs
+  #   # echo newTermGrid(
+  #   #   (0,0),
+  #   #   makeSeq2D(bufs),
+  #   #   makeThinLineGridBorders()
+  #   # ).toStringBlock().join("\n")
 
-    matchers.appendRow(bufs, emptyTermBuf)
-
+  #   matchers.appendRow(bufs, emptyTermBuf)
 
   @[
-    matchers.toTermBuf(), (" ~~> ").toTermBufFast(), rhs
+    rule.matchers.exprReprImpl(cb), (" ~~> ").toTermBufFast(), rhs
   ].toTermBuf()
 
 proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
