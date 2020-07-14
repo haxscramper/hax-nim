@@ -54,7 +54,12 @@ the index of new row. `idx` MUST be in range `[0, grid.rowNum()]`
 (inclsive)
 
   ]##
-  assert row.len == grid.colNum()
+  assert row.len == grid.colNum(),
+     msgjoin(
+       "Cannot insert row at index `", idx, "` expected",
+       "len:", grid.colNum(), ", but row has length", row.len
+     )
+
   if idx == 0:
     grid.elems = row & grid.elems
   elif idx == grid.rowNum():
@@ -68,9 +73,14 @@ func appendRow*[T](grid: var Seq2D[T], row: seq[T], default: T): void =
   ## current column count fill missing values on each row using
   ## `default`
   #[ IMPLEMENT resize grid and fill missing on upper rows ]#
+  # grid.fillToSize(makeArrSize(
+  #   w = row.len,
+  #   h = grid.rowNum()
+  # ), default)
+
   insertRow(
     grid,
-    row & newSeqWith(grid.colNum - row.len, default),
+    row & newSeqWith((grid.colNum - row.len).clamplow(0), default),
     grid.rowNum()
   )
 

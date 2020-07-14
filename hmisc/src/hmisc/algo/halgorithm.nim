@@ -98,6 +98,28 @@ func order*[Num](a, b: Num): (Num, Num) =
   if a > b: (b, a)
   else: (a, b)
 
+func clampLow*[T](x, minval: T): T =
+  if x < minval: minval
+  else: x
+
+func endsWith*(str: string, chars: set[char]): bool =
+  str[^1] in chars
+
+func startsWith*(str: string, chars: set[char]): bool =
+  str[0] in chars
+
+func msgjoin*(args: varargs[string, `$`]): string =
+  for idx in 0 ..< args.len:
+    if idx == args.len - 1:
+      result &= args[idx]
+    else:
+      if args[idx].endsWith({'`', '[', '('}):
+        result &= args[idx]
+      elif args[idx + 1].startsWith({',', '`'}):
+        result &= args[idx]
+      else:
+        result &= args[idx] & " "
+
 template last*[T](stack: var seq[T]): var T = stack[^1]
 template last*[T](stack: seq[T]): T = stack[^1]
 
