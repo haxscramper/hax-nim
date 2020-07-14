@@ -96,37 +96,21 @@ proc exprReprImpl*[V, F](matchers: MatcherList[V, F], cb: TermImpl): TermBuf =
 
   return blocks.toTermBuf()
 
-proc exprReprImpl*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): TermBuf =
+proc exprReprImpl*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): seq[TermBuf] =
   let rhs: TermBuf = rule.gen.isPattern.tern(
     exprRepr(rule.gen.patt),
     "proc"
   ).toTermBufFast()
 
-  # var matchers: Seq2D[TermBuf]
-  # for idx, match in rule.matchers:
-  #   let pref: string = if rule.rules.len == 1: "" else: $idx & ": "
-  #   let bufs = @[pref.toTermBufFast(), match.exprReprImpl(cb)]
-  #   # # pprint bufs
-  #   # echo newTermGrid(
-  #   #   (0,0),
-  #   #   makeSeq2D(bufs),
-  #   #   makeThinLineGridBorders()
-  #   # ).toStringBlock().join("\n")
-
-  #   matchers.appendRow(bufs, emptyTermBuf)
-
-  @[
-    rule.matchers.exprReprImpl(cb), (" ~~> ").toTermBufFast(), rhs
-  ].toTermBuf()
+  return @[ rule.matchers.exprReprImpl(cb), (" ~~> ").toTermBufFast(), rhs ]
 
 proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
-  exprReprImpl(rule, cb).toString()
+  @[exprReprImpl(rule, cb)].toTermBuf().toString()
 
 proc exprReprImpl*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): TermBuf =
-  sys.mapPairs(@[
-    ($idx & ": ").toTermBufFast(),
-    rhs.exprReprImpl(cb)
-  ]).toTermBuf()
+  sys.mapPairs(
+    @[ ($idx & ": ").toTermBufFast() ] & rhs.exprReprImpl(cb)
+  ).toTermBuf()
 
 proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
   exprReprImpl(sys, cb).toString()
