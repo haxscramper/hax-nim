@@ -16,4 +16,4 @@ nimcache/
 
 /scripts/.circuit
 /scripts/.latex
-
+callgrind.out.*

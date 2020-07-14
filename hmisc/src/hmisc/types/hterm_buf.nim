@@ -14,9 +14,16 @@ type
     xDiff: int
     yDiff: int
 
+const emptyTermBuf*: TermBuf = TermBuf()
+
 #============================  constructors  =============================#
 
-# func makeTermConf*(): TermTextConf = discard
+func toTermBufFast*(str: string): TermBuf =
+  ## Create new term buffer without checking for newlines.
+  ##
+  ## WARN: use only when there is no newlines in input string,
+  ## otherwise it will look like garbage in terminal.
+  TermBuf(buf: makeSeq2D(str.toRunes()))
 
 func toTermBuf*(str: string): TermBuf =
   TermBuf(buf: str.split("\n").mapIt(
@@ -28,6 +35,18 @@ func toTermBuf*(strs: seq[seq[string]]): TermBuf =
 func toTermBufGrid*(strs: seq[seq[string]]): Seq2D[TermBuf] =
   strs.makeSeq2D("").mapIt2D(it.toTermBuf())
   # TermBuf(buf: strs.mapIt(it.toRunes().concat()).makeSeq2D(whitespaceRune))
+
+func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf =
+  ## Merge multiple string buffers together
+  discard
+
+func toTermBuf*(bufs: seq[seq[TermBuf]]): TermBuf =
+  ## Merge multiple string buffers together
+  toTermBuf(makeSeq2D(bufs, emptyTermBuf))
+
+func toTermBuf*(bufs: seq[TermBuf]): TermBuf =
+  ## Merge multiple string buffers together
+  toTermBuf(makeSeq2D(bufs))
 
 func toTermBuf*(strs: StrBlock): TermBuf =
   TermBuf(buf: strs.mapIt(it.toRunes()).makeSeq2D(whitespaceRune))

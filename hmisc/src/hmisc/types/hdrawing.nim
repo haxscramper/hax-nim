@@ -729,6 +729,9 @@ func toStringBlock*(shape: Shape): seq[string] =
   shape.render(buf)
   return buf.toStringBlock()
 
+func toStringBlock*(grid: Seq2D[string]): seq[string] =
+  discard
+
 func toTermBuf*(shape: Shape): TermBuf =
   var buf = newBuf()
   shape.render(buf)

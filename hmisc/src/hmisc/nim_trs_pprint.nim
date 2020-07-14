@@ -1,6 +1,6 @@
 import strutils, sequtils, strformat, sugar
 
-import types/hdrawing
+import types/[hterm_buf, seq2d]
 import helpers
 import nim_trs
 
@@ -51,15 +51,21 @@ proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
     of tkPlaceholder:
       "_"
 
-proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): string =
-  var top: seq[string] = case matcher.isPattern:
-    of true: @[exprRepr(matcher.patt, cb)]
-    of false: @["proc" ]
+proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): TermBuf =
+  var tmp: Seq2D[TermBuf]
+  tmp.appendRow(@[
+     matcher.isPattern.tern(
+       exprRepr(matcher.patt, cb), "proc"
+     ).toTermBufFast()
+  ], emptyTermBuf)
 
   for varn, subp in matcher.subpatts:
-    top &= (@[@[varn, ": ", subp.exprRepr(cb)]]).toStringBlock()
+    tmp.appendRow(
+      @[(varn & ": ").toTermBufFast(), subp.exprRepr(cb)],
+      emptyTermBuf
+    )
 
-  result = top.joinl
+  result = tmp.toTermBuf()
 
 
 proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
@@ -67,20 +73,28 @@ proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
     &"({lhs.exprRepr()} -> {rhs.exprRepr(cb)})"
   ).join(" ") & "}"
 
+proc exprReprImpl*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): TermBuf =
+  let rhs: TermBuf = rule.gen.isPattern.tern(
+    exprRepr(rule.gen.patt),
+    "proc"
+  ).toTermBufFast()
+
+  var matchers: Seq2D[TermBuf]
+  for idx, match in rule.rules:
+    let pref: string = if rule.rules.len == 1: "" else: $idx & ": "
+    matchers.appendRow(
+      @[pref.toTermBufFast(), match.exprRepr(cb)],
+      emptyTermBuf)
+
+  @[
+    matchers.toTermBuf(), (" ~~> ").toTermBufFast(), rhs
+  ].toTermBuf()
+
 proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
-  let rhs =
-    case rule.gen.isPattern:
-      of true: exprRepr(rule.gen.patt)
-      of false: "proc"
+  exprReprImpl(rule, cb).toString()
 
-  var matchers: seq[seq[string]] = collect(newSeq):
-    for idx, match in rule.rules:
-      let pref = if rule.rules.len == 1: "" else: $idx & ": "
-      @[pref] & match.exprRepr(cb)
-
-  @[@[
-    matchers.toStringBlock().joinl(), " ~~> ", rhs
-  ]].toStringBlock().joinl()
+proc exprReprImpl*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): TermBuf =
+  sys.mapPairs(@[($idx & ": ").toTermBufFast(), rhs.exprReprImpl(cb)]).toTermBuf()
 
 proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
-  sys.mapPairs(@[$idx & ": ", rhs.exprRepr(cb)]).toStringBlock().joinl()
+  exprReprImpl(sys, cb).toString()

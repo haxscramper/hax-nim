@@ -62,6 +62,23 @@ the index of new row. `idx` MUST be in range `[0, grid.rowNum()]`
   else:
     raiseAssert("#[ IMPLEMENT ]#")
 
+func appendRow*[T](grid: var Seq2D[T], row: seq[T], default: T): void =
+  ## Insert new row in grid. If `row.len < grid.colNum` fill missing
+  ## values with `default` value. If row length is *bigger* than
+  ## current column count fill missing values on each row using
+  ## `default`
+  #[ IMPLEMENT resize grid and fill missing on upper rows ]#
+  insertRow(
+    grid,
+    row & newSeqWith(grid.colNum - row.len, default),
+    grid.rowNum()
+  )
+
+func appendRow*[T](grid: var Seq2D[T], row: seq[T]): void =
+  ## Append new row to grid. Row length MUST match number of columns
+  ## in grid.
+  insertRow(grid, row, grid.rowNum())
+
 func insertCol*[T](grid: var Seq2D[T], col: seq[T], idx: int = 0): void =
   ##[
 
@@ -93,6 +110,9 @@ func makeSeq2D*[T](s: seq[seq[T]]): Seq2d[T] =
         &"{maxlen}"
 
     return Seq2D[T](elems: s, colWidth: maxlen)
+
+func makeSeq2D*[T](row: seq[T]): Seq2D[T] =
+  Seq2D[T](elems: @[row], colWidth: row.len)
 
 iterator items*[T](s: Seq2d[T]): seq[T] =
   for row in s.elems:
