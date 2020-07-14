@@ -269,3 +269,49 @@ suite "Nim trs reduction rule search":
       let vars = patt.exportedVars()
       assert "ii" in vars # Exported by toplevel matcher
       assert "zz" in vars # Exported by submatcher on `"ii"`
+
+  test "Rewrite system with multiple nested paterns":
+    let sys = makeSystem({
+      makePatt(nOp(nConst(10), nVar("ii"))) : nOp(nVar("ii")),
+      makePatt(
+        nOp(nConst(90), nVar("ii"), nVar("uu")), {
+          "ii" : nOp(nConst(10), nVar("zz")),
+          "uu" : nOp(nConst(20), nVar("ee"))
+      }) : nOp(nVar("uu"), nVar("ee")),
+      makePatt(nOp(nConst(120), nVar("qq"))) : nConst(90)
+    })
+
+    echo sys.exprRepr()
+
+    block:
+      # Test rewrite for last rule.
+      let res = nT(nT(120), nT(20)).toTerm().reduce(sys)
+      assert res.ok
+      cmpTerm res.term, nT(90)
+
+    block:
+      # Extract variable from nested term
+      for val in @[10, 20, 30, 40]:
+        let res = nT(nT(10), nT(val)).toTerm().reduce(sys)
+        assert res.ok
+        cmpTerm res.term, nT(nT(val))
+
+    block:
+      let redex = nT(
+        nT(90),
+        nT(nT(10), nT(666)), # `ii: tmkF('10', _zz)`
+        nT(nT(20), nT(777))  # `uu: tmkF('20', _ee)`
+      ).toTerm()
+
+      block:
+        # Apply rules manually
+        for i in 0 .. 2:
+          let envres = redex.apply(sys.getNthRule(i))
+          if i == 1:
+            assert envres.isSome()
+            let env = envres.get()
+            echo env.exprRepr()
+
+            cmpTerm nT(nT(10), nT(666)), env["ii"]
+            cmpTerm nT(nT(20), nT(777)), env["uu"]
+            cmpTerm nT(777), env["ee"]

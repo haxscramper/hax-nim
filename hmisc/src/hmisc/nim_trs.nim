@@ -127,6 +127,9 @@ Example for `NimNode` and `NimNodeKind`
     subpatts*: Table[VarSym, TermMatcher[V, F]] ## Submatches
     ## on generated variables
     varlist: VarSet ## List of generated variables
+    # `varlist` can be automatically genrated for pattern-based term
+    # matchers. If matcher proc is used user should supply list of
+    # variable names.
     default: GenProc[V, F] ## Generate missing variables not produced
     ## by subpattern matches
 
@@ -448,6 +451,9 @@ iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
   for lhs, rhs in pairs(env.values):
     yield (lhs, rhs)
 
+func contains*[V, F](env: TermEnv[V, F], vsym: VarSym): bool =
+  vsym in env.values
+
 func len*[V, F](env: TermEnv[V, F]): int =
   ## Get number of itesm in enviroenmt
   env.values.len()
@@ -592,17 +598,43 @@ proc substitute*[V, F](term: Term[V, F], env: TermEnv[V, F]): Term[V, F] =
       result.setAtPath(path, v.dereference(env))
 
 
+proc mergeEnv*[V, F](env: var TermEnv[V, F], other: TermEnv[V, F]): void =
+  for vsym, value in other:
+    if vsym notin env:
+      env[vsym] = value
 
-proc apply*[V, F](
-  redex: Term[V, F], rule: RulePair[V, F]): Option[TermEnv[V, F]] =
+
+proc match*[V, F](redex: Term[V, F], matcher: TermMatcher[V, F]): Option[TermEnv[V, F]] =
+  # NOTE actually I might have to use full-blown backtracking here:
+  # each rule might have one or more nested terms. Rule pair is
+  # already almost like a clause. The only difference is (1)
+  # additional baggage in form of generator and (2) support for
+  # matches that are not terms.
+  let unifRes =
+    if matcher.isPattern:
+      unif(matcher.patt, redex)
+    else:
+      matcher.matcher(redex)
+
+  if unifRes.isSome():
+    var res = unifRes.get()
+    for vname, submatch in matcher.subpatts:
+      #[ IMPLEMENT check if variable is actually present in environment ]#
+      #[ IMPLEMENT check if variable generated from submatch does not overide any of
+                   already existing variables
+      ]#
+      let submRes = match(res[vname], submatch)
+      if submRes.isSome():
+        res.mergeEnv(submRes.get())
+
+    return some(res)
+
+
+proc apply*[V, F](redex: Term[V, F], rule: RulePair[V, F]): Option[TermEnv[V, F]] =
   ## Match pattern from `rule` with `redex` and return unification
   ## environment.
   for id in rule.first[redex.getSym()] & rule.matchers:
-    let unifRes = if rule.rules[id].isPattern: unif(rule.rules[id].patt, redex)
-                  else: rule.rules[id].matcher(redex)
-
-    if unifRes.isSome():
-      return unifRes
+    return match(redex, rule.rules[id])
 
 iterator possibleMatches*[V, F](system: RedSystem[V, F], redex: Term[V, F]): RuleId =
   let fsym = redex.getSym()
@@ -632,6 +664,9 @@ proc generate*[V, F](rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
     rule.gen.patt.substitute(env)
   else:
     rule.gen.gen(env)
+
+proc getNthRule*[V, F](system: RedSystem[V, F], idx: int): RulePair[V, F] =
+  system.rules[idx]
 
 proc reduce*[V, F](
   term: Term[V, F],

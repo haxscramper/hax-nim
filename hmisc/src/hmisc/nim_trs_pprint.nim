@@ -78,10 +78,13 @@ proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): TermBuf =
     result = header
 
 
-proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =
-  "{" & env.mapPairs(
-    &"({lhs.exprRepr()} -> {rhs.exprRepr(cb)})"
-  ).join(" ") & "}"
+proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F], forceOneLine: bool = false): string =
+  if env.len > 3 and not forceOneLine:
+    "{\n" & env.mapPairs(&"  {lhs.exprRepr()} -> {rhs.exprRepr(cb)}").joinl() & "\n}"
+  else:
+    "{" & env.mapPairs(
+      &"({lhs.exprRepr()} -> {rhs.exprRepr(cb)})"
+    ).join(" ") & "}"
 
 proc exprReprImpl*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): TermBuf =
   let rhs: TermBuf = rule.gen.isPattern.tern(
