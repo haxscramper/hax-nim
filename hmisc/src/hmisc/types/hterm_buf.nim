@@ -1,5 +1,6 @@
 import seq2d, hprimitives, hgeometry_primitives
 import unicode, sequtils, strutils
+import ../algo/hmath
 
 #*************************************************************************#
 #***************************  terminal buffer  ***************************#
@@ -15,6 +16,11 @@ type
     yDiff: int
 
 const emptyTermBuf*: TermBuf = TermBuf()
+
+
+func width*(buf: TermBuf): int = buf.buf.colNum()
+func height*(buf: TermBuf): int = buf.buf.rowNum()
+
 
 #============================  constructors  =============================#
 
@@ -38,7 +44,10 @@ func toTermBufGrid*(strs: seq[seq[string]]): Seq2D[TermBuf] =
 
 func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf =
   ## Merge multiple string buffers together
-  discard
+  let cellws = bufs.maximizeColIt(it.width())
+  let cellhs = bufs.maximizeRowIt(it.height())
+  let absCellX = cellws.cumsumjoin(0)
+  let absCellY = cellhs.cumsumjoin(0)
 
 func toTermBuf*(bufs: seq[seq[TermBuf]]): TermBuf =
   ## Merge multiple string buffers together
@@ -58,11 +67,6 @@ func newBuf*(offset: (int, int) = (0, 0)): TermBuf =
   TermBuf(xDiff: offset[0], yDiff: offset[1])
 
 #==============================  accessors  ==============================#
-
-func width*(buf: TermBuf): int =
-  buf.buf.colNum()
-
-func height*(buf: TermBuf): int = buf.buf.rowNum()
 
 func reserve*(buf: var TermBuf, rows, cols: int): void =
   buf.buf.fillToSize(

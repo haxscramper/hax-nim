@@ -72,11 +72,10 @@ func appendRow*[T](grid: var Seq2D[T], row: seq[T], default: T): void =
   ## values with `default` value. If row length is *bigger* than
   ## current column count fill missing values on each row using
   ## `default`
-  #[ IMPLEMENT resize grid and fill missing on upper rows ]#
-  # grid.fillToSize(makeArrSize(
-  #   w = row.len,
-  #   h = grid.rowNum()
-  # ), default)
+  grid.fillToSize(makeArrSize(
+    w = row.len,
+    h = grid.rowNum()
+  ), default)
 
   insertRow(
     grid,

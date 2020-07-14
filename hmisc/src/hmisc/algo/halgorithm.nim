@@ -1,6 +1,8 @@
 import math, strutils, sequtils, random, macros, options
 import std/wordwrap
 import ../types/hprimitives
+import hmath
+export hmath
 
 #=======================  small helper templates  ========================#
 
@@ -73,35 +75,6 @@ func splitList*[T](s: openarray[T]): (T, seq[T]) =
   assert s.len > 0, "Cannot split empty list"
   (s[0], s[1..^1])
 
-func sumjoin*(a: openarray[int], sep: int): int =
-  a.sum() + (a.len > 0).tern((a.len() - 1) * sep, 0)
-
-
-func cumsumjoin*(
-  a: openarray[int], sep: int, addFirst: bool = false): seq[int] =
-  var curr: int = 0
-  if addFirst:
-    result.add curr
-
-  for val in a:
-    result.add(val + sep + curr)
-    curr += val + sep
-
-func sumjoin*(a: openarray[int], r: ArrRange, sep: int): int =
-  sumjoin(a[r.a .. r.b], sep)
-
-iterator `..+`*(start: int, offset: int): int =
-  for i in start ..< start + offset:
-    yield i
-
-func order*[Num](a, b: Num): (Num, Num) =
-  if a > b: (b, a)
-  else: (a, b)
-
-func clampLow*[T](x, minval: T): T =
-  if x < minval: minval
-  else: x
-
 func endsWith*(str: string, chars: set[char]): bool =
   str[^1] in chars
 
@@ -122,20 +95,6 @@ func msgjoin*(args: varargs[string, `$`]): string =
 
 template last*[T](stack: var seq[T]): var T = stack[^1]
 template last*[T](stack: seq[T]): T = stack[^1]
-
-func modiv*(a, b: int): tuple[val, rem: int] =
-  result.val = a div b
-  result.rem = a mod b
-
-proc max*[T](x: openArray[T], default: T): T =
-  ## The maximum value of `x`. ``T`` needs to have a ``<`` operator.
-  ## use `default` if array is empty
-  if x.len == 0:
-    result = default
-  else:
-    for i in x:
-      if result < i: result = i
-
 # TODO use static hashtable instead of searching whole list each time.
 proc matchWith*[K, V](
   val: K,
@@ -160,10 +119,6 @@ proc matchWith*[K, V](
     result = none(V)
 
 #=======================  single item operations  ========================#
-
-func setMax*[T](a: var T, b: T): void =
-  if a < b:
-    a = b
 
 
 proc nthType1*[T1, T2](a: (T1, T2)): T1 =

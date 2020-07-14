@@ -1,4 +1,5 @@
 import unicode, strutils, sequtils, strformat
+import ../algo/hmath
 
 
 #=========================================================================#
@@ -95,6 +96,9 @@ func unpack*(r: ArrRange): (int, int) = (r.a, r.b)
 func point*(r: ArrRange): int =
   assert r.isPoint()
   r.a
+
+func sumjoin*(a: openarray[int], r: ArrRange, sep: int): int =
+  sumjoin(a[r.a .. r.b], sep)
 
 func isValid*(r: ArrRange): bool = r.b >= r.a
 func overlap*(r1, r2: ArrRange): ArrRange =
