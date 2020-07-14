@@ -30,55 +30,64 @@ type
     ## Configuration for converting `ObjTree` into `BlockGrid`
     retainDisabledFields: bool
 
-  GridConvStageKind = enum
-    gcskStandaloneConstant
-    gcskAnonTupleName
+  GridConvRole = enum
+    gcrTypeName
+    gcrFieldName
+    gcrFieldValue
+    gcrObjName
+    gcrKeyValue
+    gcrSeqIndex
+    gcrConstValue
+
+  GridPlacementRole = enum
+    gprInlined
+    gprEmbedded
+    gprStandalone
 
   GridConvStage = object
     ## Description of current tree -> grid conversion stage
-    kind: GridConvStageKind
+    role: GridConvRole
+    placement: GridPlacementRole
+    fldDisabled: bool
+    isPointedTo: bool
+
+func makeConvStage*(role: GridConvRole, placement: GridPlacementRole): GridConvStage =
+  GridConvStage(role: role, placement: placement)
 
 type
   ObjGrid[Conf] = BlockGrid[ObjElem[Conf]]
   ObjCell[Conf] = GridCell[ObjElem[Conf]]
   ObjRow[Conf] = BlockGridRow[ObjElem[Conf]]
+  ConfGenProc[Conf] = proc(
+    obj: ValObjTree,
+    config: GridConvConfig,
+    stage: GridConvStage): Conf
 
-func initObjElemConf(
-  obj: ObjTree, config: GridConvConfig,
-  stage: GridConvStage, res: var TermTextConf): void =
-  discard
-
-func makeElemConf*[Conf](
-  obj: ValObjTree, config: GridConvConfig, stage: GridConvStage): Conf =
-  initObjElemConf(obj, config, stage, result)
-
-func toCells*[Conf](obj: ValObjTree): tuple[ctype, value: ObjCell[Conf]] =
+func toCells*[Conf](
+  obj: ValObjTree,
+  makeConf: ConfGenProc[Conf]): tuple[ctype, value: ObjCell[Conf]] =
   ## Convert constant to row
   assert obj.kind == okConstant
   return (
     makeCell(makeObjElem[Conf](
       obj.constType,
-      makeElemConf[Conf](
+      makeConf(
         obj,
         GridConvConfig(), #[ IMPLEMENT ]#
-        stage = GridConvStage(
-          kind: gcskStandaloneConstant
-        )
+        makeConvStage(gcrTypeName, gprInlined)
       )
     )),
     makeCell(makeObjElem[Conf](
       obj.strLit,
-      makeElemConf[Conf](
+      makeConf(
         obj,
         GridConvConfig(), #[ IMPLEMENT ]#
-        stage = GridConvStage(
-          kind: gcskStandaloneConstant
-        )
+        makeConvStage(gcrConstValue, gprInlined)
       )
     )),
   )
 
-proc toGrid*[Conf](obj: ValObjTree): tuple[
+proc toGrid*[Conf](obj: ValObjTree, makeConf: ConfGenProc[Conf]): tuple[
   grid: BlockGrid[ObjElem[Conf]],
   edges: seq[tuple[
     pholder: ObjElem[Conf],
@@ -89,7 +98,7 @@ proc toGrid*[Conf](obj: ValObjTree): tuple[
   # TODO DOC
   case obj.kind:
     of okConstant:
-      let (ctype, value) = toCells[Conf](obj)
+      let (ctype, value) = toCells[Conf](obj, makeConf)
       result.grid = makeGrid[ObjElem[Conf]](
         @[@[ctype, value]], makeThinLineGridBorders())
     of okSequence: # Sequence
@@ -106,12 +115,10 @@ proc toGrid*[Conf](obj: ValObjTree): tuple[
           result.grid = makeGrid[ObjElem[Conf]](
             makeCell(makeObjElem[Conf](
               obj.name & "+",
-              makeElemConf[Conf](
+              makeConf(
                 obj,
                 GridConvConfig(), #[ IMPLEMENT ]#
-                stage = GridConvStage(
-                  kind: gcskAnonTupleName
-                )
+                makeConvStage(gcrObjName, gprInlined)
               )
             ), (2, 1)),
             makeThinLineGridBorders()
@@ -120,17 +127,23 @@ proc toGrid*[Conf](obj: ValObjTree): tuple[
           for (name, value) in obj.fldPairs:
             case value.kind:
               of okConstant:
-                let (ctype, value) = toCells[Conf](value)
+                let (ctype, value) = toCells[Conf](value, makeConf)
                 result.grid.appendRow(@[ctype, value])
 
               else:
                 discard
 
 
+proc makeTermGridConf(
+  obj: ValObjTree,
+  config: GridConvConfig,
+  stage: GridConvStage): TermTextConf =
+  echo "Making term text conf, role: ", stage.role
+
 proc toPGrid*[T](obj: T): string =
   var counter = makeCounter()
   let tree = toSimpleTree(obj, counter)
-  let (grid, edges) = toGrid[TermTextConf](tree)
+  let (grid, edges) = toGrid[TermTextConf](tree, makeTermGridConf)
   return grid.toTermBuf().toString()
 
 # proc foldObject(obj: ObjTree): tuple[node: Node, edges: seq[Edge]] =

@@ -29,7 +29,8 @@ type
         grid*: BlockGrid[T]
 
   BlockGrid*[T] = object
-    borders*: TermGridConf
+    borders*: TermGridConf # REVIEW remove - this is an implementation
+                           # detail form particular rendering backend.
     grid*: MulticellGrid[GridCell[T]]
 
   BlockGridRow*[T] = seq[GridCell[T]]
