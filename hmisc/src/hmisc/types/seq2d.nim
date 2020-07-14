@@ -15,20 +15,6 @@ func rowNum*[T](s: Seq2D[T]): int =
   ## Get number or rows in 2d sequence
   s.elems.len
 
-func fillToSize*[T](grid: var Seq2D[T], size: ArrSize, val: T): void =
-  ## Make sure `grid` is of `size` (or lagrger). Fill missing elements
-  ## using `val`.
-  if grid.colWidth < size.width:
-    grid.colWidth = size.width
-
-  for row in 0 ..< size.height:
-    if not (row < grid.elems.len):
-      grid.elems.add @[]
-
-    let rowlen = grid.elems[row].len
-    if rowlen < size.width:
-      grid.elems[row] &= newSeqWith(size.width - rowlen, val)
-
 func usafeColNum*[T](s: Seq2D[T]): int = s.colWidth
 func colNum*[T](s: Seq2D[T]): int =
   ## Get max number of columns in 2d sequence. If `expecUniform` check
@@ -41,6 +27,30 @@ func colNum*[T](s: Seq2D[T]): int =
 
 func size*[T](s: Seq2D[T]): ArrSize =
   makeArrSize(s.colNum(), s.rowNum())
+
+func fillToSize*[T](grid: var Seq2D[T], size: ArrSize, val: T): void =
+  ## Make sure `grid` is of `size` (or lagrger). Fill missing elements
+  ## using `val`.
+  # defer: debugecho "Request to fill size: ", size
+  # defer:
+  #   for idx, row in grid.elems:
+  #     assert row.len == grid.colWidth,
+  #       &"Invariant invalidated: [{idx}].len: {row.len}, expected {grid.colWidth}"
+  #   # discard grid.colNum()
+
+  if grid.colWidth < size.width:
+    grid.colWidth = size.width
+
+  for row in 0 ..< max(size.height, grid.rowNum()):
+    if not (row < grid.elems.len):
+      grid.elems.add @[]
+
+    let rowlen = grid.elems[row].len
+    let expected = max(size.width, grid.colWidth)
+    if rowlen < expected:
+      let diff = expected - rowlen
+      grid.elems[row] &= newSeqWith(diff, val)
+
 
 func len*[T](s: Seq2D[T]): int =
   s.elems.len
