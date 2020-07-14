@@ -53,23 +53,29 @@ proc exprRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F]): string =
       "_"
 
 proc exprRepr*[V, F](matcher: TermMatcher[V, F], cb: TermImpl[V, F]): TermBuf =
-  var tmp: Seq2D[TermBuf]
-  tmp.appendRow(@[
-     matcher.isPattern.tern(
-       exprRepr(matcher.patt, cb), "proc"
-     ).toTermBufFast()
-  ], emptyTermBuf)
+  let header = matcher.isPattern.tern(
+    exprRepr(matcher.patt, cb), "proc"
+  ).toTermBufFast()
+  # var tmp: Seq2D[TermBuf]
+  # tmp.appendRow(@[
 
+  # ], emptyTermBuf)
+
+  var subvars: Seq2D[TermBuf]
   for varn, subp in matcher.subpatts:
-    tmp.appendRow(
-      @[(varn & ": ").toTermBufFast(), subp.exprRepr(cb)],
+    subvars.appendRow(
+      @[
+        (varn & ": ").toTermBufFast(),
+        subp.exprRepr(cb)
+      ],
       emptyTermBuf
     )
 
-  result = tmp.toTermBuf()
-  # echo "----- result: "
-  # pprint result
-  # echo "-----"
+  if subvars.len > 0:
+    result = subvars.toTermBuf()
+    result = @[@[header], @[result]].toTermBuf()
+  else:
+    result = header
 
 
 proc exprRepr*[V, F](env: TermEnv[V, F], cb: TermImpl[V, F]): string =

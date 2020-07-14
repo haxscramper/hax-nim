@@ -103,18 +103,16 @@ func toStringBlock*(buf: TermBuf): StrBlock = buf.buf.mapIt($it)
 
 func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf =
   ## Merge multiple string buffers together
-  # debugecho "Making term buffer from multiple cells"
-  let cellws = bufs.maximizeColIt:
-    # debugecho it
-    it.width()
+  if (bufs.colNum() == 0 or bufs.rowNum() == 0):
+    return emptyTermBuf
+  else:
+    let cellws = bufs.maximizeColIt: it.width()
+    let cellhs = bufs.maximizeRowIt: it.height()
 
-  let cellhs = bufs.maximizeRowIt: it.height()
+    let absCellX = cellws.cumsumjoin(0, true, true)
+    let absCellY = cellhs.cumsumjoin(0, true, true)
 
-  let absCellX = cellws.cumsumjoin(0, true, true)
-  let absCellY = cellhs.cumsumjoin(0, true, true)
-
-  result.reserve(rows = absCellY[^1], cols = absCellY[^1])
-  # debugecho "Reserved buffer of size, ", absCellX[^1], " X ", absCellY[^1]
-  for colIdx, cellX in absCellX:
-    for rowIdx, cellY in absCellY:
-      bufs[rowIdx, colIdx].renderOnto(result, makePoint(cellX, cellY))
+    result.reserve(rows = absCellY[^1], cols = absCellY[^1])
+    for colIdx, cellX in absCellX:
+      for rowIdx, cellY in absCellY:
+        bufs[rowIdx, colIdx].renderOnto(result, makePoint(cellX, cellY))

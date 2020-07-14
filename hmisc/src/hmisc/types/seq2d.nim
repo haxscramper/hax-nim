@@ -85,7 +85,7 @@ func appendRow*[T](grid: var Seq2D[T], row: seq[T], default: T): void =
   ## `default`
   grid.fillToSize(makeArrSize(
     w = row.len,
-    h = grid.rowNum()
+    h = max(grid.rowNum(), 1)
   ), default)
 
   insertRow(
@@ -151,8 +151,8 @@ iterator iterrows*[T](s: Seq2D[T]): seq[T] =
     yield row
 
 iterator itercols*[T](s: Seq2D[T]): seq[T] =
-  let rowlen = s.elems.mapIt(it.len).max()
-  for col in 0 ..< rowlen:
+  # let rowlen = s.col s.elems.mapIt(it.len).max()
+  for col in 0 ..< s.colNum:
     var buf: seq[T]
     for row in s.elems:
       buf.add row[col]
@@ -240,6 +240,12 @@ template maximizeColIt*[T](inseq: Seq2d[T], op: untyped): seq[int] =
   type ResType = typeof((var it {.inject.}: T; op))
   var res: seq[ResType]
   var idx = 0
+  templAssert(
+    instantiationInfo(),
+    inseq.colNum() > 0,
+    "Cannot maximize columns in empty grid"
+  )
+
   for col in inseq.itercols():
     var buf: seq[ResType]
     for cell in col:
@@ -262,9 +268,10 @@ template maximizeRowIt*[T](
   type ResType = typeof((var it {.inject.}: T; op))
   var res: seq[ResType]
   var idx = 0
-  for col in inseq.iterrows():
+  for row in inseq.iterrows():
     var buf: seq[ResType]
-    for cell in col:
+    assert row.len > 0, "Cannot maximize empty row"
+    for cell in row:
       let it {.inject.} = cell
       buf.add op
 

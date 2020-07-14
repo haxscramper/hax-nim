@@ -34,7 +34,6 @@ template subnodesEq*(lhs, rhs, field: untyped): untyped =
 
 template fail*(msg: string): untyped =
   raiseAssert(msg)
-
 template nnil*(): untyped =
   defer:
     let iinfo = instantiationInfo()

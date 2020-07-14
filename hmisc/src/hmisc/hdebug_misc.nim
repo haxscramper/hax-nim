@@ -20,3 +20,13 @@ template printCpuTime*(body: untyped): untyped =
   echo "Execution took [ms] ",
       int((finish - start) * 1_000_000).float / 1_000,
       " (line ", iinfo.line, ")"
+
+
+template templAssert*(
+  iinfo: tuple[filename: string, line: int, column: int],
+  condition: untyped,
+  message: string): untyped =
+  if not condition:
+    raiseAssert(
+      message & ". Exception from template instantiation on line " &
+        $iinfo.line & ", file: " & iinfo.filename)
