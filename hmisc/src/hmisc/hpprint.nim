@@ -689,3 +689,7 @@ proc pprint*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): void =
   # var conf = objectPPrintConf
   # conf.maxWidth = maxWidth
   # echo prettyString(toSimpleTree(obj), conf, ident)
+
+func debugPPrint*[Obj](obj: Obj): void =
+  {.noSideEffect.}:
+    pprint(obj)

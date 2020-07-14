@@ -9,6 +9,7 @@ export tables, intsets
 import types/[htrie, hprimitives]
 import algo/[halgorithm, hseq_mapping]
 import helpers
+import hpprint
 
 type
   InfoException = ref object of CatchableError
@@ -320,12 +321,12 @@ func makeMatcher*[V, F](matcher: MatchProc[V, F]): TermMatcher[V, F] =
 func makeMatcher*[V, F](patt: Term[V, F]): TermMatcher[V, F] =
   TermMatcher[V, F](isPattern: true, patt: patt)
 
-func mergeVarlists*[V, F](matchers: PattList[V, F]): VarSet =
+func mergeVarlists[V, F](matchers: PattList[V, F]): VarSet =
   ## Combine sets of exported variables from multiple matchers
   if matchers.len > 0:
     return matchers.mapPairs(rhs.varlist).foldl(union(a, b))
 
-func getExportedVars*[V, F](patt: TermMatcher[V, F]): VarSet =
+func getExportedVars[V, F](patt: TermMatcher[V, F]): VarSet =
   if patt.isPattern:
     for (v, path) in patt.patt.varlist():
       result.incl v.name
@@ -335,6 +336,8 @@ func getExportedVars*[V, F](patts: PattList[V, F]): VarSet =
   result = mergeVarlists(patts)
   for vars, patt in patts:
     result.incl patt.getExportedVars()
+
+func exportedVars*[V, F](matcher: TermMatcher[V, F]): VarSet = matcher.varlist
 
 func toPattList*[V, F](patts: varargs[(VarSym, Term[V, F])]): PattList[V, F] =
   toTable(patts.mapPairs((lhs, rhs.makeMatcher())))
@@ -350,7 +353,8 @@ func setSubpatterns*[V, F](
   default: GenProc[V, F]): void =
   matcher.default = default
   matcher.subpatts = subpatts
-  #[ IMPLEMENT set exported variables ]#
+  matcher.varlist.incl getExportedVars(matcher)
+  matcher.varlist.incl getExportedVars(subpatts)
 
 func makeMatcher*[V, F](
   matcher: MatchProc[V, F],

@@ -266,6 +266,6 @@ suite "Nim trs reduction rule search":
         }
       )
 
-      let vars = patt.getExportedVars()
-      assert "ii" in vars
-      # assert "zz" in vars
+      let vars = patt.exportedVars()
+      assert "ii" in vars # Exported by toplevel matcher
+      assert "zz" in vars # Exported by submatcher on `"ii"`

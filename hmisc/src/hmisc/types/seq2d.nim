@@ -3,6 +3,20 @@ import ../hdebug_misc
 import ../algo/[halgorithm, hseq_mapping]
 import unicode
 
+#================================  TODO  =================================#
+#[
+
+IDEA support appending two grinds to each other. Interface is similar
+     to `appendRow`: either raise exception if size mismatch (overload
+     with no default argument) or fill missing elements using
+     `default` parameter. Concatenation should be doable from both
+     sides (concat rows or columns). This should be more efficient
+     than just copying elements one-by one.
+
+]#
+
+#===========================  Implementation  ============================#
+
 type
   Seq2d*[T] = object
     colWidth: int
