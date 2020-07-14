@@ -42,12 +42,7 @@ func toTermBufGrid*(strs: seq[seq[string]]): Seq2D[TermBuf] =
   strs.makeSeq2D("").mapIt2D(it.toTermBuf())
   # TermBuf(buf: strs.mapIt(it.toRunes().concat()).makeSeq2D(whitespaceRune))
 
-func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf =
-  ## Merge multiple string buffers together
-  let cellws = bufs.maximizeColIt(it.width())
-  let cellhs = bufs.maximizeRowIt(it.height())
-  let absCellX = cellws.cumsumjoin(0)
-  let absCellY = cellhs.cumsumjoin(0)
+func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf
 
 func toTermBuf*(bufs: seq[seq[TermBuf]]): TermBuf =
   ## Merge multiple string buffers together
@@ -98,4 +93,26 @@ func renderOnto*(buf: TermBuf, other: var TermBuf, pos: Point[int]): void =
 #=============================  converters  ==============================#
 
 func toString*(buf: TermBuf): string = buf.buf.join("\n")
+func `$`*(buf: TermBuf): string =
+     "cols: " & $buf.buf.usafeColNum() & ", elems: @[" &
+       buf.buf.mapIt("\"" & $it & "\"").join(", ") & "]"
+
 func toStringBlock*(buf: TermBuf): StrBlock = buf.buf.mapIt($it)
+
+#==============================  compound  ===============================#
+
+func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf =
+  ## Merge multiple string buffers together
+  let cellws = bufs.maximizeColIt:
+    debugecho it
+    it.width()
+
+  let cellhs = bufs.maximizeRowIt: it.height()
+
+  let absCellX = cellws.cumsumjoin(0, true, true)
+  let absCellY = cellhs.cumsumjoin(0, true, true)
+
+  result.reserve(rows = absCellY[^1], cols = absCellY[^1])
+  for colIdx, cellX in absCellX:
+    for rowIdx, cellY in absCellY:
+      bufs[rowIdx, colIdx].renderOnto(result, makePoint(cellX, cellY))

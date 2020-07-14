@@ -29,6 +29,7 @@ func fillToSize*[T](grid: var Seq2D[T], size: ArrSize, val: T): void =
     if rowlen < size.width:
       grid.elems[row] &= newSeqWith(size.width - rowlen, val)
 
+func usafeColNum*[T](s: Seq2D[T]): int = s.colWidth
 func colNum*[T](s: Seq2D[T]): int =
   ## Get max number of columns in 2d sequence. If `expecUniform` check
   ## that all rows have equal lentgth

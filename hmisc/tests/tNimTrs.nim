@@ -33,6 +33,7 @@ type
   TrmEnv = TermEnv[Trm, TrmKind]
   TrmSys = RedSystem[Trm, TrmKind]
   TrmGenp = GenProc[Trm, TrmKind]
+  TrmRule = RulePair[Trm, TrmKind]
   TrmMatch = TermMatcher[Trm, TrmKind]
 
 func nOp(subt: varargs[TrmTerm]): TrmTerm =
@@ -69,7 +70,7 @@ proc toTerm(interm: Trm): TrmTerm = interm.toTerm(trmImpl)
 proc treeRepr(val: Trm): string = treeRepr(val, trmImpl)
 proc treeRepr(val: TrmTerm): string = treeRepr(val, trmImpl)
 
-proc exprRepr(val: TrmEnv | TrmTerm | TrmSys): string =
+proc exprRepr(val: TrmEnv | TrmTerm | TrmSys | TrmRule): string =
   exprRepr(val, trmImpl)
 
 proc makeSystem(rules: varargs[(TrmTerm, TrmTerm)]): TrmSys =
@@ -78,6 +79,12 @@ proc makeSystem(rules: varargs[(TrmTerm, TrmTerm)]): TrmSys =
       makeMatcher(lhs),
       makeGenerator(rhs)
     ))
+  )
+
+proc makeRule(lhs, rhs: TrmTerm): TrmRule =
+  makeRulePair(
+    makeMatcher(lhs),
+    makeGenerator(rhs)
   )
 
 proc makeSystem(rules: varargs[(TrmMatch, TrmTerm)]): TrmSys =
@@ -189,12 +196,6 @@ suite "Nim trs primitives":
        cmpTerm res["io"], nConst(8)
 
   test "Pretty-printing":
-    assertEq nOp(nConst(12), nConst(22)).exprRepr(), "tmkF('12', '22')"
-    assertEq mkEnv({"ii" : nConst(nT(10))}).exprRepr(), "{(_ii -> '10')}"
-    assertEq makeSystem({
-      nOp(nVar("i1"), nConst(nT(90))) : nVar("i1")
-    }).exprRepr(), "0: tmkF(_i1, '90') ~~> _i1"
-
     echo makeSystem({
       makePatt(
         nOp(nVar("i1"), nConst(nT(90))),
@@ -204,6 +205,17 @@ suite "Nim trs primitives":
         }
       ) : nVar("i1")
     }).exprRepr()
+
+    assertEq nOp(nConst(12), nConst(22)).exprRepr(), "tmkF('12', '22')"
+    assertEq mkEnv({"ii" : nConst(nT(10))}).exprRepr(), "{(_ii -> '10')}"
+
+    assertEq makeRule(nOp(nVar("i1")), nVar("i1")).exprRepr(),
+           "tmkF(_i1) ~~> _i1"
+
+    assertEq makeSystem({
+      nOp(nVar("i1"), nConst(nT(90))) : nVar("i1")
+    }).exprRepr(), "0: tmkF(_i1, '90') ~~> _i1"
+
 
 suite "Nim trs reduction rule search":
   test "Rewrite constant":

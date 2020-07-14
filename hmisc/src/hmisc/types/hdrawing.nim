@@ -412,8 +412,8 @@ func newTermGrid*(
 func newTermGrid*(
   start: (int, int), cells: Seq2d[TermBuf],
   conf: TermGridConf): Multishape =
-  let cellws: seq[int] = cells.maximizeColIt(it.width)
-  let cellhs: seq[int] = cells.maximizeRowIt(it.height)
+  let cellws: seq[int] = cells.maximizeColIt: it.width()
+  let cellhs: seq[int] = cells.maximizeRowIt: it.height()
 
   let grid = newTermGrid(start, cellws, cellhs, conf)
   let (_, _, left, right, top, bottom) = spacingDimensions(conf)
@@ -425,8 +425,8 @@ func newTermGrid*(
     for (pos, cell) in cells.itercells():
       Shape(newTermText(
         start = (
-          start[0] + absColPos[pos[1]] + left,
-          start[1] + absRowPos[pos[0]] + top
+          start[0] + absColPos[pos[1]] + left + hSpacing,
+          start[1] + absRowPos[pos[0]] + top + vSpacing
         ), cell))
 
   newMultishape(@[Shape(grid)] & cellShapes)

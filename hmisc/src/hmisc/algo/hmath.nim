@@ -7,7 +7,11 @@ func sumjoin*(a: openarray[int], sep: int): int =
 
 
 func cumsumjoin*(
-  a: openarray[int], sep: int, addFirst: bool = false): seq[int] =
+  a: openarray[int],
+  sep: int,
+  addFirst: bool = false,
+  dropLast: bool = false
+     ): seq[int] =
   var curr: int = 0
   if addFirst:
     result.add curr
@@ -15,6 +19,9 @@ func cumsumjoin*(
   for val in a:
     result.add(val + sep + curr)
     curr += val + sep
+
+  if dropLast:
+    result = result[0..^2]
 
 
 iterator `..+`*(start: int, offset: int): int =

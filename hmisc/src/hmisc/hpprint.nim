@@ -12,7 +12,7 @@
 import types/[hnim_ast]
 import helpers
 
-import strformat, tables, strutils, sequtils
+import strformat, tables, strutils, sequtils, unicode
 export tables
 import with, gara
 
@@ -108,6 +108,13 @@ proc prettyPrintConverter(val: JsonNode, path: seq[int] = @[0]): ValObjTree =
           name: lhs,
           value: prettyPrintConverter(rhs, path = path & @[idx])
         )))
+
+proc prettyPrintConverter(val: seq[Rune], path: seq[int] = @[0]): ValObjTree =
+  ValObjTree(
+    kind: okConstant,
+    constType: "seq[Rune]",
+    strLit: &"\"{val}\""
+  )
 
 template unref(val: untyped): untyped =
   when val is ref: val[]
@@ -274,6 +281,8 @@ proc toSimpleTree*[Obj](
       let val = "\"" & entry & "\""
     elif entry is pointer:
       let val = "<pointer>"
+    elif entry is Rune:
+      let val = "\'" & $(@[entry]) & "\'"
     else:
       let val = $entry
 
@@ -420,7 +429,7 @@ proc relativePosition*(
   if rpBottomLeft in labels:
     resLines.add labels[rpBottomLeft].text
 
-  return makeChunk(resLines.mapIt(it.strip(leading = false)))
+  return makeChunk(resLines.mapIt(strutils.strip(it, leading = false)))
 
 
 template echov(variable: untyped, other: varargs[string, `$`]): untyped =
@@ -533,7 +542,7 @@ proc getLabelConfiguration(
 
 proc arrangeKVPairs(
   input: seq[tuple[name: string, val: Chunk]],
-  conf: PPrintConf, current: ObjTree, ident: int): Chunk =
+  conf: PPrintConf, current: ValObjTree, ident: int): Chunk =
   ## Layout sequence of key-value pairs. `name` field in tuple items
   ## might be empty if `current.kind` is `okSequence`.
 
@@ -572,9 +581,9 @@ proc arrangeKVPairs(
     let text = case current.kind:
       of okComposed, okTable:
         if conf.alignFieldsRight:
-          align(it.name & conf.kvSeparator, fldsWidth)
+          strutils.align(it.name & conf.kvSeparator, fldsWidth)
         else:
-          alignLeft(it.name & conf.kvSeparator, fldsWidth)
+          strutils.alignLeft(it.name & conf.kvSeparator, fldsWidth)
       of okSequence:
         ""
       of okConstant:

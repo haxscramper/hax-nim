@@ -1,8 +1,9 @@
 import strutils, sequtils, strformat, sugar
 
-import types/[hterm_buf, seq2d]
+import types/[hterm_buf, seq2d, hdrawing]
 import helpers
 import nim_trs
+import hpprint
 
 proc treeRepr*[V, F](term: Term[V, F], cb: TermImpl[V, F], depth: int = 0): string =
   let ind = "  ".repeat(depth)
@@ -81,10 +82,17 @@ proc exprReprImpl*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): TermBuf =
 
   var matchers: Seq2D[TermBuf]
   for idx, match in rule.rules:
-    let pref: string = if rule.rules.len == 1: "" else: $idx & ": "
-    matchers.appendRow(
-      @[pref.toTermBufFast(), match.exprRepr(cb)],
-      emptyTermBuf)
+    let pref: string = if rule.rules.len == 1: "--" else: $idx & ": "
+    let bufs = @[pref.toTermBufFast(), match.exprRepr(cb)]
+    pprint bufs
+    echo newTermGrid(
+      (0,0),
+      makeSeq2D(bufs),
+      makeThinLineGridBorders()
+    ).toStringBlock().join("\n")
+
+    matchers.appendRow(bufs, emptyTermBuf)
+
 
   @[
     matchers.toTermBuf(), (" ~~> ").toTermBufFast(), rhs
@@ -94,7 +102,10 @@ proc exprRepr*[V, F](rule: RulePair[V, F], cb: TermImpl[V, F]): string =
   exprReprImpl(rule, cb).toString()
 
 proc exprReprImpl*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): TermBuf =
-  sys.mapPairs(@[($idx & ": ").toTermBufFast(), rhs.exprReprImpl(cb)]).toTermBuf()
+  sys.mapPairs(@[
+    ($idx & ": ").toTermBufFast(),
+    rhs.exprReprImpl(cb)
+  ]).toTermBuf()
 
 proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
   exprReprImpl(sys, cb).toString()
