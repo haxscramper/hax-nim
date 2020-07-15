@@ -6,7 +6,7 @@ export deques
 # IDEA `pairsBFS` and `pairsDFS` to iterate over paths
 #      (similar to index?) + nodes in tree
 # IDEA it is possible to support DAG by computing hash of each node
-
+# TODO Use `iterateItBFS` for `mapItBFStoSeq` implementation
 
 template mapItBFStoSeq*(
   topNode: typed,
@@ -253,6 +253,42 @@ type
 func makeDfsFrame[T, R](elems: seq[T], path: seq[int]): DfsFrame[T, R] =
   DfsFrame[T, R](idx: 0, inSubt: elems, path: path, subt: @[])
 
+template iterateItDFS*(inTree, subnodes, hasSubnodes, body: untyped): untyped =
+  type InTree = typeof(inTree)
+  var stack: seq[DfsFrame[InTree, bool]]
+  stack.add makeDfsFrame[InTree, bool](@[inTree], @[])
+  block dfsLoop:
+    while true:
+      if stack.last.idx == stack.last.inSubt.len:
+        let top = stack.pop
+        block:
+          let
+            it {.inject.} = stack.last.inSubt[stack.last.idx]
+            path {.inject.} = top.path
+            subt {.inject.} = top.subt
+            inSubt {.inject.} = top.inSubt
+
+          block:
+            body
+
+        if stack.len == 1:
+          break dfsLoop
+        else:
+          inc stack.last.idx
+      else:
+        stack.add makeDfsFrame[InTree, bool](
+          block:
+            let it {.inject.} = stack.last.inSubt[stack.last.idx]
+            if hasSubnodes:
+              subnodes
+            else:
+              var tmp: seq[InTree]
+              tmp
+          ,
+          stack.last.path & @[stack.last.idx]
+        )
+
+
 template mapItDFSImpl*[InTree, OutTree](
   inTree: InTree,
   subnodeCall: untyped,
@@ -285,9 +321,8 @@ template mapItDFSImpl*[InTree, OutTree](
   var res: OutTree
   stack.add makeDfsFrame[InTree, OutTree](@[intree], @[])
 
-  var cnt: int = 0
   block dfsLoop:
-    while cnt < 20:
+    while true:
       if stack.last.idx == stack.last.inSubt.len:
         # Current toplevel frame reached the end
         let top = stack.pop

@@ -78,6 +78,11 @@ suite "Tree mapping":
       if it.isToken:
         discard it.tok
 
+  test "{iterateItDFS}":
+    astInval.iterateItDFS(it.subnodes, not it.isToken):
+      if it.isToken:
+        discard it.tok
+
   test "{mapDFSpost} value assetions :proc:generic:value:example:":
     assert inval.mapDFSpost(
       map =
