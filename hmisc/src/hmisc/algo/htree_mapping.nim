@@ -78,6 +78,36 @@ Do BFS iteration on recursive data type and map results into sequence
   result
 
 
+template iterateItBFS*(
+  topNode: typed,
+  subNode: untyped,
+  hasSubnodes: untyped,
+  body: untyped): untyped =
+  ##[
+
+Loop over tree nodes in BFS order
+
+  ]##
+  type VertType = typeof((topNode))
+  var q = initDeque[VertType]()
+  q.addLast(topNode)
+
+  while q.len != 0:
+    let it {.inject.} = q.popFirst()
+
+    block:
+      body
+
+    if hasSubnodes:
+      for sub in subNode:
+        static:
+          assert sub is VertType,
+            "Mismatch between type of the subnodes and root tree - subnode is " &
+            $typeof(sub) & ", while `topNode` is " & $typeof(topNode)
+
+        q.addLast(sub)
+
+
 #*************************************************************************#
 #*********************************  DFS  *********************************#
 #*************************************************************************#

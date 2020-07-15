@@ -315,3 +315,6 @@ suite "Nim trs reduction rule search":
             cmpTerm nT(nT(10), nT(666)), env["ii"]
             cmpTerm nT(nT(20), nT(777)), env["uu"]
             cmpTerm nT(777), env["ee"]
+
+  test "Reduction system event-driven iteration":
+    discard

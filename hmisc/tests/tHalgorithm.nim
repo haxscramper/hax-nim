@@ -73,6 +73,10 @@ suite "Tree mapping":
         "test11 on level 1",
         "test12 on level 1"]
 
+  test "{iterateItBFS}":
+    astInval.iterateItBFS(it.subnodes, not it.isToken):
+      if it.isToken:
+        discard it.tok
 
   test "{mapDFSpost} value assetions :proc:generic:value:example:":
     assert inval.mapDFSpost(
