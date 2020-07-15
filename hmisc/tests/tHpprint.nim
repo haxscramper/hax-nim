@@ -1,4 +1,4 @@
-import unittest, shell, sugar
+import unittest, shell, sugar, sequtils
 
 import hmisc/[helpers]
 import strutils
@@ -810,3 +810,45 @@ suite "Object diff":
       assertEq res[[0]].kind, odkKind
       # Not testig for different fields since they will not be
       # iterated (different kinds)
+
+  type
+    AstKind = enum
+      akFloatLit
+      akIntLit
+      akStrLit
+
+      akIdent
+
+      akInfix
+      akStmtList
+      akTypeDef
+      akCall
+
+    Ast = object
+      case kind: AstKind
+        of akFloatLit:
+          floatVal: float
+        of akIntLit:
+          intVal: int
+        of akStrLit, akIdent:
+          strVal: string
+        of akStmtList, akTypeDef, akInfix, akCall:
+          subnodes: seq[Ast]
+
+
+  proc newTree(kind: AstKind, subn: varargs[Ast]): Ast =
+    result = Ast(kind: kind)
+    result.subnodes = toSeq(subn)
+
+  proc newLit(a: float): Ast = Ast(kind: akFloatLit, floatVal: a)
+  proc newLit(a: int): Ast = Ast(kind: akIntLit, intVal: a)
+  proc newLit(a: string): Ast = Ast(kind: akStrLit, strVal: a)
+  proc newIdent(a: string): Ast = Ast(kind: akIdent, strVal: a)
+  proc newStmtList(args: varargs[Ast]): Ast =
+    Ast(kind: akStmtList, subnodes: toSeq(args))
+
+  test "{diff} Ast tree diff":
+    let res = diff(
+      newStmtList(newLit("hello"), newLit(1.22)),
+      newStmtList(newLit("hello"), newLit(1.23))
+    )

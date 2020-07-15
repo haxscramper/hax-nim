@@ -14,10 +14,8 @@ proc getBranches(node: NimNode): seq[FieldBranch[NimNode]] =
     case branch.kind:
       of nnkOfBranch:
         result.add FieldBranch[NimNode](
-          ofValue: branch[0] # ObjTree[NimNode](
-            # kind: okConstant, constType: caseType, strLit: $branch[0].toStrLit())
-          ,
-          flds: branch[1].getFields(),
+          ofValue: (newTree(nnkCurly, branch[0..^2])),
+          flds: branch[^1].getFields(),
           isElse: false
         )
       of nnkElse:
@@ -79,8 +77,6 @@ proc getFields*(node: NimNode): seq[Field[NimNode]] =
           else:
             discard
 
-        # result &= elem.getFields()
-
     of nnkIdentDefs:
       let descr = getFieldDescription(node)
       result.add Field[NimNode](
@@ -88,10 +84,18 @@ proc getFields*(node: NimNode): seq[Field[NimNode]] =
         name: descr.name,
         fldType: descr.fldType
       )
+    # of nnkIntLit:
+    #   let descr = getFieldDescription(node)
+    #   result.add Field[NimNode](
+    #     isKind: false,
+    #     name: descr.name,
+    #     fldType: descr.fldType
+    #   )
     else:
-      # echo node.getTypeImpl().toStrLit()
       raiseAssert(
-        &"Unexpected node kind in `getFields` {node.kind}. Code: `{$node.toStrLit()}`")
+        &"Unexpected node kind in `getFields` {node.kind}. Code: `{$node.toStrLit()}`, object repr: " &
+        $node.getTypeImpl().toStrLit()
+      )
 
 proc getKindFields*[Node](flds: seq[Field[Node]]): seq[Field[Node]] =
   for fld in flds:
@@ -198,6 +202,7 @@ proc unrollFieldLoop(
 
   result.node = newBlockStmt(result.node)
   result.fldIdx = fldIdx
+  # echo result.node.toStrLit()
 
 
 macro parallelFieldPairs*(lhsObj, rhsObj: typed, body: untyped): untyped =

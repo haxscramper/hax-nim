@@ -319,6 +319,10 @@ template mapItDFSImpl*[InTree, OutTree](
   # TEST predicated for subnodes checking
   # REVIEW TODO STYLE rename `outType` into `intermediateType` ?
 
+  # IDEA store pointers intead of full objects. Maybe add
+  # configuration option for this one, but should be possible (and
+  # useful) in theory.
+
   var stack: seq[DfsFrame[InTree, OutTree]]
   var res: OutTree
   stack.add makeDfsFrame[InTree, OutTree](@[intree], @[])

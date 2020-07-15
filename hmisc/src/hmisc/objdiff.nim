@@ -1,6 +1,6 @@
-import sugar, strutils, sequtils, strformat
+import sugar, strutils, sequtils, strformat, sets
 import hmisc/[hpprint]
-import hmisc/types/htrie
+import hmisc/types/[htrie, hnim_ast]
 import unittest
 
 #====================  type match inforcement macro  =====================#
@@ -78,33 +78,6 @@ import macros
 
 import hmisc/nimast_trs
 
-proc parseEnumSet[Enum](
-  node: NimNode,
-  namedSets: Table[string, set[Enum]] = initTable[string, set[Enum]]()): set[Enum] =
-  case node.kind:
-    of nnkIdent:
-      try:
-        return {parseEnum[Enum]($node)}
-      except ValueError:
-        if $node in namedSets:
-          namedSets[$node]
-        else:
-          raise newException(
-            ValueError,
-            "Invalid enum value '" & $node & "' for expression " & posString(node) &
-              " and no such named set exists (available ones: " &
-              namedSets.mapPairs(lhs).joinq() & ")"
-          )
-    of nnkInfix:
-      assert node[0] == ident("..")
-      return {parseEnum[Enum]($node[1]) ..
-              parseEnum[Enum]($node[2])}
-    of nnkCurly:
-      for subnode in node.children:
-        result.incl parseEnumSet[Enum](subnode, namedSets)
-
-    else:
-      discard
 
 import hmisc/helpers
 

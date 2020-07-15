@@ -690,7 +690,8 @@ proc match*[V, F](redex: Term[V, F], matcher: TermMatcher[V, F]): Option[TermEnv
       if submRes.isSome():
         res.mergeEnv(submRes.get())
 
-    if not(res.hasAll(matcher.varlist - matcher.optVars)):
+    mixin difference
+    if not(res.hasAll(difference(matcher.varlist, matcher.optVars))):
       if matcher.default == nil:
         raiseAssert(msgjoin(
           "Cannot get default value for variables:", res.missingVars(

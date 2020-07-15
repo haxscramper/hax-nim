@@ -1,7 +1,7 @@
 ## Statically typed nim ast representation
 
 import ../helpers
-import sequtils, colors
+import sequtils, colors, macros, tables, strutils
 
 type
   FieldBranch*[Node] = object
@@ -178,3 +178,60 @@ func `==`*[Node](lhs, rhs: Field[Node]): bool =
         of false:
           true
     )
+
+#*************************************************************************#
+#****************************  Ast reparsing  ****************************#
+#*************************************************************************#
+
+#=======================  Enum set normalization  ========================#
+
+proc normalizeSetImpl(node: NimNode): seq[NimNode] =
+   case node.kind:
+    of nnkIdent:
+      return @[ node ]
+    of nnkCurly:
+      for subnode in node:
+        result &= normalizeSetImpl(node)
+    of nnkInfix:
+      assert node[0] == ident("..")
+      result = @[ node ]
+    else:
+      raiseAssert("222")
+
+
+proc normalizeSet*(node: NimNode): NimNode =
+  ## Convert any possible set representation (e.g. `{1}`, `{1, 2}`,
+  ## `{2 .. 6}` as well as `2, 3` (in case branches). Return
+  ## `nnkCurly` node with all values listed one-by-one (if identifiers
+  ## were used) or in ranges (if original node contained `..`)
+  return nnkCurly.newTree(normalizeSetImpl(node))
+
+proc parseEnumSet*[Enum](
+  node: NimNode,
+  namedSets: Table[string, set[Enum]] = initTable[string, set[Enum]]()): set[Enum] =
+  case node.kind:
+    of nnkIdent:
+      try:
+        return {parseEnum[Enum]($node)}
+      except ValueError:
+        if $node in namedSets:
+          namedSets[$node]
+        else:
+          raise newException(
+            ValueError,
+            "Invalid enum value '" & $node & "' for expression " & posString(node) &
+              " and no such named set exists (available ones: " &
+              namedSets.mapPairs(lhs).joinq() & ")"
+          )
+    of nnkInfix:
+      assert node[0] == ident("..")
+      return {parseEnum[Enum]($node[1]) ..
+              parseEnum[Enum]($node[2])}
+    of nnkCurly:
+      for subnode in node.children:
+        result.incl parseEnumSet[Enum](subnode, namedSets)
+
+    else:
+      # QUESTION there was something useful or what? Do I need it
+      # here?
+      discard
