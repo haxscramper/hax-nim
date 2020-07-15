@@ -7,7 +7,7 @@ import deques, intsets, sets
 export tables, intsets
 
 import types/[htrie, hprimitives]
-import algo/[halgorithm, hseq_mapping]
+import algo/[halgorithm, hseq_mapping, htree_mapping]
 import helpers
 import hpprint
 
@@ -147,7 +147,7 @@ Example for `NimNode` and `NimNodeKind`
     # matchers: seq[int8] # List of matchers
     gen*: TermGenerator[V, F] # Proc to generate final result
 
-  RuleId = int16
+  RuleId* = int16
   RedSystem*[V, F] = object
     first: Table[F, seq[RuleId]]
     matchers: set[RuleId] # Matcher procs - always have to try
@@ -675,7 +675,8 @@ proc findApplicable*[V, F](
   system: RedSystem[V, F],
   redex: Term[V, F],
   rs: ReductionState,
-  path: TreePath): Option[(RuleId, TermEnv[V, F], RulePair[V, F])] =
+  path: TreePath # REVIEW is it necessary?
+                         ): Option[(RuleId, TermEnv[V, F], RulePair[V, F])] =
   ## Return first rule in system that can be applied for given `redex`
   ## and unification environment under which rule matches with pattern
   ## in rule.
@@ -694,6 +695,29 @@ proc generate*[V, F](rule: RulePair[V, F], env: TermEnv[V, F]): Term[V, F] =
 
 proc getNthRule*[V, F](system: RedSystem[V, F], idx: int): RulePair[V, F] =
   system.rules[idx]
+
+template reductionTriggersBFS*[V, F](
+  redex: Term[V, F], system: RedSystem[V, F], body: untyped): untyped =
+
+  var rs = ReductionState()
+  iterateItBFS(redex, it.getSubt(), it.getKind() == tkFunctor):
+    let rule = system.findApplicable(it, rs, emptyTreePath)
+    if rule.isSome():
+      let (ruleId {.inject.}, env {.inject.}, rulePair {.inject.}) = rule.get()
+      block:
+        body
+
+
+template reductionTriggersDFS*[V, F](
+  redex: Term[V, F], system: RedSystem[V, F], body: untyped): untyped =
+
+  var rs = ReductionState()
+  iterateItDFS(redex, it.getSubt(), it.getKind() == tkFunctor):
+    let rule = system.findApplicable(it, rs, emptyTreePath)
+    if rule.isSome():
+      let (ruleId {.inject.}, env {.inject.}, rulePair {.inject.}) = rule.get()
+      block:
+        body
 
 proc reduce*[V, F](
   term: Term[V, F],
@@ -743,26 +767,5 @@ rule value generator.
         let (idx, env, rule) = rule.get()
         let genRes = rule.generate(env).substitute(env)
         term.setAtPath(path, genRes)
-
-      # if rs.canRewrite(path):
-      #   for idx, rule in system.findApplicable(redex):
-      #     # inc iterIdx
-      #     # if rs.cannotUse(path, idx): continue
-
-      #     var unifRes: Option[TermEnv[V, F]] = redex.apply(rule)
-      #     # Unification ok, calling generator proc to get replacement
-      #     if unifRes.isSome():
-      #       rs.registerUse(path, idx)
-      #       let newEnv = unifRes.get()
-
-      #       # New value from generator
-      #       let tmpNew = rule.generate(newEnv).substitute(newEnv)
-      #       setAtPath(term, path, tmpNew)
-
-            # if getKind(term) notin {tkVariable, tkConstant}:
-            #   canReduce = true
-            #   result.ok = true
-            # else:
-            #   return (term, true, rs.rewPaths)
 
   result.term = term

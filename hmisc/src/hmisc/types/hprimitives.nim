@@ -221,3 +221,5 @@ func colRange*(pos: ArrPos, size: ArrSize): ArrRange =
 
 type
   TreePath* = seq[int]
+
+const emptyTreePath*: TreePath = @[0]

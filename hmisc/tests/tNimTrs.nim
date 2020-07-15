@@ -317,4 +317,48 @@ suite "Nim trs reduction rule search":
             cmpTerm nT(777), env["ee"]
 
   test "Reduction system event-driven iteration":
-    discard
+    let redex = nT(nT(10), nT(20)).toTerm()
+    let sys = makeSystem({
+      makePatt(nConst(10)) : nConst(-1),
+      makePatt(nConst(20)) : nConst(-2),
+    })
+
+    # BFS/DFS trigger loops are iterative - all local variables can be
+    # accessed without use of `{.global.}` pragma.
+    block:
+      var localVar: int = 0
+      reductionTriggersBFS(redex, sys):
+        assert it is TrmTerm
+        assert env is TrmEnv
+        assert ruleId is RuleId
+
+        case ruleId:
+          of 0:
+            cmpTerm(it, nT(10))
+            inc localVar
+          of 1:
+            cmpTerm(it, nT(20))
+            inc localVar
+          else:
+            fail()
+
+      assert localVar == 2
+
+    block:
+      var localVar: int = 0
+      reductionTriggersDFS(redex, sys):
+        assert it is TrmTerm
+        assert env is TrmEnv
+        assert ruleId is RuleId
+
+        case ruleId:
+          of 0:
+            cmpTerm(it, nT(10))
+            inc localVar
+          of 1:
+            cmpTerm(it, nT(20))
+            inc localVar
+          else:
+            fail()
+
+      assert localVar == 2

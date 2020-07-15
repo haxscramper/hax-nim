@@ -1,5 +1,5 @@
 import options, macros, deques
-export deques
+# export deques
 
 #=================================  BFS  =================================#
 # IDEA `itemsBFS` and `itemsDFS` to iterate over nodes in tree
@@ -88,6 +88,8 @@ template iterateItBFS*(
 Loop over tree nodes in BFS order
 
   ]##
+  mixin addLast
+  mixin popFirst
   type VertType = typeof((topNode))
   var q = initDeque[VertType]()
   q.addLast(topNode)
@@ -266,7 +268,6 @@ template iterateItDFS*(inTree, subnodes, hasSubnodes, body: untyped): untyped =
             it {.inject.} = stack.last.inSubt[stack.last.idx]
             path {.inject.} = top.path
             subt {.inject.} = top.subt
-            inSubt {.inject.} = top.inSubt
 
           block:
             body
