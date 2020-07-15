@@ -281,7 +281,13 @@ suite "Nim trs reduction rule search":
       makePatt(nOp(nConst(120), nVar("qq"))) : nConst(90)
     })
 
-    echo sys.exprRepr()
+    assertEq sys.exprRepr(),
+        """
+        0: tmkF('10', _ii)      ~~> tmkF(_ii)
+        1: tmkF('90', _ii, _uu) ~~> tmkF(_uu, _ee)
+           uu: tmkF('20', _ee)
+           ii: tmkF('10', _zz)
+        2: tmkF('120', _qq)     ~~> '90'""".dedent()
 
     block:
       # Test rewrite for last rule.
@@ -310,11 +316,20 @@ suite "Nim trs reduction rule search":
           if i == 1:
             assert envres.isSome()
             let env = envres.get()
-            echo env.exprRepr()
 
             cmpTerm nT(nT(10), nT(666)), env["ii"]
             cmpTerm nT(nT(20), nT(777)), env["uu"]
             cmpTerm nT(777), env["ee"]
+
+            assertEq env.exprRepr(),
+              """
+              {
+                _zz -> '666'
+                _uu -> tmkF('20', '777')
+                _ii -> tmkF('10', '666')
+                _ee -> '777'
+              }""".dedent
+
 
   test "Reduction system event-driven iteration":
     let redex = nT(nT(10), nT(20)).toTerm()
@@ -362,3 +377,24 @@ suite "Nim trs reduction rule search":
             fail()
 
       assert localVar == 2
+
+  test "{matchPattern} extract data from term":
+    type
+      U = object
+        lhs, rhs: int
+
+    let term = nT(nT(20), nT(30)).toTerm()
+    let patt = makePatt(nOp(nVar("lhs"), nVar("rhs")))
+    let res: U = term.matchPattern(patt):
+      assert env is Option[TrmEnv]
+      if env.isSome():
+        let env = env.get()
+        U(
+          lhs: env["lhs"].fromTerm().val,
+          rhs: env["rhs"].fromTerm().val
+        )
+      else:
+        U()
+
+    assert res.lhs == 20
+    assert res.rhs == 30

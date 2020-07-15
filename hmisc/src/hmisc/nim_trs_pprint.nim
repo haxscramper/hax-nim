@@ -113,4 +113,4 @@ proc exprReprImpl*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): TermBuf =
   ).toTermBuf()
 
 proc exprRepr*[V, F](sys: RedSystem[V, F], cb: TermImpl[V, F]): string =
-  exprReprImpl(sys, cb).toString()
+  exprReprImpl(sys, cb).toString().split("\n").mapIt(it.strip(leading = false)).join("\n")

@@ -719,6 +719,12 @@ template reductionTriggersDFS*[V, F](
       block:
         body
 
+template matchPattern*[V, F](
+  redex: Term[V, F], matcher: TermMatcher[V, F], body: untyped): untyped =
+  let env {.inject.} = redex.match(matcher)
+  block:
+    body
+
 proc reduce*[V, F](
   term: Term[V, F],
   system: RedSystem[V, F],
