@@ -187,16 +187,16 @@ func `==`*[Node](lhs, rhs: Field[Node]): bool =
 
 proc normalizeSetImpl(node: NimNode): seq[NimNode] =
    case node.kind:
-    of nnkIdent:
+    of nnkIdent, nnkIntLit, nnkCharLit:
       return @[ node ]
     of nnkCurly:
       for subnode in node:
-        result &= normalizeSetImpl(node)
+        result &= normalizeSetImpl(subnode)
     of nnkInfix:
       assert node[0] == ident("..")
       result = @[ node ]
     else:
-      raiseAssert("222")
+      raiseAssert("Cannot normalize set: " & $node.lispRepr())
 
 
 proc normalizeSet*(node: NimNode): NimNode =

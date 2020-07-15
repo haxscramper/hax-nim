@@ -14,7 +14,7 @@ proc getBranches(node: NimNode): seq[FieldBranch[NimNode]] =
     case branch.kind:
       of nnkOfBranch:
         result.add FieldBranch[NimNode](
-          ofValue: (newTree(nnkCurly, branch[0..^2])),
+          ofValue: (newTree(nnkCurly, branch[0..^2])).normalizeSet(),
           flds: branch[^1].getFields(),
           isElse: false
         )
@@ -164,7 +164,7 @@ proc unrollFieldLoop(
     let rhsId = ident(genParam.rhsName)
     let fldId = ident(fld.name)
     tmpRes.add superquote do:
-      let `ident(genParam.isKindName)`: bool = `newLit(fld.isKind)`
+      const `ident(genParam.isKindName)`: bool = `newLit(fld.isKind)`
       let `ident(genParam.idxName)`: int = `newLit(fldIdx)`
       let `lhsId` = `ident(genParam.lhsObj)`.`fldId`
       let `rhsId` = `ident(genParam.rhsObj)`.`fldId`
@@ -215,18 +215,13 @@ Allows to iterate two objects at once, while keeping track of `kind`
 fields for each type. The body is unrolled and variables are injected
 for each field.
 
-Injected variables
-------------------
+## Injected variables
 
-name
-  name of the current field
-lhs, rhs
-  value of current fields
-fldIdx
-  int. Index of current field in the object.
-lshObj, rhsObj
-  Original objects being iterated. [1]_
-isKind
+:name: name of the current field
+:lhs, rhs: value of current fields
+:fldIdx: int. Index of current field in the object.
+:lshObj, rhsObj: Original objects being iterated. [1]_
+:isKind:
   bool. Whether or not current field is used as case parameter for object
 
 

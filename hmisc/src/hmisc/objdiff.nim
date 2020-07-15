@@ -312,11 +312,15 @@ proc diff*[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
     for idx, (lval, rval) in zip(lhsIn, rhsIn):
       result.merge diff(lval, rval, path & @[idx])
   elif T is object:
+    var idx: int = 0
     parallelFieldPairs(lhsIn, rhsIn):
-      if isKind:
-        result[path] = ObjDiff(kind: odkKind)
+      when isKind:
+        if lhs != rhs:
+          result[path] = ObjDiff(kind: odkKind)
       else:
-        result.merge diff(lhs, rhs, path & @[fldIdx])
+        result.merge diff(lhs, rhs, path & @[idx])
+
+      inc idx
 
   else:
     if lhsIn != rhsIn:

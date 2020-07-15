@@ -848,7 +848,12 @@ suite "Object diff":
     Ast(kind: akStmtList, subnodes: toSeq(args))
 
   test "{diff} Ast tree diff":
-    let res = diff(
-      newStmtList(newLit("hello"), newLit(1.22)),
-      newStmtList(newLit("hello"), newLit(1.23))
-    )
+    let lhs = newStmtList(newLit("hello"), newLit(1.22))
+    let rhs = newStmtList(newLit("hello"), newLit(1.23))
+    let res = diff(lhs, rhs)
+    for path in res.paths():
+      echo "Difference at path ", path, " kind: ", res[path]
+      echo "lhs:"
+      pprintAtPath(lhs, path)
+      echo "rhs:"
+      pprintAtPath(rhs, path)
