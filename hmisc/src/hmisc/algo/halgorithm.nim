@@ -86,9 +86,9 @@ func msgjoin*(args: varargs[string, `$`]): string =
     if idx == args.len - 1:
       result &= args[idx]
     else:
-      if args[idx].endsWith({'`', '[', '('}):
+      if args[idx].endsWith({'`', '[', '(', '\''}):
         result &= args[idx]
-      elif args[idx + 1].startsWith({',', '`'}):
+      elif args[idx + 1].startsWith({',', '`', '\'', ' '}):
         result &= args[idx]
       else:
         result &= args[idx] & " "

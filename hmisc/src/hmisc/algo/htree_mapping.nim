@@ -51,6 +51,7 @@ Do BFS iteration on recursive data type and map results into sequence
   type VertType = typeof((topNode))
   var result: seq[ResType] = @[]
 
+  mixin addLast, popFirst
   var q = initDeque[(VertType, int)]()
   q.addLast((topNode, 0))
 

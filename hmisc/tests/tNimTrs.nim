@@ -33,6 +33,7 @@ type
   TrmEnv = TermEnv[Trm, TrmKind]
   TrmSys = RedSystem[Trm, TrmKind]
   TrmGenp = GenProc[Trm, TrmKind]
+  TrmDefGenp = DefaultGenProc[Trm, TrmKind]
   TrmRule = RulePair[Trm, TrmKind]
   TrmMatch = TermMatcher[Trm, TrmKind]
 
@@ -94,7 +95,7 @@ proc makeSystem(rules: varargs[(TrmMatch, TrmTerm)]): TrmSys =
 
 proc makePatt(
   upper: TrmTerm, subpatts: varargs[(VarSym, TrmTerm)],
-  default: TrmGenp = nil): TrmMatch =
+  default: TrmDefGenp = nil): TrmMatch =
   makeMatcher(upper, toSeq(subpatts).toPattList(), default)
 
 
@@ -398,3 +399,41 @@ suite "Nim trs reduction rule search":
 
     assert res.lhs == 20
     assert res.rhs == 30
+
+  test "{matchPattern} submatchers with default generator":
+    type
+      U = object
+        lhs, rhs: int
+        order: (int, int)
+
+    let term = nT(nT(20), nT(30)).toTerm()
+    let matcher = makeMatcher(@[
+      makePatt(nOp(nVar("lhs"), nVar("rhs"))),
+      makePatt(
+        nOp(nVar("lhs"), nVar("rhs"), nVar("order")),
+        {
+          "order": nOp(nVar("ord0"), nVar("ord1"))
+        }
+      )],
+      proc(env: TrmEnv): TrmEnv =
+        result["ord0"] = nConst(4)
+        result["ord1"] = nConst(6)
+      ,
+      @["order"]
+    )
+
+    let res: U = term.matchPattern(matcher):
+      if env.isSome():
+        let env = env.get()
+        U(
+          lhs: env["lhs"].fromTerm().val,
+          rhs: env["rhs"].fromTerm().val,
+          order: (
+            env["ord0"].fromTerm().val,
+            env["ord1"].fromTerm().val
+          )
+        )
+      else:
+        U()
+
+    assertEq res, U(lhs: 20, rhs: 30, order: (4, 6))

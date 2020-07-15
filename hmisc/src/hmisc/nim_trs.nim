@@ -104,8 +104,10 @@ Example for `NimNode` and `NimNodeKind`
     ## Mapping between variable symbols and values
     values*: Table[VarSym, Term[V, F]]
 
-  GenProc*[V, F] = proc(env: TermEnv[V, F]): Term[V, F] ## Proc
-  ## for generaing Values during rewriting.
+  GenProc*[V, F] = proc(env: TermEnv[V, F]): Term[V, F] ## Proc for
+  ## generaing Values during rewriting.
+  DefaultGenProc*[V, F] = proc(env: TermEnv[V, F]): TermEnv[V, F] ## Generate
+  ## default values for variables
 
   MatchProc*[V, F] = proc(test: Term[V, F]): Option[TermEnv[V, F]]
 
@@ -120,6 +122,7 @@ Example for `NimNode` and `NimNodeKind`
     first: Table[F, seq[int8]]
     forceTry: seq[int8] ## List of matchers to always try
     patterns*: seq[TermMatcher[V, F]]
+    # default: DefaultGenProc[V, F]
 
   PattList*[V, F] = Table[VarSym, MatcherList[V, F]]
 
@@ -136,8 +139,10 @@ Example for `NimNode` and `NimNodeKind`
     # `varlist` can be automatically genrated for pattern-based term
     # matchers. If matcher proc is used user should supply list of
     # variable names.
-    default: GenProc[V, F] ## Generate missing variables not produced
+    default: DefaultGenProc[V, F] ## Generate missing variables not produced
     ## by subpattern matches
+    optVars: VarSet ## Optional variables - `default` is not required
+                    ## to generate them.
 
 
   RulePair*[V, F] = object
@@ -369,24 +374,48 @@ func makeRulePair*[V, F](
 func setSubpatterns*[V, F](
   matcher: var TermMatcher[V, F],
   subpatts: PattList[V, F],
-  default: GenProc[V, F]): void =
+  default: DefaultGenProc[V, F],
+  optVars: seq[VarSym]): void =
   matcher.default = default
   matcher.subpatts = subpatts
   matcher.varlist.incl getExportedVars(matcher)
   matcher.varlist.incl getExportedVars(subpatts)
+  matcher.optVars = optVars.toSet()
 
 func makeMatcher*[V, F](
   matcher: MatchProc[V, F],
-  subpatt: PattList[V, F], default: GenProc[V, F]): TermMatcher[V, F] =
+  subpatt: PattList[V, F],
+  default: GenProc[V, F],
+  optVars: seq[VarSym] = @[]): TermMatcher[V, F] =
   ## Create term matcher instance for matching procs
   result = TermMatcher[V, F](isPattern: false, matcher: matcher)
-  result.setSubpatterns(subpatt, default)
+  result.setSubpatterns(subpatt, default, optVars)
 
 func makeMatcher*[V, F](
   patt: Term[V, F],
-  subpatt: PattList[V, F], default: GenProc[V, F]): TermMatcher[V, F] =
+  subpatt: PattList[V, F],
+  default: DefaultGenProc[V, F],
+  optVars: seq[VarSym] = @[]): TermMatcher[V, F] =
   result = TermMatcher[V, F](isPattern: true, patt: patt)
-  result.setSubpatterns(subpatt, default)
+  result.setSubpatterns(subpatt, default, optVars)
+
+
+func makeMatcher*[V, F](
+  matchers: seq[TermMatcher[V, F]],
+  default: DefaultGenProc[V, F],
+  optVars: seq[VarSym] = @[]): TermMatcher[V, F] =
+  ## Create new toplevel term matcher from multiple smaller ones. New
+  ## variable `auxToplevelCatchall` is introduced.
+  let catchallName = "auxToplevelCatchall"
+  makeMatcher(
+    makeVariable[V, F](catchallName),
+    {
+      catchallName : makeMatcherList(matchers)
+    }.toTable(),
+    default,
+    optVars
+  )
+
 
 func makeGenerator*[V, F](obj: Term[V, F]): TermGenerator[V, F] =
   ## Create closure proc that will output `obj` as value
@@ -469,6 +498,21 @@ iterator pairs*[V, F](env: TermEnv[V, F]): (VarSym, Term[V, F]) =
 
 func contains*[V, F](env: TermEnv[V, F], vsym: VarSym): bool =
   vsym in env.values
+
+func hasAll*[V, F](env: TermEnv[V, F], varlist: VarSet): bool =
+  result = true
+  for vname in varlist:
+    if vname notin env:
+      return false
+
+func missingVars*[V, F](env: TermEnv[V, F], varlist: VarSet): VarSet =
+  for vname in varlist:
+    if vname notin env:
+      result.incl vname
+
+func varlist*[V, F](env: TermEnv[V, F]): VarSet =
+  for vname, _ in env:
+    result.incl vname
 
 func len*[V, F](env: TermEnv[V, F]): int =
   ## Get number of itesm in enviroenmt
@@ -636,7 +680,7 @@ proc match*[V, F](redex: Term[V, F], matcher: TermMatcher[V, F]): Option[TermEnv
       matcher.matcher(redex)
 
   if unifRes.isSome():
-    var res = unifRes.get()
+    var res: TermEnv[V, F] = unifRes.get()
     for vname, submatch in matcher.subpatts:
       #[ IMPLEMENT check if variable is actually present in environment ]#
       #[ IMPLEMENT check if variable generated from submatch does not overide any of
@@ -645,6 +689,26 @@ proc match*[V, F](redex: Term[V, F], matcher: TermMatcher[V, F]): Option[TermEnv
       let submRes = match(res[vname], submatch)
       if submRes.isSome():
         res.mergeEnv(submRes.get())
+
+    if not(res.hasAll(matcher.varlist - matcher.optVars)):
+      if matcher.default == nil:
+        raiseAssert(msgjoin(
+          "Cannot get default value for variables:", res.missingVars(
+            matcher.varlist - matcher.optVars
+          ), " `default` callback for term matcher is nil"
+        ))
+
+      let default: TermEnv[V, F] = matcher.default(res)
+      for vname in matcher.varlist:
+        if (vname notin res) and (vname notin matcher.optVars):
+          if vname notin default:
+            raiseAssert(msgjoin(
+              "Variable '", vname, "' is missing from default environment. Need to get",
+              "values for variables:", res.missingVars(matcher.varlist - matcher.optVars),
+              ", but default enviornment provides:", default.varlist()
+            ))
+
+          res[vname] = default[vname]
 
     return some(res)
 
@@ -722,6 +786,19 @@ template reductionTriggersDFS*[V, F](
 template matchPattern*[V, F](
   redex: Term[V, F], matcher: TermMatcher[V, F], body: untyped): untyped =
   let env {.inject.} = redex.match(matcher)
+  block:
+    body
+
+
+template matchPattern*[V, F](
+  redex: Term[V, F], matchers: MatcherList[V, F], body: untyped): untyped =
+  let env {.inject.} = redex.match(matchers)
+  block:
+    body
+
+template matchPattern*[V, F](
+  redex: Term[V, F], sys: RedSystem[V, F], body: untyped): untyped =
+  let rule {.inject.} = redex.match(matcher)
   block:
     body
 
