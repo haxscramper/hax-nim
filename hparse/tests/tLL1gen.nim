@@ -1,6 +1,7 @@
 import unittest, sequtils, options
 import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
+import hmisc/types/graphviz_ast
 import hparse/[ll1_gen, grammars], macros
 
 type
@@ -130,7 +131,9 @@ suite "LL(1) parser simple":
     let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
 
     # ERROR `index out of bounds, the container is empty`
-    pprint tree
+    let graph = tree.toDotGraph()
+    echo graph
+    graph.topng("/tmp/image.png")
 
   test "Map parse tree to ast":
     let root = parseTokens(@[

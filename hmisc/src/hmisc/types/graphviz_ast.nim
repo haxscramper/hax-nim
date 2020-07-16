@@ -4,6 +4,13 @@ import ../helpers
 
 import html_ast
 
+#================================  TODO  =================================#
+#[
+
+REVIEW use `DotGraph` instead of `Graph`
+
+]#
+
 
 ##[
 Statically typed wrapper on top of graphviz node description
@@ -19,7 +26,13 @@ type
     path: seq[int]
 
 func `$`(id: NodeId): string =
-  id.path.mapIt("t" & $it).join(":")
+  if id.path.len == 0: # HACK I dont have good idea as to where put
+                       # `style` nodes, so I just decided to plut it
+                       # in here.
+    "node"
+  else:
+    id.path.mapIt("t" & $it).join(":")
+
 
 converter toNodeId*(id: int): NodeId =
   ## Create single node id
@@ -28,6 +41,9 @@ converter toNodeId*(id: int): NodeId =
 converter toNodeId*(ids: seq[int]): seq[NodeId] =
   ## Create multiple node ids
   ids.mapIt(NodeId(path: @[it]))
+
+converter toNodeId*[T](p: ptr T): NodeId =
+  NodeId(path: @[cast[int](p)])
 
 converter toNodeId*(ids: seq[seq[int]]): seq[NodeId] =
   ## Create multile node ids for record nodes
@@ -236,7 +252,7 @@ type
       of nsaPlaintext:
         htmlLabel*: HtmlElem
       else:
-        label*: string ## Node label
+        label*: Option[string] ## Node label
 
 type
   Arrow* = object
@@ -272,6 +288,9 @@ type
 
 type
   Graph* = object
+    styleNode*: Node
+    styleEdge*: Edge
+
     isUndirected*: bool
     name*: string
     isCluster*: bool
@@ -284,6 +303,21 @@ type
     subgraphs*: seq[Graph]
     nodes*: seq[Node]
     edges*: seq[Edge]
+
+#============================  constructors  =============================#
+
+func addEdge*(graph: var Graph, edge: Edge): void =
+  graph.edges.add edge
+
+func addNode*(graph: var Graph, node: Node): void =
+  graph.nodes.add node
+
+func makeEdge*(idFrom, idTo: NodeId): Edge =
+  Edge(src: idFrom, to: @[idTo])
+
+func makeNode*(id: NodeId, label: string): Node =
+  Node(id: id, label: some(label), shape: nsaDefault)
+
 
 type
   DotTreeKind = enum
@@ -335,7 +369,8 @@ func toTree(node: Node, level: int = 0): DotTree =
     of nsaPlaintext:
       attr["label"] = " <" & $node.htmlLabel & "> "
     else:
-      discard
+      if node.label.isSome():
+        attr["label"] = node.label.get().quote()
 
   if node.shape != nsaDefault: attr["shape"] = $node.shape
 
@@ -377,6 +412,7 @@ func toTree(graph: Graph, level: int = 0): DotTree =
   if graph.splines != spsDefault: attrs["splines"] = $graph.splines
 
   result.elements &= toTree(attrs)
+  result.elements.add graph.styleNode.toTree(level + 1)
   result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
   result.elements.add graph.edges.mapIt(toTree(it, level + 1))
   result.elements.add graph.subgraphs.mapIt(toTree(it, level + 1))
