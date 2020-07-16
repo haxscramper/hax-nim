@@ -157,7 +157,7 @@ suite "LL(1) parser simple":
   test "Deeply nested list with idents":
     # TODO unit test error for unfinished input
     # TODO test erorr for incorrect token expected
-    let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
+    let tree = parseTokens(mapString("[a,b,c]"))
     echo tree.treeRepr()
 
     # ERROR `index out of bounds, the container is empty`

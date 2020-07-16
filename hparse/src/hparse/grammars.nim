@@ -1,4 +1,4 @@
-import tables, sugar, sequtils, strformat, options
+import tables, sugar, sequtils, strformat, options, colors
 export tables
 import hmisc/helpers
 import hmisc/types/graphviz_ast
@@ -274,8 +274,22 @@ func first*[TKind](
 func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
   result.styleNode.shape = nsaRect
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
+    let itaddr = cast[int](addr it[])
+    if it.kind == pkTerm:
+      result.addEdge(makeEdge(
+        itaddr,
+        itaddr + 1))
+
+      result.addNode(makeNode(
+        itaddr + 1,
+        $it.tok,
+        nsaCircle,
+        color = colLightGrey,
+        style = nstFilled
+      ))
+
     result.addNode(makeNode(
-      toNodeId(addr it[]),
+      itaddr,
       block:
         let sel =
           case it.kind:
@@ -295,7 +309,7 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
     ))
     for tr in subt:
       result.addEdge(makeEdge(
-        toNodeId(addr it[]),
+        itaddr,
         toNodeId(addr tr[])
       ))
 

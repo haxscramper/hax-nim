@@ -126,7 +126,7 @@ type
     nsaUnderline = "underline"
     nsaUtr = "utr"
 
-  NodeStyle = enum
+  NodeStyle* = enum
     ## The style attribute can be used to modify the appearance of a node.
 
     nstDefault = "" ## No explicitly specified style
@@ -200,6 +200,7 @@ type
     clsRounded = "rounded"
     clsFilled = "filled"
 
+const colNoColor* = Color(-1)
 
 type
   RecordField = object
@@ -310,8 +311,16 @@ func addNode*(graph: var Graph, node: Node): void =
 func makeEdge*(idFrom, idTo: NodeId): Edge =
   Edge(src: idFrom, to: @[idTo])
 
-func makeNode*(id: NodeId, label: string): Node =
-  Node(id: id, label: some(label), shape: nsaDefault)
+func makeNode*(
+  id: NodeId,
+  label: string,
+  shape: NodeShape = nsaDefault,
+  color: Color = colNoColor,
+  style: NodeStyle = nstDefault): Node =
+  result = Node(shape: shape, style: style)
+  result.id = id
+  result.label = some(label)
+  result.color = color
 
 
 type
@@ -358,6 +367,9 @@ func toTree(node: Node, level: int = 0): DotTree =
     else:
       if node.style != nstDefault:
         attr["style"] = $node.style
+
+      if node.color != colNoColor:
+        attr["color"] = ($node.color).quote()
 
   case node.shape:
     of nsaRecord, nsaMRecord:
