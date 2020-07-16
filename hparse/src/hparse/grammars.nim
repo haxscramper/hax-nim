@@ -72,7 +72,7 @@ type
   ParseTree*[Tok] = ref object
     ## Parse tree object
     subnodes: seq[ParseTree[Tok]]
-    rulename*: Option[string]
+    # rulename*: Option[string]
 
     case kind*: PattKind
       of pkTerm:
@@ -118,6 +118,11 @@ iterator subnodes*[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
   assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
   for item in tree.subnodes:
     yield item
+
+
+func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
+  assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
+  tree.subnodes
 
 proc toGrammar*[TKind](
   table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
@@ -282,7 +287,7 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
 
       result.addNode(makeNode(
         itaddr + 1,
-        $it.tok,
+        ($it.tok).quote(),
         nsaCircle,
         color = colLightGrey,
         style = nstFilled
@@ -290,22 +295,28 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
 
     result.addNode(makeNode(
       itaddr,
-      block:
-        let sel =
-          case it.kind:
-            of pkNTerm: it.name
-            of pkTerm:
-              fmt("{it.tok.kind}\n'{it.tok}'")
-            of pkOptional: "?"
-            of pkAlternative: "or"
-            of pkOneOrMore: "1+"
-            of pkZeroOrMore: "0+"
-            of pkConcat: "and"
-
-        if it.rulename.isSome():
-          sel & "\n(" & it.rulename.get() & ")"
-        else:
-          sel
+      label = case it.kind:
+        of pkNTerm: it.name
+        of pkTerm:
+          fmt("{it.tok.kind}")
+        of pkOptional: "?"
+        of pkAlternative: "or"
+        of pkOneOrMore: "1+"
+        of pkZeroOrMore: "0+"
+        of pkConcat: "and"
+      ,
+      shape = case it.kind:
+        of pkNTerm: nsaDefault
+        of pkTerm: nsaUnderline
+        else: nsaEllipse
+      ,
+      color = case it.kind:
+        of pkNTerm: colLightBlue
+        else: colNoColor
+      ,
+      style = case it.kind:
+        of pkNTerm: nstFilled
+        else: nstDefault
     ))
     for tr in subt:
       result.addEdge(makeEdge(
@@ -319,19 +330,13 @@ func treeReprImpl*[Tok](
     if it: "|   " else: "    "
   ).join("") & "+-> "
 
-  let suffStr =
-    if node.rulename.isSome():
-      "'" & node.rulename.get() & "'"
-    else:
-      ""
-
   result = case node.kind:
     of pkTerm:
       @[ fmt("{prefStr}{node.tok.kind} = '{node.tok}'") ]
     of pkNTerm:
-      @[ fmt("{prefStr}{node.name} ({suffStr})") ]
+      @[ fmt("{prefStr}{node.name}") ]
     else:
-      @[ fmt("{prefStr}{node.kind} {suffStr}") ]
+      @[ fmt("{prefStr}{node.kind}") ]
 
   for idx, subn in node.subnodes:
     result &= subn.treeReprImpl(pref & @[

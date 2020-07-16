@@ -126,7 +126,7 @@ proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   quote do:
     var ntermTree: typeof(`tree`)
     `ntermIdent`(`lexerIdent`, ntermTree)
-    ntermTree.rulename = some(`symStr`)
+    # ntermTree.rulename = some(`symStr`)
     ntermTree
 
 proc makeConcatBlock[TKind](
@@ -147,10 +147,7 @@ proc makeConcatBlock[TKind](
   let tokIdent = ident "Tok"
   return (parseStmts & @[
     quote do:
-      newTree[`tokIdent`](
-        kind = pkConcat,
-        @`valueVars`
-      )
+      newTree[`tokIdent`](kind = pkConcat, @`valueVars`)
       # ParseTree[`tokIdent`](
       #   kind: pkConcat,
       #   values: @`valueVars`
@@ -272,10 +269,16 @@ proc makeRuleParser[TKind](
     # stream used to get lookahead.
     proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok])
 
+  let ntermSym = newLit(rule.nterm)
   let parseBody = rule.patts.makeParseBlock(conf, sets)
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
       `parseBody`
+      if `tree`.kind != pkTerm:
+        `tree` = newTree(
+          name = `ntermSym`,
+          subnodes = `tree`.getSubnodes(),
+        )
 
   return (decl: decl, impl: impl)
 

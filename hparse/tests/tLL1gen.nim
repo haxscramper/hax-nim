@@ -65,7 +65,7 @@ macro grammarTest(): untyped =
   let compGrammar = computeGrammar(grammar)
   # pprint compGrammar
   result = makeGrammarParser(compGrammar)
-  # echo result.toStrLit()
+  # colorPrint result
 
 grammarTest()
 
