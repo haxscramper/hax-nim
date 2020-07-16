@@ -65,7 +65,7 @@ macro grammarTest(): untyped =
   let compGrammar = computeGrammar(grammar)
   # pprint compGrammar
   result = makeGrammarParser(compGrammar)
-  echo result.toStrLit()
+  # echo result.toStrLit()
 
 grammarTest()
 
@@ -158,6 +158,7 @@ suite "LL(1) parser simple":
     # TODO unit test error for unfinished input
     # TODO test erorr for incorrect token expected
     let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
+    echo tree.treeRepr()
 
     # ERROR `index out of bounds, the container is empty`
     let graph = tree.toDotGraph()

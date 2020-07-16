@@ -298,3 +298,33 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
         toNodeId(addr it[]),
         toNodeId(addr tr[])
       ))
+
+func treeReprImpl*[Tok](
+  node: ParseTree[Tok], pref: seq[bool], parentMaxIdx, currIdx: int): seq[string] =
+  let prefStr = pref.mapIt(
+    if it: "|   " else: "    "
+  ).join("") & "+-> "
+
+  let suffStr =
+    if node.rulename.isSome():
+      "'" & node.rulename.get() & "'"
+    else:
+      ""
+
+  result = case node.kind:
+    of pkTerm:
+      @[ fmt("{prefStr}{node.tok.kind} = '{node.tok}'") ]
+    of pkNTerm:
+      @[ fmt("{prefStr}{node.name} ({suffStr})") ]
+    else:
+      @[ fmt("{prefStr}{node.kind} {suffStr}") ]
+
+  for idx, subn in node.subnodes:
+    result &= subn.treeReprImpl(pref & @[
+      currIdx != parentMaxIdx
+    ],
+    node.subnodes.len - 1,
+    idx)
+
+func treeRepr*[Tok](node: ParseTree[Tok]): string =
+  treeReprImpl(node, @[], 0, 0).join("\n")
