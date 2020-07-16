@@ -1,5 +1,6 @@
-import unittest, sequtils
-import hmisc/[halgorithm, hpprint]
+import unittest, sequtils, options
+import hmisc/hpprint
+import hmisc/algo/[halgorithm, htree_mapping]
 import hparse/[ll1_gen, grammars], macros
 
 type
@@ -156,7 +157,7 @@ suite "LL(1) parser simple":
       else:
         return toSeq(node.subnodes())
 
-    let res = root.mapItTreeDFS(
+    let res = root.mapItDFS(
       it.getSubnodes,
       Ast,
       (it.kind == pkTerm).tern(

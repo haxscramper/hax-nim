@@ -1,7 +1,7 @@
 # To support lexing in both compiled and interpreted environments as
 # well as at compile-time
 import regex
-import streams
+import streams, strformat
 
 type
   Matcher[Tok] = object

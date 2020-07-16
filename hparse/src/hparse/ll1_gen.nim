@@ -1,5 +1,4 @@
-import macros
-import sugar
+import macros, options, sugar
 import strformat, strutils, sequtils, algorithm
 import hmisc/[defensive, helpers]
 import sets

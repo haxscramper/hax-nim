@@ -212,7 +212,11 @@ proc toSimpleTree*[Obj](
   elif (entry is object) or
        (entry is ref object) or
        (entry is tuple):
-    let id = when entry is ref: addr entry else: idCounter()
+    let id: int =
+      when entry is ref:
+        cast[int](unsafeAddr entry)
+      else:
+        idCounter()
     when (entry is object) or (entry is ref object):
       result = ValObjTree(
         kind: okComposed,
