@@ -276,6 +276,16 @@ func first*[TKind](
     of pkNTerm: sets.first[patt.sym]
     else: patt.first
 
+func nodeKindStr*(kind: PattKind): string =
+  case kind:
+    of pkOptional: "?"
+    of pkAlternative: "or"
+    of pkOneOrMore: "1+"
+    of pkZeroOrMore: "0+"
+    of pkConcat: "and"
+    else:
+      ""
+
 func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
   result.styleNode.shape = nsaRect
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
@@ -297,13 +307,8 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
       itaddr,
       label = case it.kind:
         of pkNTerm: it.name
-        of pkTerm:
-          fmt("{it.tok.kind}")
-        of pkOptional: "?"
-        of pkAlternative: "or"
-        of pkOneOrMore: "1+"
-        of pkZeroOrMore: "0+"
-        of pkConcat: "and"
+        of pkTerm: fmt("{it.tok.kind}")
+        else: it.kind.nodeKindStr()
       ,
       shape = case it.kind:
         of pkNTerm: nsaDefault
@@ -328,25 +333,34 @@ proc toPng*[Tok](tree: ParseTree[Tok], path: string = "/tmp/image.png"): void =
   tree.toDotGraph().topng(path)
 
 func treeReprImpl*[Tok](
-  node: ParseTree[Tok], pref: seq[bool], parentMaxIdx, currIdx: int): seq[string] =
+  node: ParseTree[Tok],
+  pref: seq[bool],
+  parentMaxIdx, currIdx: int,
+  kindPref: string): seq[string] =
   let prefStr = pref.mapIt(
     if it: "|   " else: "    "
   ).join("") & "+-> "
 
   result = case node.kind:
     of pkTerm:
-      @[ fmt("{prefStr}{node.tok.kind} = '{node.tok}'") ]
+      var kindStr = $node.tok.kind
+      debugecho &"'{kindStr}'"
+      if kindStr.startsWith(kindPref):
+        kindStr = kindStr[kindPref.len .. ^1]
+
+      @[ fmt("{prefStr}{kindStr} = '{node.tok}'") ]
     of pkNTerm:
       @[ fmt("{prefStr}{node.name}") ]
     else:
-      @[ fmt("{prefStr}{node.kind}") ]
+      @[ fmt("{prefStr}[ {node.kind.nodeKindStr()} ]") ]
 
   for idx, subn in node.subnodes:
     result &= subn.treeReprImpl(pref & @[
       currIdx != parentMaxIdx
     ],
     node.subnodes.len - 1,
-    idx)
+    idx,
+    kindPref)
 
-func treeRepr*[Tok](node: ParseTree[Tok]): string =
-  treeReprImpl(node, @[], 0, 0).join("\n")
+func treeRepr*[Tok](node: ParseTree[Tok], kindPref: string = ""): string =
+  treeReprImpl(node, @[], 0, 0, kindPref).join("\n")
