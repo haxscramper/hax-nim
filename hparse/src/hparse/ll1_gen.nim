@@ -279,6 +279,11 @@ proc makeRuleParser[TKind](
           name = `ntermSym`,
           subnodes = `tree`.getSubnodes(),
         )
+      else:
+        `tree` = newTree(
+          name = `ntermSym`,
+          subnodes = @[`tree`]
+        )
 
   return (decl: decl, impl: impl)
 

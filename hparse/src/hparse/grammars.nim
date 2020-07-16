@@ -324,6 +324,9 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
         toNodeId(addr tr[])
       ))
 
+proc toPng*[Tok](tree: ParseTree[Tok], path: string = "/tmp/image.png"): void =
+  tree.toDotGraph().topng(path)
+
 func treeReprImpl*[Tok](
   node: ParseTree[Tok], pref: seq[bool], parentMaxIdx, currIdx: int): seq[string] =
   let prefStr = pref.mapIt(

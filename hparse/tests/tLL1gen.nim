@@ -126,10 +126,10 @@ suite "LL(1) parser simple":
       pkConcat,
       pt(tkOpBrace),
       pkConcat.pe(
-        pt(tkIdent),
+        pn("element", pt(tkIdent)),
         pkZeroOrMore.pe(
-          pkConcat.pe(pt(tkComma), pt(tkIdent)),
-          pkConcat.pe(pt(tkComma), pt(tkIdent))
+          pkConcat.pe(pt(tkComma), pn("element", pt(tkIdent))),
+          pkConcat.pe(pt(tkComma), pn("element", pt(tkIdent)))
         )
       ),
       pt(tkCloseBrace)
@@ -157,7 +157,7 @@ suite "LL(1) parser simple":
   test "Deeply nested list with idents":
     # TODO unit test error for unfinished input
     # TODO test erorr for incorrect token expected
-    let tree = parseTokens(mapString("[a,b,c]"))
+    let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
     echo tree.treeRepr()
 
     # ERROR `index out of bounds, the container is empty`
