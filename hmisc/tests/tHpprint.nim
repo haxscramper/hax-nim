@@ -765,6 +765,24 @@ suite "Object tree to dot graph":
 import hmisc/[objdiff]
 
 suite "Object diff":
+  test "{parallelFieldPairs} field indexing :macro:":
+    type
+      Case = object
+        f1: int                # fldIdx - `0`, valIdx - `0`
+        case kind: bool        # fldIdx - `1`, valIdx - `1`
+          of true: f2: float   # fldIdx - `2`, valIdx - `2`
+          of false: f3: string # fldIdx - `3`, valIdx - `2`
+
+          # Fields `f2` and `f3` have the same `valIdx` because they
+          # are located in different branches and cannot be accessed
+          # simotaneously.
+
+    let v = Case(kind: false, f3: "Hello")
+    parallelFieldPairs(v, v):
+      if name == "f3":
+        assert fldIdx == 3
+        assert valIdx == 2
+
   test "diff integers":
     assertEq diff(1, 2).paths(), @[@[0]]
 
@@ -850,10 +868,12 @@ suite "Object diff":
   test "{diff} Ast tree diff":
     let lhs = newStmtList(newLit("hello"), newLit(1.22))
     let rhs = newStmtList(newLit("hello"), newLit(1.23))
-    let res = diff(lhs, rhs)
-    for path in res.paths():
-      echo "Difference at path ", path, " kind: ", res[path]
-      echo "lhs:"
-      pprintAtPath(lhs, path)
-      echo "rhs:"
-      pprintAtPath(rhs, path)
+    ppDiff(lhs, rhs)
+
+    # let res = diff(lhs, rhs)
+    # for path in res.paths():
+    #   echo "Difference at path ", path, " kind: ", res[path]
+    #   echo "lhs:"
+    #   pprintAtPath(lhs, path)
+    #   echo "rhs:"
+    #   pprintAtPath(rhs, path)

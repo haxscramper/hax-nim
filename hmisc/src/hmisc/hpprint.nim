@@ -13,7 +13,6 @@ import types/[hnim_ast, hprimitives]
 import helpers
 
 import strformat, tables, strutils, sequtils, unicode
-export tables
 import with, gara
 
 
@@ -172,6 +171,8 @@ proc toSimpleTree*[Obj](
       (entry is string)
     ) and compiles(for k, v in pairs(entry): discard):
 
+    # IMPLEMENT Insert values in sorted order to give the same layout
+    # for unordered containers
     result = ValObjTree(
       kind: okTable,
       keyType: $typeof((pairs(entry).nthType1)),
@@ -671,19 +672,6 @@ func getSubnodes*(it: ObjTree): seq[ObjTree] =
         of true: raiseAssert(
           "IMPLEMENT Sectioned objects are not supported RN")
 
-func getAtPath*[Node](tree: ObjTree[Node], path: TreePath): ObjTree[Node] =
-  case tree.kind:
-    of okComposed:
-      if path.len == 1:
-        return tree
-      else:
-        return getAtPath(tree.fldPairs[path[1]].value, path[1..^1])
-    of okConstant:
-      return tree
-    of okSequence:
-      return getAtPath(tree.valItems[path[1]], path[1..^1])
-    of okTable:
-      return getAtPath(tree.valPairs[path[1]].val, path[1..^1])
 
 func makeCounter*(): iterator(): int {.closure.} =
    result = iterator(): int {.closure.} =
@@ -704,6 +692,11 @@ proc pprint*[Node](tree: ObjTree[Node]): void =
   var conf = objectPPrintConf
   conf.maxWidth = 80
   echo prettyString(tree, conf)
+
+
+proc toValObjTree*[Obj](obj: Obj): ValObjTree =
+  var counter = makeCounter()
+  toSimpleTree(obj, counter)
 
 proc pprintAtPath*[Obj](obj: Obj, path: TreePath): void =
   var counter = makeCounter()

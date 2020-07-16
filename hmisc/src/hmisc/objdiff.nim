@@ -1,291 +1,7 @@
-import sugar, strutils, sequtils, strformat, sets
-import hmisc/[hpprint]
-import hmisc/types/[htrie, hnim_ast]
-import unittest
+import types/[htrie, hnim_ast]
+import hpprint
 
-#====================  type match inforcement macro  =====================#
-
-import typeinfo
-
-template objKind(o: untyped): AnyKind =
-  when o is bool:
-    akBool                  #  a ``bool``
-  elif o is char:
-    akChar                  #  a ``char``
-  elif o is enum:
-      akEnum                  #  an enum
-  elif o is array:
-    akArray                 #  an array
-  elif o is object:
-    akObject                #  an object
-  elif o is tuple:
-    akTuple                 #  a tuple
-  elif o is set:
-    akSet                   #  a set
-  elif o is range:
-    akRange                 #  a range
-  elif o is ptr: # Nim pointer type
-    akPtr                   #  a ptr
-  elif o is ref:
-    akRef                   #  a ref
-  elif o is seq:
-    akSequence              #  a sequence
-  elif (o is proc):
-    akProc                  #  a proc
-  elif o is pointer: # Opaque pointer to data
-    akPointer               #  a pointer
-  elif o is string:
-    akString                #  a string
-  elif o is string:
-    akCString               #  a cstring
-  elif o is int:
-    akInt                   #  an int
-  elif o is int8:
-    akInt8                  #  an int8
-  elif o is int16:
-    akInt16                 #  an int16
-  elif o is int32:
-    akInt32                 #  an int32
-  elif o is int64:
-    akInt64                 #  an int64
-  elif o is float:
-    akFloat                 #  a float
-  elif o is float32:
-    akFloat32               #  a float32
-  elif o is float64:
-    akFloat64               #  a float64
-  elif o is uint:
-    akUInt                  #  an unsigned int
-  elif o is uint8:
-    akUInt8                 #  an unsigned int8
-  elif o is uint16:
-    akUInt16                #  an unsigned in16
-  elif o is uint32:
-    akUInt32                #  an unsigned int32
-  elif o is uint64:
-    akUInt64                #  an unsigned int64
-  else:
-    akNone                   ## invalid any
-
-# const
-#   akIntegerKinds = {akInt .. akInt64}
-#   akFloatKinds = {akFloat .. akFloat64}
-#   akUIntKinds = {akUint .. akUInt64}
-#   akNumericKinds = {akInt .. akUInt64}
-
-import macros
-
-
-import hmisc/nimast_trs
-
-
-import hmisc/helpers
-
-proc makeSetLiteral[Enum](s: set[Enum]): NimNode =
-  result = nnkCurly.newTree()
-  for item in s:
-    result.add ident($item)
-
-proc expandSetLiteral[Enum](
-  source: NimNode, namedSets: Table[string, set[Enum]]): NimNode =
-  parseEnumSet[Enum](source, namedSets).makeSetLiteral()
-
-
-proc makeLiteralBranch(setExpr, caseBody: NimNode): NimNode =
-  let setLiteral =
-    case setExpr.kind:
-      of nnkIdent: nnkCurly.newTree(setExpr)
-      else: setExpr
-
-  result = nnkElifExpr.newTree(
-    nnkInfix.newTree(ident "in", ident "objType", setLiteral),
-    caseBody
-  )
-
-
-
-macro switchType(expr, body: untyped): untyped =
-  # echo body.treeRepr()
-  var branchSets {.global, compiletime.}: set[AnyKind] = {akFloat128}
-  var kindSet: set[AnyKind]
-  for val in disjointIter(AnyKind):
-    kindSet.incl val
-
-
-  # IDEA generate named sets from consts (convert `const` to key-value
-  # literal using) template and `astToStr`
-  let namedSets = {
-    "akIntKinds": {akInt .. akInt64},
-    "akFloatKinds": {akFloat .. akFloat64},
-    "akUIntKinds": {akUint .. akUInt64},
-    "akNumericKinds": {akInt .. akUInt64}
-  }.toTable()
-
-  proc registerSet(node: NimNode, anchor: NimNode): void =
-    let parsed = parseEnumSet[AnyKind](node, namedSets)
-    let diff = (branchSets * parsed) - {akFloat128}
-    if diff.len > 0:
-      raiseAssert(
-        "Wrong type match: expression " & posString(anchor) &
-          " is not disjoint from previous branches. Overlaps: " &
-          $(diff)
-      )
-    else:
-      branchSets.incl parsed
-
-  var hasElse {.global, compiletime.} = false
-  var branches {.global, compiletime.}: seq[NimNode]
-  branches = @[]
-  let rewrite = makeNodeRewriteSystem:
-    rule:
-      patt: Call([[setExpr]], [[caseBody]])
-      outp:
-        registerSet(setExpr, setExpr)
-        branches.add makeLiteralBranch(
-          setExpr.expandSetLiteral(namedSets), caseBody)
-
-        nnkStmtList.newTree()
-
-
-    rule:
-      patt: Infix(Ident(".."), [[start]], [[final]], [[caseBody]])
-      outp:
-        let setLiteral = nnkCurly.newTree(
-            nnkInfix.newTree(ident "..", start, final)
-        )
-
-        registerSet(setLiteral, start)
-        branches.add makeLiteralBranch(setLiteral, caseBody)
-
-        nnkStmtList.newTree()
-
-    rule:
-      patt: Call([[setExpr]], [[caseBody]], Else([[elseBody]]))
-      outp:
-        block:
-          registerSet(setExpr, setExpr)
-          branches.add makeLiteralBranch(
-            setExpr.expandSetLiteral(namedSets), caseBody)
-
-        block:
-          hasElse = true
-          let diff = kindSet - branchSets
-          let setLiteral = nnkCurly.newTree(toSeq(diff).mapIt(ident $it))
-          registerSet(setLiteral, elseBody)
-          branches.add makeLiteralBranch(setLiteral, caseBody)
-
-        nnkStmtList.newTree()
-
-    rule:
-      patt: Infix(
-        Ident(".."), [[start]], [[final]], [[caseBody]], [[elseBody]])
-      outp:
-        block:
-          let setLiteral = nnkCurly.newTree(
-              nnkInfix.newTree(ident "..", start, final)
-          )
-
-          registerSet(setLiteral, start)
-          branches.add makeLiteralBranch(setLiteral, caseBody)
-
-        block:
-          hasElse = true
-          let diff = kindSet - branchSets
-          let setLiteral = nnkCurly.newTree(toSeq(diff).mapIt(ident $it))
-          registerSet(setLiteral, elseBody)
-          branches.add makeLiteralBranch(setLiteral, caseBody)
-
-        nnkStmtList.newTree()
-
-  let term = body.toTerm()
-  let reduced = reduce(
-    term, rewrite,
-    reduceConstraints = rcRewriteOnce
-  )
-
-  if reduced.ok:
-    let diff = (kindSet - branchSets)
-    if diff.len > 0:
-      raiseAssert("Not all cases are covered in type match " &
-        posString(expr) & ". Missing " & $diff)
-
-    result = nnkWhenStmt.newTree(branches)
-
-    let kindId = ident "objType"
-    result =
-      quote do:
-        const `kindId`: AnyKind = objKind(`expr`)
-        `result`
-
-    # echo "----vvvv----"
-    # echo result.toStrLit()
-    # echo "----^^^^----"
-
-block:
-  macro varPragma(a, b, c: untyped): untyped =
-    discard
-
-  let v {.varPragma.} = 111
-  var v {.varPragma.} = 111
-
-when false:
-  block:
-    macro getConst(sym: typed) =
-      echo sym.treeRepr()
-      echo sym.toStrLit()
-      echo sym.getImpl().treeRepr()
-
-    block:
-      const c = "hello"
-      getConst(c)
-
-    block:
-      const c = akInt
-      getConst(c)
-
-  macro getConst(sym: untyped) =
-    echo sym.toStrLit()
-    echo sym.treeRepr()
-
-  block:
-    const c = "hello"
-    getConst(c)
-
-  type
-    En = enum
-      en1
-      en2
-
-  const c = en1
-  getConst(c)
-
-suite "Field switch macro":
-  test "{switchType} :macro:example:":
-    block:
-      var res = 1
-      switchType(2):
-        akNone:
-          res = 90
-        akInt:
-          res = 0
-        else:
-          res = 8
-
-      assert res == 0
-
-  test "{switchType} Named set :macro:example:":
-    block:
-      var res = 1
-      switchType(2):
-        akInt:
-          res = 90
-        else:
-          res = 8
-
-      assertEq res, 90
-
-
-#=======================  objdiff implementation  ========================#
+#===========================  type definition  ===========================#
 
 type
   ObjDiffKind* = enum
@@ -300,11 +16,32 @@ type
       else:
         discard
 
+  ObjAccessor = object
+    case kind: ObjKind
+      of okConstant:
+        nil
+      of okSequence:
+        idx: int
+      of okComposed:
+        name: string
+      of okTable:
+        key: string
+
   TreePath = seq[int]
   ObjDiffPaths = Trie[int, ObjDiff]
 
+#=========================  diff implementation  =========================#
 
-proc diff*[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
+proc diff*[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths = #[
+
+TODO sort fields in unordered associative containers. Otherwise it
+     will be impossible to adequately check what is missing.
+
+IDEA provide LCS-based difference reports for sequences (if possible)
+     instead of simply comparing lengths
+
+]#
+
   when T is seq:
     if lhsIn.len() != rhsIn.len():
       result[path] = ObjDiff(kind: odkLen, lhsLen: lhsIn.len(), rhsLen: rhsIn.len())
@@ -312,16 +49,70 @@ proc diff*[T](lhsIn, rhsIn: T, path: TreePath = @[0]): ObjDiffPaths =
     for idx, (lval, rval) in zip(lhsIn, rhsIn):
       result.merge diff(lval, rval, path & @[idx])
   elif T is object:
-    var idx: int = 0
     parallelFieldPairs(lhsIn, rhsIn):
       when isKind:
         if lhs != rhs:
           result[path] = ObjDiff(kind: odkKind)
       else:
-        result.merge diff(lhs, rhs, path & @[idx])
-
-      inc idx
+        result.merge diff(lhs, rhs, path & @[valIdx])
 
   else:
     if lhsIn != rhsIn:
       result[path] = ObjDiff(kind: odkValue)
+
+#========================  diff pretty-printing  =========================#
+
+func getAtPath*[Node](tree: ObjTree[Node], path: TreePath): (ObjTree[Node], seq[ObjAccessor]) =
+  case tree.kind:
+    of okComposed:
+      if path.len <= 1:
+        return (tree, @[ObjAccessor(kind: okConstant)])
+      else:
+        let (subtree, accs) = getAtPath(tree.fldPairs[path[1]].value, path[1..^1])
+        return (subtree, @[
+          ObjAccessor(kind: okComposed, name: tree.fldPairs[path[1]].name)
+        ] & accs)
+    of okConstant:
+      return (tree, @[ObjAccessor(kind: okConstant)])
+    of okSequence:
+      let (subtree, accs) = getAtPath(tree.valItems[path[1]], path[1..^1])
+      return (subtree, @[
+        ObjAccessor(kind: okSequence, idx: path[1])
+      ] & accs)
+    of okTable:
+      let (subtree, accs) = getAtPath(tree.valPairs[path[1]].val, path[1..^1])
+      return (subtree, @[
+        ObjAccessor(kind: okTable, key: tree.valPairs[path[1]].key)
+      ])
+
+func toStr*(accs: seq[ObjAccessor]): string =
+  for acc in accs:
+    case acc.kind:
+      of okComposed:
+        result &= "." & acc.name
+      of okTable:
+        result &= "[" & acc.key & "]"
+      of okSequence:
+        result &= "[" & $acc.idx & "]"
+      of okConstant:
+        discard
+
+proc ppDiff*[T](lhs, rhs: T): void =
+  ## Pretty-print difference between two objects
+  let diffpaths = diff(lhs, rhs)
+  if diffpaths.paths().len == 0:
+    return
+
+  let
+    lhsObjTree = toValObjTree(lhs)
+    rhsObjTree = toValObjTree(rhs)
+
+  for path in diffpaths.paths():
+    let (lhsTree, lhsNamePath) = getAtPath(lhsObjTree, path)
+    let (rhsTree, rhsNamePath) = getAtPath(rhsObjTree, path)
+
+    echo "Difference at path ", lhsNamePath.toStr(), " kind: ", diffpaths[path]
+    echo "lhs val:"
+    pprint lhsTree
+    echo "rhs val:"
+    pprint rhsTree

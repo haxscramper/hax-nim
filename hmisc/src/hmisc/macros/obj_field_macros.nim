@@ -152,10 +152,11 @@ proc unrollFieldLoop(
   body: NimNode,
   fldIdx: int,
   genParam: tuple[
-    lhsObj, rhsObj, lhsName, rhsName, idxName, isKindName, fldName: string]
+    lhsObj, rhsObj, lhsName, rhsName, idxName, valIdxName, isKindName, fldName: string]
      ): tuple[node: NimNode, fldIdx: int] =
 
   result.node = newStmtList()
+
   var fldIdx: int = fldIdx
   for fld in flds:
     var tmpRes = newStmtList()
@@ -168,9 +169,10 @@ proc unrollFieldLoop(
       let `ident(genParam.idxName)`: int = `newLit(fldIdx)`
       let `lhsId` = `ident(genParam.lhsObj)`.`fldId`
       let `rhsId` = `ident(genParam.rhsObj)`.`fldId`
-      let `ident(genParam.fldName)`: string = `newLit(fld.name)`
+      const `ident(genParam.fldName)`: string = `newLit(fld.name)`
       block:
         `body`
+        inc `ident(genParam.valIdxName)`
 
     inc fldIdx
     if fld.isKind:
@@ -202,7 +204,6 @@ proc unrollFieldLoop(
 
   result.node = newBlockStmt(result.node)
   result.fldIdx = fldIdx
-  # echo result.node.toStrLit()
 
 
 macro parallelFieldPairs*(lhsObj, rhsObj: typed, body: untyped): untyped =
@@ -220,12 +221,30 @@ for each field.
 :name: name of the current field
 :lhs, rhs: value of current fields
 :fldIdx: int. Index of current field in the object.
+:valIdx: int. Index of current *value field* in the object
 :lshObj, rhsObj: Original objects being iterated. [1]_
 :isKind:
   bool. Whether or not current field is used as case parameter for object
 
-
 [1] Useful when iterating over results of expression
+
+## Notes
+
+Difference between `fldIdx` and `valIdx`. First one describes order of
+fields **as defined** in object while second one shows order of fields
+**as accessed** in object. For example, in object like this:
+
+.. code-block:: nim
+    type
+      Case = object
+        f1: int                # fldIdx - `0`, valIdx - `0`
+        case kind: bool        # fldIdx - `1`, valIdx - `1`
+          of true: f2: float   # fldIdx - `2`, valIdx - `2`
+          of false: f3: string # fldIdx - `3`, valIdx - `2`
+
+          # Fields `f2` and `f3` have the same `valIdx` because they
+          # are located in different branches and cannot be accessed
+          # at the same time.
 
   ]##
 
@@ -235,6 +254,7 @@ for each field.
     lhsName: "lhs",
     rhsName: "rhs",
     idxName: "fldIdx",
+    valIdxName: "valIdx",
     isKindName: "isKind",
     fldName: "name"
   )
@@ -242,9 +262,11 @@ for each field.
   let (unrolled, _) = getFields(lhsObj).unrollFieldLoop(body, 0, genParams)
 
   result = superquote do:
+
     block:
+      var `ident(genParams.valIdxName)`: int = 0
       let `ident(genParams.lhsObj)` = `lhsObj`
       let `ident(genParams.rhsObj)` = `rhsObj`
       `unrolled`
 
- # echo result.toStrLit()
+  # echo result.toStrLit()
