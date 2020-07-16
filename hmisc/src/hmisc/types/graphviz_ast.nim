@@ -26,12 +26,7 @@ type
     path: seq[int]
 
 func `$`(id: NodeId): string =
-  if id.path.len == 0: # HACK I dont have good idea as to where put
-                       # `style` nodes, so I just decided to plut it
-                       # in here.
-    "node"
-  else:
-    id.path.mapIt("t" & $it).join(":")
+  id.path.mapIt("t" & $it).join(":")
 
 
 converter toNodeId*(id: int): NodeId =
@@ -338,6 +333,7 @@ type
         edgeAttributes: StringTableRef
       of dtkProperty:
         key, val: string
+        globalProp: bool
       of dtkSubgraph:
         section: seq[string]
         elements: seq[DotTree]
@@ -412,7 +408,15 @@ func toTree(graph: Graph, level: int = 0): DotTree =
   if graph.splines != spsDefault: attrs["splines"] = $graph.splines
 
   result.elements &= toTree(attrs)
-  result.elements.add graph.styleNode.toTree(level + 1)
+  block:
+    let styleNode = graph.styleNode.toTree(level + 1)
+    if styleNode.nodeAttributes.len > 0:
+      result.elements.add DotTree(
+        kind: dtkProperty, globalProp: true,
+        key: "node",
+        val: styleNode.nodeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
+      )
+
   result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
   result.elements.add graph.edges.mapIt(toTree(it, level + 1))
   result.elements.add graph.subgraphs.mapIt(toTree(it, level + 1))
@@ -435,7 +439,10 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
         tree.elements.mapIt(toRope(it, level + 1)).join("\n") &
       "\n" & pref & "}"
     of dtkProperty:
-      rope(&"{pref}{tree.key} = {tree.val};")
+      if tree.globalProp:
+        rope(&"{pref}{tree.key}[{tree.val}];")
+      else:
+        rope(&"{pref}{tree.key} = {tree.val};")
     of dtkNodeDef:
       let attrs = tree.nodeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
       if attrs.len == 0:

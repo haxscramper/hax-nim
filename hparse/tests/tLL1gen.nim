@@ -12,10 +12,31 @@ type
     tkComma
 
   Token = object
-    kind: TokenKind
+    case kind: TokenKind
+      of tkIdent:
+        strVal: string
+      else:
+        nil
 
   TPatt = Patt[TokenKind]
   PTree = ParseTree[Token]
+
+func `$`(tok: Token): string =
+  case tok.kind:
+    of tkIdent: tok.strVal
+    of tkOpBrace: "["
+    of tkCloseBrace: "]"
+    of tkComma: ","
+
+
+func `==`(lhs, rhs: Token): bool =
+  lhs.kind == rhs.kind and (
+    case lhs.kind:
+      of tkIdent:
+        lhs.strVal == rhs.strVal
+      else:
+        true
+  )
 
 
 macro grammarTest(): untyped =
@@ -44,8 +65,16 @@ macro grammarTest(): untyped =
   let compGrammar = computeGrammar(grammar)
   # pprint compGrammar
   result = makeGrammarParser(compGrammar)
+  echo result.toStrLit()
 
 grammarTest()
+
+proc parseTokens(toks: seq[Token]): ParseTree[Token] =
+  var root = ParseTree[Token](kind: pkNTerm)
+  var stream = makeStream(toks)
+  parseList(stream, root)
+  return root
+
 
 proc parseTokens(toks: seq[TokenKind]): ParseTree[Token] =
   var root = ParseTree[Token](kind: pkNTerm)
@@ -62,13 +91,13 @@ proc pt(tok: TokenKind): PTree =
 proc pn(name: NTermSym, args: varargs[PTree]): PTree =
   newTree(name, toSeq(args))
 
-func mapString(s: string): seq[TokenKind] =
+func mapString(s: string): seq[Token] =
   s.mapIt(
     case it:
-      of '[': tkOpBrace
-      of ']': tkCloseBrace
-      of ',': tkComma
-      else: tkIdent
+      of '[': Token(kind: tkOpBrace)
+      of ']': Token(kind: tkCloseBrace)
+      of ',': Token(kind: tkComma)
+      else: Token(kind: tkIdent, strVal: $it)
   )
 
 proc `$`(a: PTree): string = pstring(a)
@@ -132,7 +161,7 @@ suite "LL(1) parser simple":
 
     # ERROR `index out of bounds, the container is empty`
     let graph = tree.toDotGraph()
-    echo graph
+    # echo graph
     graph.topng("/tmp/image.png")
 
   test "Map parse tree to ast":

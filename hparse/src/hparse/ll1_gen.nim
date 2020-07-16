@@ -122,9 +122,11 @@ proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   let ntermIdent = ident(makeParserName(nterm.sym))
   let lexerIdent = ident(conf.toksIdent)
   let tree = ident "tree"
+  let symStr = newLit(nterm.sym)
   quote do:
     var ntermTree: typeof(`tree`)
     `ntermIdent`(`lexerIdent`, ntermTree)
+    ntermTree.rulename = some(`symStr`)
     ntermTree
 
 proc makeConcatBlock[TKind](

@@ -1,4 +1,4 @@
-import tables, sugar, sequtils, strformat
+import tables, sugar, sequtils, strformat, options
 export tables
 import hmisc/helpers
 import hmisc/types/graphviz_ast
@@ -72,6 +72,8 @@ type
   ParseTree*[Tok] = ref object
     ## Parse tree object
     subnodes: seq[ParseTree[Tok]]
+    rulename*: Option[string]
+
     case kind*: PattKind
       of pkTerm:
         tok: Tok
@@ -274,11 +276,22 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
     result.addNode(makeNode(
       toNodeId(addr it[]),
-      case it.kind:
-        of pkNTerm: it.name
-        of pkTerm: $it.tok.kind
+      block:
+        let sel =
+          case it.kind:
+            of pkNTerm: it.name
+            of pkTerm:
+              fmt("{it.tok.kind}\n'{it.tok}'")
+            of pkOptional: "?"
+            of pkAlternative: "or"
+            of pkOneOrMore: "1+"
+            of pkZeroOrMore: "0+"
+            of pkConcat: "and"
+
+        if it.rulename.isSome():
+          sel & "\n(" & it.rulename.get() & ")"
         else:
-          "?"
+          sel
     ))
     for tr in subt:
       result.addEdge(makeEdge(
