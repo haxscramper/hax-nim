@@ -61,8 +61,18 @@ func tok[TKind](tok: TKind): Patt[TKind] =
 
 discard zeroP(andP(nt("we"), nt("ddd")))
 
-macro grammarTest(): untyped =
-  let grammar = {
+template makeGrammarParser(body: untyped): untyped =
+  # Trillion IQ hack
+  macro buildGrammar(): untyped =
+    let grammar = toGrammar(body)
+    let compGrammar = computeGrammar(grammar)
+    # pprint compGrammar
+    result = makeGrammarParser(compGrammar)
+    colorPrint result
+
+  buildGrammar()
+
+makeGrammarParser({
     # list ::= '[' <elements> ']'
     "list" : andP(
       tok(tkOpBrace),
@@ -82,14 +92,7 @@ macro grammarTest(): untyped =
       tok(tkIdent),
       nt("list")
     )
-  }.toGrammar()
-
-  let compGrammar = computeGrammar(grammar)
-  # pprint compGrammar
-  result = makeGrammarParser(compGrammar)
-  colorPrint result
-
-grammarTest()
+  })
 
 proc parseTokens(toks: seq[Token]): ParseTree[Token] =
   var root = ParseTree[Token](kind: pkNTerm)
