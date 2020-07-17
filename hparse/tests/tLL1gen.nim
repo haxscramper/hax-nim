@@ -206,6 +206,7 @@ suite "LL(1) parser simple":
       parseList
     )
     echo tree.treeRepr("tk")
+    echo tree.lispRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`
     let graph = tree.toDotGraph()

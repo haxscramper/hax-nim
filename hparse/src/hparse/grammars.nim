@@ -289,13 +289,14 @@ func first*[TKind](
     of pkNTerm: sets.first[patt.sym]
     else: patt.first
 
-func nodeKindStr*(kind: PattKind): string =
-  case kind:
+func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
+  case node.kind:
     of pkOptional: "?"
     of pkAlternative: "or"
     of pkOneOrMore: "1+"
     of pkZeroOrMore: "0+"
     of pkConcat: "and"
+    of pkNTerm: node.name
     else:
       ""
 
@@ -324,7 +325,7 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
       label = case it.kind:
         of pkNTerm: it.name
         of pkTerm: fmt("{it.tok.kind}")
-        else: it.kind.nodeKindStr()
+        else: it.nodeKindStr()
       ,
       shape = case it.kind:
         of pkNTerm: nsaDefault
@@ -367,7 +368,7 @@ func treeReprImpl*[Tok](
     of pkNTerm:
       @[ fmt("{prefStr}{node.name}") ]
     else:
-      @[ fmt("{prefStr}[ {node.kind.nodeKindStr()} ]") ]
+      @[ fmt("{prefStr}[ {node.nodeKindStr()} ]") ]
 
   for idx, subn in node.subnodes:
     result &= subn.treeReprImpl(pref & @[
@@ -379,3 +380,30 @@ func treeReprImpl*[Tok](
 
 func treeRepr*[Tok](node: ParseTree[Tok], kindPref: string = ""): string =
   treeReprImpl(node, @[], 0, 0, kindPref).join("\n")
+
+func lispReprImpl*[Tok](
+  node: ParseTree[Tok],
+  kindPref: string, discardEmpty: bool): seq[string] =
+  case node.kind:
+    of pkTerm:
+      var kindStr = $node.tok.kind
+      if kindStr.startsWith(kindPref):
+        kindStr = kindStr[kindPref.len .. ^1]
+
+      @[ fmt("({kindStr} '{node.tok}')") ]
+    else:
+      if discardEmpty and (node.getSubnodes().len == 0):
+        @[]
+      else:
+        @[ "(" & node.nodeKindStr() & " " &
+          node.subnodes.mapIt(
+            it.lispReprImpl(kindPref, discardEmpty)
+          ).concat().join(" ") &
+          ")" ]
+
+
+func lispRepr*[Tok](
+  node: ParseTree[Tok],
+  kindPref: string = "",
+  discardEmpty: bool = true): string =
+  lispReprImpl(node, kindPref, discardEmpty).join(" ")
