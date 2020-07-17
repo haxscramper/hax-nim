@@ -287,20 +287,26 @@ proc makeRuleParser[TKind](
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
       `parseBody`
-      # echo "Generated tree"
-      # echo treeRepr(`tree`)
-      runTreeActions(`tree`)
       case `tree`.kind:
         of pkTerm, pkNTerm:
           `tree` = newTree(
             name = `ntermSym`,
             subnodes = @[`tree`]
           )
+          runTreeActions(`tree`)
         else:
-          `tree` = newTree(
-            name = `ntermSym`,
-            subnodes = `tree`.getSubnodes(),
-          )
+          runTreeActions(`tree`)
+          case `tree`.kind: # Kind of toplevel tree might change after running tree action.
+            of pkTerm, pkNTerm:
+              `tree` = newTree(
+                name = `ntermSym`,
+                subnodes = @[`tree`]
+              )
+            else:
+              `tree` = newTree(
+                name = `ntermSym`,
+                subnodes = `tree`.getSubnodes(),
+              )
 
 
   return (decl: decl, impl: impl)

@@ -465,9 +465,15 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
     else:
       discard
 
+
   var newsubn: seq[ParseTree[Tok]]
   var hadPromotions: bool = false
-  for subnode in tree.subnodes:
+  debugecho tree.treeRepr()
+  debugecho "Before cycle: ", tree.subnodes.len
+  let inTree = tree
+  for idx in 0 ..< inTree.subnodes.len:
+    debugecho "In cycle: ", inTree.subnodes.len
+    let subnode = inTree.subnodes[idx]
     case subnode.action:
       of taDefault:
         newsubn.add subnode
