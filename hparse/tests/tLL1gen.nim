@@ -4,6 +4,8 @@ import hmisc/algo/[halgorithm, htree_mapping]
 import hmisc/types/graphviz_ast
 import hparse/[ll1_gen, grammars], macros
 
+#========================  token type definition  ========================#
+
 type
   TokenKind = enum
     tkOpBrace
@@ -38,6 +40,8 @@ func `==`(lhs, rhs: Token): bool =
         true
   )
 
+#====================  generic pattern construction  =====================#
+
 func zeroP[TKind](patt: Patt[TKind]): Patt[TKind] =
   Patt[TKind](kind: pkZeroOrMore, opt: patt)
 
@@ -53,13 +57,10 @@ func andP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
 func orP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
   Patt[TKind](kind: pkAlternative, patts: toSeq(patts))
 
-func nt(str: string): TPatt =
-  Patt[TokenKind](kind: pkNTerm, sym: str)
-
 func tok[TKind](tok: TKind): Patt[TKind] =
   Patt[TKind](kind: pkTerm, tok: tok)
 
-discard zeroP(andP(nt("we"), nt("ddd")))
+#======================  grammar parser generation  ======================#
 
 template makeGrammarParser(body: untyped): untyped =
   # Trillion IQ hack
@@ -72,40 +73,7 @@ template makeGrammarParser(body: untyped): untyped =
 
   buildGrammar()
 
-makeGrammarParser({
-    # list ::= '[' <elements> ']'
-    "list" : andP(
-      tok(tkOpBrace),
-      nt("elements"),
-      tok(tkCloseBrace)
-    ),
-    # elements ::= <element> (',' <element>)*
-    "elements" : andP(
-      nt("element"),
-      zeroP(andP(
-        tok(tkComma),
-        nt("element")
-      ))
-    ),
-    # element ::= 'ident' | <list>
-    "element" : orP(
-      tok(tkIdent),
-      nt("list")
-    )
-  })
-
-proc parseTokens(toks: seq[Token]): ParseTree[Token] =
-  var root = ParseTree[Token](kind: pkNTerm)
-  var stream = makeStream(toks)
-  parseList(stream, root)
-  return root
-
-
-proc parseTokens(toks: seq[TokenKind]): ParseTree[Token] =
-  var root = ParseTree[Token](kind: pkNTerm)
-  var stream = makeStream(toks.mapIt(Token(kind: it)))
-  parseList(stream, root)
-  return root
+#======================  dummy value construction  =======================#
 
 proc pe(kind: PattKind, args: varargs[PTree]): PTree =
   newTree(kind, toSeq(args))
@@ -136,6 +104,44 @@ proc tokensBFS(tree: PTree): seq[Token] =
 
 
 suite "LL(1) parser simple":
+  func nt(str: string): TPatt =
+    Patt[TokenKind](kind: pkNTerm, sym: str)
+
+  makeGrammarParser({
+      # list ::= '[' <elements> ']'
+      "list" : andP(
+        tok(tkOpBrace),
+        nt("elements"),
+        tok(tkCloseBrace)
+      ),
+      # elements ::= <element> (',' <element>)*
+      "elements" : andP(
+        nt("element"),
+        zeroP(andP(
+          tok(tkComma),
+          nt("element")
+        ))
+      ),
+      # element ::= 'ident' | <list>
+      "element" : orP(
+        tok(tkIdent),
+        nt("list")
+      )
+    })
+
+  proc parseTokens(toks: seq[Token]): ParseTree[Token] =
+    var root = ParseTree[Token](kind: pkNTerm)
+    var stream = makeStream(toks)
+    parseList(stream, root)
+    return root
+
+
+  proc parseTokens(toks: seq[TokenKind]): ParseTree[Token] =
+    var root = ParseTree[Token](kind: pkNTerm)
+    var stream = makeStream(toks.mapIt(Token(kind: it)))
+    parseList(stream, root)
+    return root
+
   test "Parse simple list":
     let tree = parseTokens(@[
       tkOpBrace,
@@ -223,3 +229,10 @@ suite "LL(1) parser simple":
         (Ast(isList: true, subnodes: subt))
       )
     )
+
+suite "LL(1) parser tree actions":
+  test "Drop rule":
+    discard
+    # makeGrammarParser({
+    #   "a"
+    # })
