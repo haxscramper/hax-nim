@@ -249,9 +249,9 @@ suite "LL(1) parser tree actions":
   makeGrammarParser({
       # list ::= '[' <elements> ']'
       "list" : andP(
-        tok(tkOpBrace),
-        nt("elements"),
-        tok(tkCloseBrace)
+        tok(tkOpBrace).addAction(taDrop),
+        nt("elements").addAction(taSpliceDiscard),
+        tok(tkCloseBrace).addAction(taDrop)
       ),
       # elements ::= <element> (',' <element>)*
       "elements" : andP(
@@ -270,7 +270,7 @@ suite "LL(1) parser tree actions":
 
   test "Drop rule":
     let tree = parseTopLevel(
-      mapString("[[c],[e]]"),
+      mapString("[[c,z,d,[e,d]],[e,d,f]]"),
       parseList
     )
 
