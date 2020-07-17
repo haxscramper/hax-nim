@@ -209,7 +209,7 @@ suite "LL(1) parser simple":
     echo tree.lispRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`
-    let graph = tree.toDotGraph()
+    let graph = tree.toDotGraph("tk", true)
     # echo graph
     graph.topng("/tmp/image.png")
 

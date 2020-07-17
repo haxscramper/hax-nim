@@ -300,10 +300,13 @@ func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
     else:
       ""
 
-func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
-  # TODO add support for 'pretty' visualization (current one) and
-  # 'precise', which does not introduce **any** new elements and shows
-  # as much original information as possible.
+func tokKindStr*[TKind](tkind: TKind, prefStr: string): string =
+  result = $tkind
+  if result.startsWith(prefStr):
+    result = result[prefStr.len .. ^1]
+
+
+func toDotGraphPretty*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
   result.styleNode.shape = nsaRect
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
     let itaddr = cast[int](addr it[])
@@ -324,7 +327,7 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
       itaddr,
       label = case it.kind:
         of pkNTerm: it.name
-        of pkTerm: fmt("{it.tok.kind}")
+        of pkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}")
         else: it.nodeKindStr()
       ,
       shape = case it.kind:
@@ -346,6 +349,31 @@ func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
         toNodeId(addr tr[])
       ))
 
+func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
+  result.styleNode.shape = nsaRect
+  tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
+    let itaddr = cast[int](addr it[])
+    result.addNode(makeNode(
+      itaddr,
+      label = case it.kind:
+        of pkNTerm: it.name
+        of pkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}\n'{it.tok}'")
+        else: it.nodeKindStr()
+    ))
+
+    for tr in subt:
+      result.addEdge(makeEdge(
+        itaddr,
+        toNodeId(addr tr[])
+      ))
+
+func toDotGraph*[Tok](
+  tree: ParseTree[Tok], kindPref: string = "", preciseRepr: bool = false): Graph =
+  if preciseRepr:
+    toDotGraphPrecise(tree, kindPref)
+  else:
+    toDotGraphPretty(tree, kindPref)
+
 proc toPng*[Tok](tree: ParseTree[Tok], path: string = "/tmp/image.png"): void =
   tree.toDotGraph().topng(path)
 
@@ -360,11 +388,7 @@ func treeReprImpl*[Tok](
 
   result = case node.kind:
     of pkTerm:
-      var kindStr = $node.tok.kind
-      if kindStr.startsWith(kindPref):
-        kindStr = kindStr[kindPref.len .. ^1]
-
-      @[ fmt("{prefStr}{kindStr} = '{node.tok}'") ]
+      @[ fmt("{prefStr}{node.tok.kind.tokKindStr(kindPref)} = '{node.tok}'") ]
     of pkNTerm:
       @[ fmt("{prefStr}{node.name}") ]
     else:
