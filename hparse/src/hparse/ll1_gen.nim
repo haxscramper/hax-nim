@@ -264,6 +264,7 @@ proc makeParseBlock[TKind](
       ## Output result tree
       `actAssgn`
       `argTree` = `resIdent`
+      runTreeActions(`argTree`)
     )
 
 proc makeRuleParser[TKind](
@@ -293,20 +294,11 @@ proc makeRuleParser[TKind](
             name = `ntermSym`,
             subnodes = @[`tree`]
           )
-          runTreeActions(`tree`)
         else:
-          runTreeActions(`tree`)
-          case `tree`.kind: # Kind of toplevel tree might change after running tree action.
-            of pkTerm, pkNTerm:
-              `tree` = newTree(
-                name = `ntermSym`,
-                subnodes = @[`tree`]
-              )
-            else:
-              `tree` = newTree(
-                name = `ntermSym`,
-                subnodes = `tree`.getSubnodes(),
-              )
+          `tree` = newTree(
+            name = `ntermSym`,
+            subnodes = `tree`.getSubnodes(),
+          )
 
 
   return (decl: decl, impl: impl)

@@ -260,23 +260,24 @@ suite "LL(1) parser tree actions":
       "elements" : andP(
         nt("element"),
         zeroP(andP(
-          tok(tkComma),
+          tok(tkComma).addAction(taDrop),
           nt("element")
-        )).addAction(taSpliceDiscard)
+        ).addAction(taSpliceDiscard)).addAction(taSpliceDiscard)
       ),
       # element ::= 'ident' | <list>
       "element" : orP(
         tok(tkIdent).addAction(taPromote),
-        nt("list")
+        nt("list").addAction(taPromote)
       )
     })
 
   test "Drop rule":
     let tree = parseTopLevel(
-      mapString("[[a],[b],[c]]"),
+      mapString("[[c,d],[e,f]]"),
       parseList
     )
 
+    echo "--- FINAL ---"
     echo tree.treeRepr("tk")
+
     tree.topng("/tmp/image.png", "tk", true)
-    # echo tree.lispRepr("tk")
