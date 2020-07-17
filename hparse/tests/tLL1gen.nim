@@ -108,12 +108,9 @@ proc tokensBFS(tree: PTree): seq[Token] =
 proc parseToplevel[Tok](
   toks: seq[Tok],
   parseCb: proc(
-    toks: var TokStream[Tok],
-    tree: var ParseTree[Tok])): ParseTree[Tok] =
-  var root = ParseTree[Token](kind: pkNTerm)
+    toks: var TokStream[Tok]): ParseTree[Tok]): ParseTree[Tok] =
   var stream = makeStream(toks)
-  parseCb(stream, root)
-  return root
+  return parseCb(stream)
 
 proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
   inseq.mapIt(Token(kind: it))

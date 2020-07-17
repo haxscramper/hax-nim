@@ -119,15 +119,14 @@ proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
 
 proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   assert nterm.kind == pkNTerm
-  let ntermIdent = ident(makeParserName(nterm.sym))
-  let lexerIdent = ident(conf.toksIdent)
-  let tree = ident "tree"
-  let symStr = newLit(nterm.sym)
+  let
+    ntermIdent = ident(makeParserName(nterm.sym))
+    lexerIdent = ident(conf.toksIdent)
+    # tree = ident "res"
+    symStr = newLit(nterm.sym)
+
   quote do:
-    var ntermTree: typeof(`tree`)
-    `ntermIdent`(`lexerIdent`, ntermTree)
-    # ntermTree.rulename = some(`symStr`)
-    ntermTree
+    `ntermIdent`(`lexerIdent`)
 
 proc makeConcatBlock[TKind](
   nterm: CompPatt[TKind],
@@ -252,8 +251,7 @@ proc makeParseBlock[TKind](
       quote do:
         `resIdent`.action = `actLit`
     else:
-      quote do:
-        discard
+      newEmptyNode()
 
   return newStmtList(
     newCommentStmtNode($patt & " " & $patt.kind),
@@ -263,8 +261,8 @@ proc makeParseBlock[TKind](
 
       ## Output result tree
       `actAssgn`
-      `argTree` = `resIdent`
-      runTreeActions(`argTree`)
+      # `argTree` = `resIdent`
+      # runTreeActions(`argTree`)
     )
 
 proc makeRuleParser[TKind](
@@ -277,33 +275,35 @@ proc makeRuleParser[TKind](
     toks = ident(conf.toksIdent)
     parser = ident(conf.parsIdent)
     tree = ident "tree"
+    res = ident "res"
 
   let decl = quote do:
     # Declare procedure to parse `rule`. `toks` is instance of token
     # stream used to get lookahead.
-    proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok])
+    proc `procName`[Tok](`toks`: var TokStream[Tok]): ParseTree[Tok]
 
   let ntermSym = newLit(rule.nterm)
   let parseBody = rule.patts.makeParseBlock(conf, sets)
   let impl = quote do:
-    proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
+    proc `procName`[Tok](`toks`: var TokStream[Tok]): ParseTree[Tok] =
       `parseBody`
-      echo "Parsed body for ", `ntermSym`, ", in tree:"
-      echo treeRepr(`tree`)
-      case `tree`.kind:
+      # echo "Parsed body for ", `ntermSym`, ", in tree:"
+      # echo treeRepr(`tree`)
+      case `res`.kind:
         of pkTerm, pkNTerm:
-          `tree` = newTree(
+          `res` = newTree(
             name = `ntermSym`,
-            subnodes = @[`tree`]
+            subnodes = @[`res`]
           )
         else:
-          `tree` = newTree(
+          `res` = newTree(
             name = `ntermSym`,
-            subnodes = `tree`.getSubnodes(),
+            subnodes = `res`.getSubnodes(),
           )
 
-      echo "After rewrapping"
-      echo treeRepr(`tree`)
+      # echo "After rewrapping"
+      # echo treeRepr(`tree`)
+      return `res`
 
 
   return (decl: decl, impl: impl)
