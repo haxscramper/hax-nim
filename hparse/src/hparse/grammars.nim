@@ -465,8 +465,8 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
     else:
       discard
 
-  debugecho "Tree actions on"
-  debugecho tree.treeRepr()
+  # debugechoi 1, "Tree actions on"
+  # debugechoi 1, tree.treeRepr()
 
   var newsubn: seq[ParseTree[Tok]]
   var hadPromotions: bool = false
@@ -477,12 +477,12 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
     case subnode.kind:
       of pkTerm:
         case subnode.action:
-          # of taPromote:
-          #   if inTree.subnodes.len > 1:
-          #     raiseAssert(msgjoin(
-          #       "Cannot promote terminal node in tree with",
-          #       inTree.subnodes.len, "elements",
-          #       ($subnode.tok.kind), " in tree ", tree.lispRepr()))
+          of taPromote:
+            if subnodes.len > 1:
+              raiseAssert(msgjoin(
+                "Cannot promote terminal node in tree with",
+                subnodes.len, "elements",
+                ($subnode.tok.kind), " in tree ", tree.lispRepr()))
           of taSpliceDiscard, taSplicePromote:
             raiseAssert(msgjoin(
               "Cannot splice terminal node (it cannot have child",
@@ -514,7 +514,7 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
         discard #[ IMPLEMENT ]#
 
   tree.subnodes = newsubn
+  tree.action = taDefault
 
-  debugecho "Result"
-  debugecho tree.treeRepr()
-  debugecho "----------------"
+  # debugechoi 1, "Result"
+  # debugechoi 1, tree.treeRepr()

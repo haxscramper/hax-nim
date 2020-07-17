@@ -114,7 +114,7 @@ proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
   return quote do:
     let tok = `toksIdent`.next()
     assert tok.kind == `tokIdent`
-    # ParseTree[`tokType`](kind: pkTerm, tok: tok)
+    # echo "Found token ", tok
     newTree(tok)
 
 proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
@@ -259,10 +259,8 @@ proc makeParseBlock[TKind](
       var `resIdent` = block:
         `result`
 
-      ## Output result tree
+      runTreeActions(`resIdent`)
       `actAssgn`
-      # `argTree` = `resIdent`
-      # runTreeActions(`argTree`)
     )
 
 proc makeRuleParser[TKind](

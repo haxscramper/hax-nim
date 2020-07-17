@@ -21,6 +21,10 @@ proc echoi*(indent: int, message: varargs[string, `$`]): void =
   ## Echo with indentation. `message` is joined using spaces
   echo "  ".repeat(indent), message.join(" ")
 
+proc debugechoi*(indent: int, message: string): void =
+  for line in message.split("\n"):
+    debugecho "  ".repeat(indent), line
+
 proc echoi*(message: varargs[string, `$`]): void =
   ## Echo with message joined by spaces
   echo message.join(" ")
