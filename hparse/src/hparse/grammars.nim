@@ -29,7 +29,7 @@ type
   Patt*[TKind] = ref object
     ## Ebnf grammar pattern. `Tok` is a type for token object.
     # head*: NTermSym ## Nonterminal symbol
-    action: TreeAct
+    action*: TreeAct
     case kind*: PattKind
       of pkNterm:
         sym*: NTermSym ## Nonterminal to parse
@@ -47,6 +47,10 @@ type
 
   Grammar*[TKind] = object
     rules*: seq[Rule[TKind]]
+
+func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
+  result = patt
+  result.action = act
 
 type
   FirstSet*[TKind] = set[TKind]

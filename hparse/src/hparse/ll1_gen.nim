@@ -275,16 +275,17 @@ proc makeRuleParser[TKind](
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
       `parseBody`
-      if `tree`.kind != pkTerm:
-        `tree` = newTree(
-          name = `ntermSym`,
-          subnodes = `tree`.getSubnodes(),
-        )
-      else:
-        `tree` = newTree(
-          name = `ntermSym`,
-          subnodes = @[`tree`]
-        )
+      case `tree`.kind:
+        of pkTerm, pkNTerm:
+          `tree` = newTree(
+            name = `ntermSym`,
+            subnodes = @[`tree`]
+          )
+        else:
+          `tree` = newTree(
+            name = `ntermSym`,
+            subnodes = `tree`.getSubnodes(),
+          )
 
   return (decl: decl, impl: impl)
 

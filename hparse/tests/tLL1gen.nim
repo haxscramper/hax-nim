@@ -60,6 +60,9 @@ func orP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
 func tok[TKind](tok: TKind): Patt[TKind] =
   Patt[TKind](kind: pkTerm, tok: tok)
 
+func nterm[TKind](sym: string): Patt[TKind] =
+  Patt[TKind](kind: pkNTerm, sym: sym)
+
 #======================  grammar parser generation  ======================#
 
 template makeGrammarParser(body: untyped): untyped =
@@ -102,11 +105,34 @@ proc tokensBFS(tree: PTree): seq[Token] =
     it.kind != pkTerm
   )
 
+proc parseToplevel[Tok](
+  toks: seq[Tok],
+  parseCb: proc(
+    toks: var TokStream[Tok],
+    tree: var ParseTree[Tok])): ParseTree[Tok] =
+  var root = ParseTree[Token](kind: pkNTerm)
+  var stream = makeStream(toks)
+  parseCb(stream, root)
+  return root
+
+proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
+  inseq.mapIt(Token(kind: it))
+
+# proc parseTokens[Tok, TokKind](
+#   toks: seq[TokKind],
+#   parseCb: proc(
+#     toks: var TokStream[Tok],
+#     tree: var ParseTree[Tok])): ParseTree[Token] =
+
+#   var root = ParseTree[Token](kind: pkNTerm)
+#   var stream = makeStream(toks.mapIt(Token(kind: it)))
+#   parseList(stream, root)
+#   return root
+
+
 
 suite "LL(1) parser simple":
-  func nt(str: string): TPatt =
-    Patt[TokenKind](kind: pkNTerm, sym: str)
-
+  const nt = nterm[TokenKind]
   makeGrammarParser({
       # list ::= '[' <elements> ']'
       "list" : andP(
@@ -129,21 +155,8 @@ suite "LL(1) parser simple":
       )
     })
 
-  proc parseTokens(toks: seq[Token]): ParseTree[Token] =
-    var root = ParseTree[Token](kind: pkNTerm)
-    var stream = makeStream(toks)
-    parseList(stream, root)
-    return root
-
-
-  proc parseTokens(toks: seq[TokenKind]): ParseTree[Token] =
-    var root = ParseTree[Token](kind: pkNTerm)
-    var stream = makeStream(toks.mapIt(Token(kind: it)))
-    parseList(stream, root)
-    return root
-
   test "Parse simple list":
-    let tree = parseTokens(@[
+    let tree = parseTopLevel(@[
       tkOpBrace,
       tkIdent,
       tkComma,
@@ -151,7 +164,7 @@ suite "LL(1) parser simple":
       tkComma,
       tkIdent,
       tkCloseBrace
-    ])
+    ].toTokSeq(), parseList)
 
     assert tree.tokensBFS() == pe(
       pkConcat,
@@ -167,13 +180,13 @@ suite "LL(1) parser simple":
     ).tokensBFS()
 
   test "Parse nested list":
-    let tree = parseTokens(@[
+    let tree = parseTopLevel(@[
       tkOpBrace,
         tkOpBrace,
           tkIdent,
         tkCloseBrace,
       tkCloseBrace
-    ])
+    ].toTokSeq(), parseList)
 
     assert tree.tokensBFS() == pkConcat.pe(
       pt(tkOpBrace),
@@ -188,7 +201,10 @@ suite "LL(1) parser simple":
   test "Deeply nested list with idents":
     # TODO unit test error for unfinished input
     # TODO test erorr for incorrect token expected
-    let tree = parseTokens(mapString("[a,[b]]"))
+    let tree = parseTopLevel(
+      mapString("[a,[b]]"),
+      parseList
+    )
     echo tree.treeRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`
@@ -197,7 +213,7 @@ suite "LL(1) parser simple":
     graph.topng("/tmp/image.png")
 
   test "Map parse tree to ast":
-    let root = parseTokens(@[
+    let root = parseTopLevel(@[
       tkOpBrace,
       tkIdent,
       tkComma,
@@ -205,7 +221,7 @@ suite "LL(1) parser simple":
       tkComma,
       tkIdent,
       tkCloseBrace
-    ])
+    ].toTokSeq(), parseList)
 
     type
       Ast = object
@@ -231,8 +247,28 @@ suite "LL(1) parser simple":
     )
 
 suite "LL(1) parser tree actions":
+  const nt = nterm[TokenKind]
+  makeGrammarParser({
+      # list ::= '[' <elements> ']'
+      "list" : andP(
+        tok(tkOpBrace),
+        nt("elements"),
+        tok(tkCloseBrace)
+      ),
+      # elements ::= <element> (',' <element>)*
+      "elements" : andP(
+        nt("element"),
+        zeroP(andP(
+          tok(tkComma),
+          nt("element")
+        ))
+      ),
+      # element ::= 'ident' | <list>
+      "element" : orP(
+        tok(tkIdent),
+        nt("list")
+      )
+    })
+
   test "Drop rule":
     discard
-    # makeGrammarParser({
-    #   "a"
-    # })
