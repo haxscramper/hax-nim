@@ -258,10 +258,10 @@ suite "LL(1) parser tree actions":
       ),
       # elements ::= <element> (',' <element>)*
       "elements" : andP(
-        nt("element"),
+        nt("element").addAction(taSpliceDiscard),
         zeroP(andP(
           tok(tkComma).addAction(taDrop),
-          nt("element")
+          nt("element").addAction(taSpliceDiscard)
         ).addAction(taSpliceDiscard)).addAction(taSpliceDiscard)
       ),
       # element ::= 'ident' | <list>
@@ -273,7 +273,7 @@ suite "LL(1) parser tree actions":
 
   test "Drop rule":
     let tree = parseTopLevel(
-      mapString("[[c,d],[e,f]]"),
+      mapString("[[c],[e]]"),
       parseList
     )
 

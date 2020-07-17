@@ -288,6 +288,8 @@ proc makeRuleParser[TKind](
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
       `parseBody`
+      echo "Parsed body for ", `ntermSym`, ", in tree:"
+      echo treeRepr(`tree`)
       case `tree`.kind:
         of pkTerm, pkNTerm:
           `tree` = newTree(
@@ -299,6 +301,9 @@ proc makeRuleParser[TKind](
             name = `ntermSym`,
             subnodes = `tree`.getSubnodes(),
           )
+
+      echo "After rewrapping"
+      echo treeRepr(`tree`)
 
 
   return (decl: decl, impl: impl)
