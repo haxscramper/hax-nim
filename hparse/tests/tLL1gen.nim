@@ -100,7 +100,7 @@ proc `$`(a: PTree): string = pstring(a)
 
 proc tokensBFS(tree: PTree): seq[Token] =
   tree.mapItBFStoSeq(
-    toSeq(it.subnodes()),
+    it.subnodes,
     if it.kind == pkTerm: some(it.tok) else: none(Token),
     it.kind != pkTerm
   )
@@ -211,7 +211,7 @@ suite "LL(1) parser simple":
     # ERROR `index out of bounds, the container is empty`
     let graph = tree.toDotGraph("tk", true)
     # echo graph
-    graph.topng("/tmp/image.png")
+    # graph.topng("/tmp/image.png")
 
   test "Map parse tree to ast":
     let root = parseTopLevel(@[
@@ -236,7 +236,7 @@ suite "LL(1) parser simple":
       if node.kind == pkTerm:
         return @[]
       else:
-        return toSeq(node.subnodes())
+        return node.subnodes
 
     let res = root.mapItDFS(
       it.getSubnodes,
@@ -262,14 +262,21 @@ suite "LL(1) parser tree actions":
         zeroP(andP(
           tok(tkComma),
           nt("element")
-        ))
+        )).addAction(taSpliceDiscard)
       ),
       # element ::= 'ident' | <list>
       "element" : orP(
-        tok(tkIdent),
+        tok(tkIdent).addAction(taPromote),
         nt("list")
       )
     })
 
   test "Drop rule":
-    discard
+    let tree = parseTopLevel(
+      mapString("[[a],[b],[c]]"),
+      parseList
+    )
+
+    echo tree.treeRepr("tk")
+    tree.topng("/tmp/image.png", "tk", true)
+    # echo tree.lispRepr("tk")

@@ -58,6 +58,7 @@ type
     first*: Table[NTermSym, FirstSet[TKind]]
 
   CompPatt*[TKind] = object
+    action*: TreeAct
     first: FirstSet[TKind]
     case kind*: PattKind
       of pkNterm:
@@ -84,8 +85,8 @@ type
 type
   ParseTree*[Tok] = ref object
     ## Parse tree object
-    subnodes: seq[ParseTree[Tok]]
-    # rulename*: Option[string]
+    subnodes*: seq[ParseTree[Tok]]
+    action*: TreeAct
 
     case kind*: PattKind
       of pkTerm:
@@ -127,10 +128,10 @@ func tok*[Tok](tree: ParseTree[Tok]): Tok =
   assert tree.kind == pkTerm
   return tree.tok
 
-iterator subnodes*[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
-  assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
-  for item in tree.subnodes:
-    yield item
+# iterator subnodes*[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
+#   assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
+#   for item in tree.subnodes:
+#     yield item
 
 
 func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
@@ -283,11 +284,17 @@ proc computePatt*[TKind](
       # FIRST sets for nonterminals are stored in `sets`
       result = CompPatt[TKind](kind: pkNterm, sym: patt.sym)
 
+  result.action = patt.action
+
 func first*[TKind](
   patt: CompPatt[TKind], sets: NTermSets[TKind]): FirstSet[TKind] =
   case patt.kind:
     of pkNTerm: sets.first[patt.sym]
     else: patt.first
+
+#*************************************************************************#
+#***************************  pretty-printing  ***************************#
+#*************************************************************************#
 
 func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
   case node.kind:
@@ -353,12 +360,20 @@ func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
   result.styleNode.shape = nsaRect
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
     let itaddr = cast[int](addr it[])
+    let label = case it.kind:
+      of pkNTerm: it.name
+      of pkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}\n'{it.tok}'")
+      else: it.nodeKindStr()
+
     result.addNode(makeNode(
       itaddr,
-      label = case it.kind:
-        of pkNTerm: it.name
-        of pkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}\n'{it.tok}'")
-        else: it.nodeKindStr()
+      label = label & (
+        block:
+          if tree.action != taDefault:
+            fmt("\n{tree.action}")
+          else:
+            ""
+      )
     ))
 
     for tr in subt:
@@ -374,8 +389,12 @@ func toDotGraph*[Tok](
   else:
     toDotGraphPretty(tree, kindPref)
 
-proc toPng*[Tok](tree: ParseTree[Tok], path: string = "/tmp/image.png"): void =
-  tree.toDotGraph().topng(path)
+proc toPng*[Tok](
+  tree: ParseTree[Tok],
+  path: string = "/tmp/image.png",
+  kindPref: string = "",
+  preciseRepr: bool = false): void =
+  tree.toDotGraph(kindPref, preciseRepr).topng(path)
 
 func treeReprImpl*[Tok](
   node: ParseTree[Tok],
@@ -384,7 +403,10 @@ func treeReprImpl*[Tok](
   kindPref: string): seq[string] =
   let prefStr = pref.mapIt(
     if it: "|   " else: "    "
-  ).join("") & "+-> "
+  ).join("") & "+-> " & (node.action != taDefault).tern(
+    fmt("< {node.action} > "),
+    ""
+  )
 
   result = case node.kind:
     of pkTerm:
@@ -431,3 +453,39 @@ func lispRepr*[Tok](
   kindPref: string = "",
   discardEmpty: bool = true): string =
   lispReprImpl(node, kindPref, discardEmpty).join(" ")
+
+#*************************************************************************#
+#*********************  tree action implementation  **********************#
+#*************************************************************************#
+
+func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
+  case tree.action:
+    of taDrop: # This tree should be dropped by it's parent
+      return
+    else:
+      discard
+
+  var newsubn: seq[ParseTree[Tok]]
+  var hadPromotions: bool = false
+  for subnode in tree.subnodes:
+    case subnode.action:
+      of taDefault:
+        newsubn.add subnode
+      of taDrop:
+        discard
+      of taSpliceDiscard:
+        newsubn &= subnode.subnodes
+      of taSplicePromote:
+        tree = subnode
+        newsubn &= subnode.subnodes
+      of taPromote:
+        if not hadPromotions:
+          debugecho "Promoting subnode ", subnode.lispRepr()
+          tree = subnode
+          newsubn &= subnode.subnodes
+        else:
+          discard #[ IMPLEMENT repeated promotions ]#
+      of taSubrule:
+        discard #[ IMPLEMENT ]#
+
+  tree.subnodes = newsubn

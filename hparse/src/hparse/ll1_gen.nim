@@ -245,13 +245,24 @@ proc makeParseBlock[TKind](
   let
     resIdent = ident resName
     argTree = ident "tree"
+
+  let actAssgn =
+    if patt.action != taDefault:
+      let actLit = ident($patt.action)
+      quote do:
+        `resIdent`.action = `actLit`
+    else:
+      quote do:
+        discard
+
   return newStmtList(
     newCommentStmtNode($patt & " " & $patt.kind),
     quote do:
-      let `resIdent` = block:
+      var `resIdent` = block:
         `result`
 
       ## Output result tree
+      `actAssgn`
       `argTree` = `resIdent`
     )
 
@@ -260,10 +271,11 @@ proc makeRuleParser[TKind](
   conf: CodeGenConf,
   sets: NTermSets[TKind]): tuple[decl, impl: NimNode] =
   ## Generate implementation for proc to parse rule
-  let procName = ident(rule.nterm.makeParserName())
-  let toks = ident(conf.toksIdent)
-  let parser = ident(conf.parsIdent)
-  let tree = ident "tree"
+  let
+    procName = ident(rule.nterm.makeParserName())
+    toks = ident(conf.toksIdent)
+    parser = ident(conf.parsIdent)
+    tree = ident "tree"
 
   let decl = quote do:
     # Declare procedure to parse `rule`. `toks` is instance of token
@@ -275,6 +287,9 @@ proc makeRuleParser[TKind](
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok], `tree`: var ParseTree[Tok]) =
       `parseBody`
+      # echo "Generated tree"
+      # echo treeRepr(`tree`)
+      runTreeActions(`tree`)
       case `tree`.kind:
         of pkTerm, pkNTerm:
           `tree` = newTree(
@@ -286,6 +301,7 @@ proc makeRuleParser[TKind](
             name = `ntermSym`,
             subnodes = `tree`.getSubnodes(),
           )
+
 
   return (decl: decl, impl: impl)
 
