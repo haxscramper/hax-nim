@@ -38,34 +38,56 @@ func `==`(lhs, rhs: Token): bool =
         true
   )
 
+func zeroP[TKind](patt: Patt[TKind]): Patt[TKind] =
+  Patt[TKind](kind: pkZeroOrMore, opt: patt)
+
+func oneP[TKind](patt: Patt[TKind]): Patt[TKind] =
+  Patt[TKind](kind: pkOneOrMore, opt: patt)
+
+func optP[TKind](patt: Patt[TKind]): Patt[TKind] =
+  Patt[TKind](kind: pkOptional, opt: patt)
+
+func andP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
+  Patt[TKind](kind: pkConcat, patts: toSeq(patts))
+
+func orP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
+  Patt[TKind](kind: pkAlternative, patts: toSeq(patts))
+
+func nt(str: string): TPatt =
+  Patt[TokenKind](kind: pkNTerm, sym: str)
+
+func tok[TKind](tok: TKind): Patt[TKind] =
+  Patt[TKind](kind: pkTerm, tok: tok)
+
+discard zeroP(andP(nt("we"), nt("ddd")))
 
 macro grammarTest(): untyped =
   let grammar = {
     # list ::= '[' <elements> ']'
-    "list" : TPatt(kind: pkConcat, patts: @[
-      TPatt(kind: pkTerm, tok: tkOpBrace),
-      TPatt(kind: pkNTerm, sym: "elements"),
-      TPatt(kind: pkTerm, tok: tkCloseBrace)
-    ]),
+    "list" : andP(
+      tok(tkOpBrace),
+      nt("elements"),
+      tok(tkCloseBrace)
+    ),
     # elements ::= <element> (',' <element>)*
-    "elements" : TPatt(kind: pkConcat, patts: @[
-      TPatt(kind: pkNterm, sym: "element"),
-      TPatt(kind: pkZeroOrMore, opt: TPatt(kind: pkConcat, patts: @[
-        TPatt(kind: pkTerm, tok: tkComma),
-        TPatt(kind: pkNTerm, sym: "element")
-      ]))
-    ]),
+    "elements" : andP(
+      nt("element"),
+      zeroP(andP(
+        tok(tkComma),
+        nt("element")
+      ))
+    ),
     # element ::= 'ident' | <list>
-    "element" :  TPatt(kind: pkAlternative, patts: @[
-      TPatt(kind: pkTerm, tok: tkIdent),
-      TPatt(kind: pkNTerm, sym: "list")
-    ])
+    "element" : orP(
+      tok(tkIdent),
+      nt("list")
+    )
   }.toGrammar()
 
   let compGrammar = computeGrammar(grammar)
   # pprint compGrammar
   result = makeGrammarParser(compGrammar)
-  # colorPrint result
+  colorPrint result
 
 grammarTest()
 
@@ -157,7 +179,7 @@ suite "LL(1) parser simple":
   test "Deeply nested list with idents":
     # TODO unit test error for unfinished input
     # TODO test erorr for incorrect token expected
-    let tree = parseTokens(mapString("[a,[b],[c,d,[e,z,e]]]"))
+    let tree = parseTokens(mapString("[a,[b]]"))
     echo tree.treeRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`

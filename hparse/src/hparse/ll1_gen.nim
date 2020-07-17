@@ -251,6 +251,7 @@ proc makeParseBlock[TKind](
       let `resIdent` = block:
         `result`
 
+      ## Output result tree
       `argTree` = `resIdent`
     )
 

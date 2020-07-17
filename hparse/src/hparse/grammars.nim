@@ -17,10 +17,19 @@ type
     pkZeroOrMore ## Zero or more occurencies of (non)terminal
     pkOneOrMore ## One or more occurence of (non)terminal
 
+  TreeAct* = enum
+    taDefault ## No tree action specified
+
+    taDrop
+    taPromote
+    taSubrule
+    taSpliceDiscard
+    taSplicePromote
 
   Patt*[TKind] = ref object
     ## Ebnf grammar pattern. `Tok` is a type for token object.
     # head*: NTermSym ## Nonterminal symbol
+    action: TreeAct
     case kind*: PattKind
       of pkNterm:
         sym*: NTermSym ## Nonterminal to parse
@@ -287,6 +296,9 @@ func nodeKindStr*(kind: PattKind): string =
       ""
 
 func toDotGraph*[Tok](tree: ParseTree[Tok]): Graph =
+  # TODO add support for 'pretty' visualization (current one) and
+  # 'precise', which does not introduce **any** new elements and shows
+  # as much original information as possible.
   result.styleNode.shape = nsaRect
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
     let itaddr = cast[int](addr it[])
@@ -344,7 +356,6 @@ func treeReprImpl*[Tok](
   result = case node.kind:
     of pkTerm:
       var kindStr = $node.tok.kind
-      debugecho &"'{kindStr}'"
       if kindStr.startsWith(kindPref):
         kindStr = kindStr[kindPref.len .. ^1]
 

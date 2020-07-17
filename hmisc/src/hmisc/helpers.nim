@@ -6,13 +6,13 @@ export hseq_mapping
 import sequtils
 include hdebug_misc
 
-proc colorPrint*(node: NimNode): void =
+proc colorPrint*(
+  node: NimNode, tmpfile: string = "/tmp/nimast.tmp.nim"): void =
   # TODO convert nim ast into adequately readable form without using
   # `pygmentize`. Maybe even color macros/templates/procs differently.
-  let file = "/tmp/nimast.tmp.nim"
-  file.writeFile($node.toStrLit())
-  discard staticExec("nimpretty " & file)
-  echo staticExec("pygmentize -f terminal " & file)
+  tmpfile.writeFile($node.toStrLit())
+  discard staticExec("nimpretty " & tmpfile)
+  echo staticExec("pygmentize -f terminal " & tmpfile)
 
 template expectType*(op, t: untyped): untyped =
   static: assert op is t
