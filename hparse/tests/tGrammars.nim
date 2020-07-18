@@ -17,7 +17,8 @@ suite "EBNF -> BNF convesion":
       zeroP(andP(
         tok(tkComma),
         nt("element")
-      ))
+      )),
+      optP(tok(tkCloseBrace))
     )
 
     echo ebnf.exprRepr()

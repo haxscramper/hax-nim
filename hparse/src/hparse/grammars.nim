@@ -361,11 +361,18 @@ func toBNF*[Tk](
               BnfPatt[Tk](kind: bnfEmpty),
               BnfPatt[Tk](kind: bnfConcat, patts: @[
                 BnfPatt[Tk](kind: bnfNterm, sym: newsym),
-                body
-              ])
-            ]
-          )
-        )
+                body])]))
+      ] & subnewrules
+    of pkOptional:
+      let newsym = makeBnfNterm(parent, idx)
+      result.toprule = BnfPatt[Tk](kind: bnfNterm, sym: newsym)
+      let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
+      result.newrules = @[
+        BnfRule[Tk](
+          sym: newsym,
+          patt: BnfPatt[Tk](
+            kind: bnfAlternative,
+            patts: @[BnfPatt[Tk](kind: bnfEmpty), body]))
       ] & subnewrules
     else:
       new(result.toprule)
