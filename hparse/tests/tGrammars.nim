@@ -15,8 +15,8 @@ suite "EBNF -> BNF convesion":
     let ebnf = andP(
       nt("element"),
       zeroP(andP(
-        tok(tkComma),
-        nt("element")
+        oneP(tok(tkComma)),
+        zeroP(nt("element"))
       )),
       optP(tok(tkCloseBrace))
     )
