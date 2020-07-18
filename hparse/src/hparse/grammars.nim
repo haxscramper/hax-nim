@@ -420,8 +420,9 @@ proc toPng*[Tok](
   tree: ParseTree[Tok],
   path: string = "/tmp/image.png",
   kindPref: string = "",
-  preciseRepr: bool = false): void =
-  tree.toDotGraph(kindPref, preciseRepr).topng(path)
+  preciseRepr: bool = false,
+  bottomTokens: bool = false): void =
+  tree.toDotGraph(kindPref, preciseRepr, bottomTokens).topng(path)
 
 func treeReprImpl*[Tok](
   node: ParseTree[Tok],

@@ -208,7 +208,7 @@ suite "LL(1) parser simple":
     # echo tree.lispRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`
-    let graph = tree.toDotGraph("tk", false, bottomTokens = false)
+    let graph = tree.toDotGraph("tk", false)
     graph.topng("/tmp/image.png")
 
   test "Map parse tree to ast":
@@ -278,7 +278,7 @@ suite "LL(1) parser tree actions":
     echo "--- FINAL ---"
     echo tree.treeRepr("tk")
 
-    tree.topng("/tmp/image.png", "tk", true)
+    tree.topng("/tmp/image.png", "tk", bottomTokens = true)
 
   # test "EEE":
   #   makeGrammarParser({
