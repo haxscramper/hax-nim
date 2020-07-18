@@ -3,65 +3,10 @@ import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
 import hmisc/types/graphviz_ast
 import hparse/[ll1_gen, grammars], macros
+include test_grammar
 
 #========================  token type definition  ========================#
 
-type
-  TokenKind = enum
-    tkOpBrace
-    tkCloseBrace
-    tkIdent
-    tkComma
-
-  Token = object
-    case kind: TokenKind
-      of tkIdent:
-        strVal: string
-      else:
-        nil
-
-  TPatt = Patt[TokenKind]
-  PTree = ParseTree[Token]
-
-func `$`(tok: Token): string =
-  case tok.kind:
-    of tkIdent: tok.strVal
-    of tkOpBrace: "["
-    of tkCloseBrace: "]"
-    of tkComma: ","
-
-
-func `==`(lhs, rhs: Token): bool =
-  lhs.kind == rhs.kind and (
-    case lhs.kind:
-      of tkIdent:
-        lhs.strVal == rhs.strVal
-      else:
-        true
-  )
-
-#====================  generic pattern construction  =====================#
-
-func zeroP[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkZeroOrMore, opt: patt)
-
-func oneP[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkOneOrMore, opt: patt)
-
-func optP[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkOptional, opt: patt)
-
-func andP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
-  Patt[TKind](kind: pkConcat, patts: toSeq(patts))
-
-func orP[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
-  Patt[TKind](kind: pkAlternative, patts: toSeq(patts))
-
-func tok[TKind](tok: TKind): Patt[TKind] =
-  Patt[TKind](kind: pkTerm, tok: tok)
-
-func nterm[TKind](sym: string): Patt[TKind] =
-  Patt[TKind](kind: pkNTerm, sym: sym)
 
 #======================  grammar parser generation  ======================#
 

@@ -41,6 +41,22 @@ type
         opt*: Patt[TKind] ## Single instance that will be repeated
         ## [0..1], [0..n] or [1..n] times respectively
 
+  BnfPattKind* = enum
+    bnfTerm
+    bnfNTerm
+    bnfConcat
+    bnfAlternative
+
+  BnfPatt*[TKind] = ref object
+    action*: TreeAct
+    case kind*: BnfPattKind
+      of bnfNterm:
+        sym*: NTermSym ## Nonterminal to parse
+      of bnfTerm:
+        tok*: TKind ## Single token to match literally
+      of bnfAlternative, bnfConcat:
+        patts*: seq[Patt[TKind]]
+
   Rule*[TKind] = object
     nterm*: NTermSym
     patts*: Patt[TKind]
@@ -95,6 +111,31 @@ type
         name: NTermSym
       else:
         nil
+
+#====================  generic pattern construction  =====================#
+
+func zeroP*[TKind](patt: Patt[TKind]): Patt[TKind] =
+  Patt[TKind](kind: pkZeroOrMore, opt: patt)
+
+func oneP*[TKind](patt: Patt[TKind]): Patt[TKind] =
+  Patt[TKind](kind: pkOneOrMore, opt: patt)
+
+func optP*[TKind](patt: Patt[TKind]): Patt[TKind] =
+  Patt[TKind](kind: pkOptional, opt: patt)
+
+func andP*[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
+  Patt[TKind](kind: pkConcat, patts: toSeq(patts))
+
+func orP*[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
+  Patt[TKind](kind: pkAlternative, patts: toSeq(patts))
+
+func tok*[TKind](tok: TKind): Patt[TKind] =
+  Patt[TKind](kind: pkTerm, tok: tok)
+
+func nterm*[TKind](sym: string): Patt[TKind] =
+  Patt[TKind](kind: pkNTerm, sym: sym)
+
+
 
 proc newTree*[Tok](kind: PattKind, subtree: varargs[ParseTree[Tok]]): ParseTree[Tok] =
   ## Create new parse tree object
@@ -243,6 +284,13 @@ func topoSort*[Vertex](
   revese: bool = true): seq[Vertex] =
   topoSort(verts, deps, reverse, (r) => hash(r))
 
+#=============================  EBNF -> BNF  =============================#
+
+func toBNF*[TKind](patt: Patt[TKind]): BnfPatt[TKind] =
+  discard
+
+#=========================  FIRST set computat  ==========================#
+
 proc computeFirst*[TKind](
   patt: Patt[TKind], other: NTermSets[TKind]): FirstSet[TKind] =
   ## Generate FIRST set for `patt`
@@ -312,6 +360,41 @@ func tokKindStr*[TKind](tkind: TKind, prefStr: string): string =
   if result.startsWith(prefStr):
     result = result[prefStr.len .. ^1]
 
+#=======================  grammar representation  ========================#
+
+func exprRepr*[TKind](patt: Patt[TKind]): string =
+  case patt.kind:
+    of pkTerm:
+      fmt("'{patt.tok}'")
+    of pkNTerm:
+      fmt("<{patt.sym}>")
+    of pkAlternative, pkConcat:
+      patt.patts.mapIt(it.exprRepr).join(
+        (patt.kind == pkConcat).tern(" & ", " | ")
+      )
+    of pkOptional, pkZeroOrMore, pkOneOrMore:
+      let suff =
+        case patt.kind:
+          of pkOptional: "?"
+          of pkZeroOrMore: "*"
+          of pkOneOrMore: "+"
+          else:
+            ""
+
+      fmt("({patt.opt.exprRepr()}){suff}")
+
+func exprRepr*[TKind](bnf: BnfPatt[TKind]): string =
+  case bnf.kind:
+    of bnfTerm:
+      fmt("'{patt.tok}'")
+    of bnfNTerm:
+      fmt("<{patt.sym}>")
+    of bnfAlternative, bnfConcat:
+      bnf.patts.mapIt(it.exprRepr).join(
+        (bnf.kind == bnfConcat).tern(" & ", " | ")
+      )
+
+#==============================  graphviz  ===============================#
 
 func toDotGraphPretty*[Tok](
   tree: ParseTree[Tok],
@@ -423,6 +506,8 @@ proc toPng*[Tok](
   preciseRepr: bool = false,
   bottomTokens: bool = false): void =
   tree.toDotGraph(kindPref, preciseRepr, bottomTokens).topng(path)
+
+#=========================  tree representation  =========================#
 
 func treeReprImpl*[Tok](
   node: ParseTree[Tok],
