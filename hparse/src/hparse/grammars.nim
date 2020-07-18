@@ -9,11 +9,14 @@ type
   NTermSym* = string
   PattKind* = enum
     pkTerm ## Terminal token
-    pkOptional ## Optional (non)terminal
     pkNterm ## Nonterminal symbol
 
+
+    # 'nested' patterns
     pkAlternative ## Any of several (non)terminals. `OR` for (non)terminals
     pkConcat ## All (non)terminals in sequence `AND` for (non)terminals
+
+    pkOptional ## Optional (non)terminal
     pkZeroOrMore ## Zero or more occurencies of (non)terminal
     pkOneOrMore ## One or more occurence of (non)terminal
 
@@ -42,20 +45,11 @@ type
         ## [0..1], [0..n] or [1..n] times respectively
 
   BnfPattKind* = enum
+    bnfEmpty
     bnfTerm
     bnfNTerm
     bnfConcat
     bnfAlternative
-
-  BnfPatt*[TKind] = ref object
-    action*: TreeAct
-    case kind*: BnfPattKind
-      of bnfNterm:
-        sym*: NTermSym ## Nonterminal to parse
-      of bnfTerm:
-        tok*: TKind ## Single token to match literally
-      of bnfAlternative, bnfConcat:
-        patts*: seq[Patt[TKind]]
 
   Rule*[TKind] = object
     nterm*: NTermSym
@@ -63,6 +57,36 @@ type
 
   Grammar*[TKind] = object
     rules*: seq[Rule[TKind]]
+
+  BnfNTerm* = object
+    case generated*: bool
+      of true:
+        idx*: seq[int]
+        parent*: string
+      of false:
+        name*: string
+
+  BnfPatt*[TKind] = ref object # REVIEW is it necessary to use `ref`?
+    action*: TreeAct
+    case kind*: BnfPattKind
+      of bnfEmpty:
+        nil
+      of bnfNterm:
+        sym*: BnfNTerm ## Nonterminal to parse
+      of bnfTerm:
+        tok*: TKind ## Single token to match literally
+      of bnfAlternative, bnfConcat:
+        patts*: seq[BnfPatt[TKind]]
+
+  BnfRule*[TKind] = object
+    sym*: BnfNterm
+    patt*: BnfPatt[TKind]
+
+func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
+  BnfNterm(generated: true, idx: idx, parent: parent)
+
+func makeBnfNterm(name: string): BnfNTerm =
+  BnfNterm(generated: false, name: name)
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
   result = patt
@@ -286,8 +310,67 @@ func topoSort*[Vertex](
 
 #=============================  EBNF -> BNF  =============================#
 
-func toBNF*[TKind](patt: Patt[TKind]): BnfPatt[TKind] =
-  discard
+func subrules*[Tk](patt: Patt[Tk]): seq[Patt[Tk]] =
+  case patt.kind:
+    of pkOptional, pkZeroOrMore, pkOneOrMore:
+      @[patt.opt]
+    of pkAlternative, pkConcat:
+      patt.patts
+    else:
+      raiseAssert(msgjoin("Invalid patt: {patt.kind} does not have subrules"))
+
+func isNested*[Tk](patt: Patt[Tk]): bool =
+  patt.kind in {pkAlternative .. pkOneOrMore}
+
+func toBNF*[Tk](
+  patt: Patt[Tk],
+  parent: string, idx: seq[int] = @[]): tuple[
+    toprule: BnfPatt[Tk],
+    newrules: seq[BnfRule[Tk]]] =
+
+  case patt.kind:
+    of pkTerm:
+      result.toprule = BnfPatt[Tk](kind: bnfTerm, tok: patt.tok)
+    of pkNterm:
+      result.toprule = BnfPatt[Tk](
+        kind: bnfNTerm,
+        sym: makeBnfNterm(patt.sym)
+      )
+    of pkAlternative, pkConcat:
+      var newsubp: seq[BnfPatt[Tk]]
+
+      for pos, subp in patt.patts:
+        let (bnfPatt, bnfRules) = subp.toBNF(parent, idx = idx & @[pos])
+        newsubp.add bnfPatt
+        result.newrules &= bnfRules
+
+      if patt.kind == pkAlternative:
+        result.toprule = BnfPatt[Tk](kind: bnfAlternative, patts: newsubp)
+      else:
+        result.toprule = BnfPatt[Tk](kind: bnfConcat, patts: newsubp)
+    of pkZeroOrMore:
+      let newsym = makeBnfNterm(parent, idx)
+      result.toprule = BnfPatt[Tk](kind: bnfNterm, sym: newsym)
+      let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
+      result.newrules = @[
+        BnfRule[Tk](
+          sym: newsym,
+          patt: BnfPatt[Tk](
+            kind: bnfAlternative,
+            patts: @[
+              BnfPatt[Tk](kind: bnfEmpty),
+              BnfPatt[Tk](kind: bnfConcat, patts: @[
+                BnfPatt[Tk](kind: bnfNterm, sym: newsym),
+                body
+              ])
+            ]
+          )
+        )
+      ] & subnewrules
+    else:
+      new(result.toprule)
+
+
 
 #=========================  FIRST set computat  ==========================#
 
@@ -371,7 +454,7 @@ func exprRepr*[TKind](patt: Patt[TKind]): string =
     of pkAlternative, pkConcat:
       patt.patts.mapIt(it.exprRepr).join(
         (patt.kind == pkConcat).tern(" & ", " | ")
-      )
+      ).wrap("{  }")
     of pkOptional, pkZeroOrMore, pkOneOrMore:
       let suff =
         case patt.kind:
@@ -381,18 +464,31 @@ func exprRepr*[TKind](patt: Patt[TKind]): string =
           else:
             ""
 
-      fmt("({patt.opt.exprRepr()}){suff}")
+      fmt("( {patt.opt.exprRepr()} ){suff}")
+
+func exprRepr*(sym: BnfNTerm): string =
+  if sym.generated:
+    fmt("{sym.parent}`gen{sym.idx.join(\"_\")}")
+  else:
+    sym.name
 
 func exprRepr*[TKind](bnf: BnfPatt[TKind]): string =
   case bnf.kind:
+    of bnfEmpty:
+      "ε"
     of bnfTerm:
-      fmt("'{patt.tok}'")
+      fmt("'{bnf.tok}'")
     of bnfNTerm:
-      fmt("<{patt.sym}>")
+      fmt("<{bnf.sym.exprRepr()}>")
     of bnfAlternative, bnfConcat:
       bnf.patts.mapIt(it.exprRepr).join(
         (bnf.kind == bnfConcat).tern(" & ", " | ")
-      )
+      ).wrap("{  }")
+
+
+func exprRepr*[TKind](rule: BnfRule[TKind]): string =
+  return fmt("{rule.sym.exprRepr()} ::= {rule.patt.exprRepr()}")
+
 
 #==============================  graphviz  ===============================#
 

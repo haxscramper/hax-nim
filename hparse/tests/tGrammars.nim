@@ -12,10 +12,16 @@ const nt = nterm[TokenKind]
 
 suite "EBNF -> BNF convesion":
   test "wee":
-    echo andP(
+    let ebnf = andP(
       nt("element"),
       zeroP(andP(
         tok(tkComma),
         nt("element")
       ))
-    ).exprRepr()
+    )
+
+    echo ebnf.exprRepr()
+    let (top, newrules) = ebnf.toBNF("X")
+    echo "toprule: ", top.exprRepr()
+    for rule in newrules:
+      echo rule.exprRepr()

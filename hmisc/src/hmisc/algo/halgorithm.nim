@@ -288,6 +288,12 @@ func wrap*(
   return delim.left & str & delim.right
 
 
+func wrap*(str: string, delim: string): string =
+  ## Split `delim` in two, use wrap `str` in left and right halves.
+  let left = delim.len div 2
+  return delim[0 ..< left] & str & delim[left .. ^1]
+
+
 func escapeHTML*(input: string): string =
   input.multiReplace([
     (">", "&gt;"),
