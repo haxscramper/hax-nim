@@ -198,17 +198,18 @@ suite "LL(1) parser simple":
   test "Deeply nested list with idents":
     # TODO unit test error for unfinished input
     # TODO test erorr for incorrect token expected
+
+
     let tree = parseTopLevel(
-      mapString("[a,[b]]"),
+      mapString("[[c,z,d,[e,d]],[e,d,f]]"),
       parseList
     )
     echo tree.treeRepr("tk")
-    echo tree.lispRepr("tk")
+    # echo tree.lispRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`
-    let graph = tree.toDotGraph("tk", true)
-    # echo graph
-    # graph.topng("/tmp/image.png")
+    let graph = tree.toDotGraph("tk", false, bottomTokens = false)
+    graph.topng("/tmp/image.png")
 
   test "Map parse tree to ast":
     let root = parseTopLevel(@[
@@ -278,3 +279,16 @@ suite "LL(1) parser tree actions":
     echo tree.treeRepr("tk")
 
     tree.topng("/tmp/image.png", "tk", true)
+
+  # test "EEE":
+  #   makeGrammarParser({
+  #       "hello" : orP(
+  #         tok(tkOpBrace),
+  #         andP(
+  #           zeroP(andP(
+  #             tok(tkComma),
+  #           ))
+  #         ),
+  #         tok(tkCloseBrace)
+  #       )
+  #     })

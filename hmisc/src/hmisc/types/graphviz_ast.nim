@@ -283,13 +283,20 @@ type
     color*: Color
 
 type
+  GraphNodeRank* = enum
+    gnrDefault = ""
+    gnrSame = "same"
+
   Graph* = object
     styleNode*: Node
     styleEdge*: Edge
 
+    noderank*: GraphNodeRank
+
     isUndirected*: bool
     name*: string
     isCluster*: bool
+    isWrapper*: bool
     label*: string
     labelOnBottom*: bool
     fontsize*: int
@@ -310,6 +317,11 @@ func addNode*(graph: var Graph, node: Node): void =
 
 func makeEdge*(idFrom, idTo: NodeId): Edge =
   Edge(src: idFrom, to: @[idTo])
+
+func addSubgraph*(graph: var Graph, subg: Graph): void =
+  graph.subgraphs.add subg
+
+
 
 func makeNode*(
   id: NodeId,
@@ -418,6 +430,7 @@ func toTree(graph: Graph, level: int = 0): DotTree =
 
   if graph.isCluster: result.section.add &"cluster_{graph.name}"
   if graph.splines != spsDefault: attrs["splines"] = $graph.splines
+  if graph.noderank != gnrDefault: attrs["rank"] = $graph.noderank
 
   result.elements &= toTree(attrs)
   block:

@@ -313,8 +313,13 @@ func tokKindStr*[TKind](tkind: TKind, prefStr: string): string =
     result = result[prefStr.len .. ^1]
 
 
-func toDotGraphPretty*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
+func toDotGraphPretty*[Tok](
+  tree: ParseTree[Tok],
+  kindPref: string,
+  bottomTokens: bool): Graph =
   result.styleNode.shape = nsaRect
+  var tokNodes: seq[Node]
+
   tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
     let itaddr = cast[int](addr it[])
     if it.kind == pkTerm:
@@ -322,13 +327,18 @@ func toDotGraphPretty*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
         itaddr,
         itaddr + 1))
 
-      result.addNode(makeNode(
+      let tokNode = makeNode(
         itaddr + 1,
         ($it.tok).quote(),
         nsaCircle,
         color = colLightGrey,
         style = nstFilled
-      ))
+      )
+
+      if bottomTokens:
+        tokNodes.add tokNode
+      else:
+        result.addNode tokNode
 
     result.addNode(makeNode(
       itaddr,
@@ -355,6 +365,13 @@ func toDotGraphPretty*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
         itaddr,
         toNodeId(addr tr[])
       ))
+
+  if bottomTokens:
+    result.addSubgraph(Graph(
+      nodes: tokNodes,
+      isWrapper: true,
+      noderank: gnrSame
+    ))
 
 func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
   result.styleNode.shape = nsaRect
@@ -383,11 +400,21 @@ func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
       ))
 
 func toDotGraph*[Tok](
-  tree: ParseTree[Tok], kindPref: string = "", preciseRepr: bool = false): Graph =
+  tree: ParseTree[Tok],
+  kindPref: string = "",
+  preciseRepr: bool = false,
+  bottomTokens: bool = false): Graph =
+  ##[
+
+## Parameters
+
+:bottomTokens: Put all token nodes at bottom. Works only with pretty graph
+
+  ]##
   if preciseRepr:
     toDotGraphPrecise(tree, kindPref)
   else:
-    toDotGraphPretty(tree, kindPref)
+    toDotGraphPretty(tree, kindPref, bottomTokens)
 
 proc toPng*[Tok](
   tree: ParseTree[Tok],
