@@ -66,7 +66,7 @@ type
       of false:
         name*: string
 
-  FlatBnfKind = enum
+  FlatBnfKind* = enum
     fbkEmpty
     fbkNterm
     fbkTerm
@@ -100,8 +100,13 @@ type
     sym*: BnfNterm
     patt*: BnfPatt[TKind]
 
+  RuleId* = tuple[id, alt: int]
+
   BnfGrammar*[Tk] = object
-    rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
+    rules*: seq[tuple[
+      head: BnfNterm,
+      patts: seq[BnfPatt[Tk]]
+    ]]
 
 func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
   BnfNterm(generated: true, idx: idx, parent: parent)
@@ -111,6 +116,10 @@ func makeBnfNterm(name: string): BnfNTerm =
 
 func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
   BnfPatt[Tk](flat: true, elems: elems)
+
+func first*[Tk](patt: BnfPatt[Tk]): FlatBnf[Tk] =
+  assert patt.flat
+  return patt.elems[0]
 
 func hash*(nterm: BnfNTerm): Hash =
   var h: Hash = 0
@@ -135,11 +144,18 @@ func `==`*(lhs, rhs: BnfNterm): bool =
   )
 
 func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
+  var tmp: Table[BnfNterm, seq[BnfPatt[Tk]]]
   for rule in rules:
-    if rule.sym notin result.rules:
-      result.rules[rule.sym] = @[rule.patt]
+    if rule.sym notin tmp:
+      tmp[rule.sym] = @[rule.patt]
     else:
-      result.rules[rule.sym].add rule.patt
+      tmp[rule.sym].add rule.patt
+
+  for head, patts in tmp:
+    result.rules.add (
+      head: head,
+      patts: patts
+    )
 
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
@@ -491,7 +507,10 @@ func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
 
 
 
-func toBNF*[Tk](rule: Rule[Tk], noAltFlatten: bool = false): seq[BnfRule[Tk]] =
+func toBNF*[Tk](
+  rule: Rule[Tk],
+  noAltFlatten: bool = false,
+  renumerate: bool = true): seq[BnfRule[Tk]] =
   let (top, newrules) = rule.patts.toBnf(rule.nterm)
   if noAltFlatten:
     block:
@@ -511,6 +530,13 @@ func toBNF*[Tk](rule: Rule[Tk], noAltFlatten: bool = false): seq[BnfRule[Tk]] =
   else:
     result.add rule(makeBnfNterm(rule.nterm), top)
     result &= newrules
+
+  for idx, rule in result:
+    if rule.sym.generated:
+      var tmp = rule
+      tmp.sym.idx = @[idx]
+      result[idx] = tmp
+
 
 #=========================  FIRST set computat  ==========================#
 
@@ -643,16 +669,21 @@ func exprRepr*[Tk](rule: Rule[Tk]): string =
   return fmt("{rule.nterm} ::= {rule.patts.exprRepr()}")
 
 func exprRepr*[Tk](grammar: BnfGrammar[Tk], nojoin: bool = false): string =
+  var buf: seq[string]
   if nojoin:
-    grammar.rules.mapPairs(
-      rhs.mapIt(fmt("{lhs.exprRepr()} ::= {it.exprRepr()}")).joinl()
-    ).joinl()
+    for ruleId, rule in grammar.rules:
+      for idx, alt in rule.patts:
+        let head = rule.head.exprRepr()
+        buf.add fmt("{ruleId}.{idx} {head} ::= {alt.exprRepr()}")
+
   else:
-    grammar.rules.mapPairs(
-      block:
-        let rule = rhs.mapIt(it.exprRepr()).join(" | ")
-        fmt("{lhs.exprRepr()} ::= {rule}")
-    ).join("\n")
+    for ruleId, rule in grammar.rules:
+      let head = rule.head.exprRepr()
+      buf.add fmt("{ruleId}     {head} ::= ")
+      for idx, alt in rule.patts:
+        buf.add fmt(".{idx}    | {alt.exprRepr()}")
+
+  return buf.join("\n")
 
 #==============================  graphviz  ===============================#
 

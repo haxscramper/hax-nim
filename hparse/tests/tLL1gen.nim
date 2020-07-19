@@ -212,9 +212,13 @@ suite "LL(1) parser tree actions":
 
     tree.topng("/tmp/image.png", "tk", bottomTokens = true)
 
+import hparse/ll1_table
+
 suite "Predictive LL(1)":
   const nt = nterm[TokenKind]
   test "Simple grammar":
     let rule = rule("X", orP(tok(tkOpBrace), tok(tkComma)))
     let gramm = makeGrammar(rule.toBNF(noAltFlatten = true))
-    echo gramm.exprRepr()
+    echo gramm.exprRepr(false)
+
+    discard makeLL1TableParser(gramm)
