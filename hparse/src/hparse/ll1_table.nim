@@ -1,60 +1,85 @@
 import grammars
 import hmisc/algo/hseq_mapping
-import sugar, sequtils
+import sugar, sequtils, hashes
 
 type
-  FirstTable*[Tk] = Table[BnfNterm, set[Tk]]
-  FollowTable*[Tk] = Table[BnfNterm, set[Tk]]
+  FirstTable*[Tk] = Table[RuleId, set[Tk]]
+  FollowTable*[Tk] = Table[RuleId, set[Tk]]
   LL1Table*[Tk] = object
     f1: int
 
+iterator iterrules*[Tk](grammar: BnfGrammar[Tk]): tuple[
+  id: RuleId, alt: BnfPatt[Tk]] =
+  for head, patts in grammar.rules:
+    for altId, alt in patts:
+      yield (id: ruleId(head, altId), alt: alt)
 
-proc necessaryTerms[TKind](patts: seq[BnfPatt[TKind]]): seq[BnfNterm] =
+proc necessaryTerms*[Tk](
+  id: RuleId, grammar: BnfGrammar[Tk]): seq[BnfNTerm] =
   ## Generate list of nonterminals that might appear at rhs of production
-  for patt in patts:
-    assert patt.flat
-    if patt.elems[0].kind == fbkNterm:
-      result.add patt.elems[0].nterm
+  let patt: BnfPatt[Tk] = grammar.rules[id.head][id.alt]
+  if patt.elems[0].kind == fbkNterm:
+    result.add patt.elems[0].nterm
+
 
 func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
-  let sortedRules: seq[(BnfNTerm, seq[BnfPatt[Tk]])] = grammar.rules.mapPairs(
-    (head: lhs, patts: rhs)).topoSort(
-    deps = ((r) => (r.patts.necessaryTerms().mapIt(it.hash))),
-    idgen = ((r) => hash(r.head))
+  let rules: seq[(RuleId, BnfPatt[Tk])] = collect(newSeq):
+    for id, alt in grammar.iterrules():
+      (id, alt)
+
+
+  let sortedRules: seq[(RuleId, BnfPatt[Tk])] = rules.topoSort(
+    deps = (
+      proc(r: (RuleId, BnfPatt[Tk])): seq[Hash] =
+        necessaryTerms[Tk](r[0], grammar).mapIt(it.hash)
+    ),
+    idgen = (
+      proc(r: (RuleId, BnfPatt[Tk])): Hash = r[0].hash
+    )
   )
 
-  for (rule, patts) in sortedRules:
-    if rule notin result:
-      result[rule] = {}
 
-    for alt in patts:
-      case alt.first.kind:
-        of fbkEmpty:
-          discard
-        of fbkTerm:
-          result[rule].incl alt.first.tok
-        of fbkNTerm:
-          result[rule].incl result[alt.first.nterm]
+  for (id, patt) in sortedRules:
+    if id notin result:
+      result[id] = {}
 
-func getFirst*[Tk](elem: FlatBnf[Tk], table: FirstTable[Tk]): set[Tk] =
+    case patt.first.kind:
+      of fbkEmpty:
+        discard
+      of fbkTerm:
+        result[id].incl patt.first.tok
+      of fbkNTerm:
+        result[id].incl result[id]
+
+func getFirst*[Tk](
+  elem: FlatBnf[Tk],
+  table: FirstTable[Tk], grammar: BnfGrammar[Tk]): set[Tk] =
   case elem.kind:
     of fbkNTerm:
-      table[elem.nterm]
+      for altId, alt in grammar.rules[elem.nterm]:
+        case alt.elems[0].kind:
+          of fbkEmpty:
+            discard
+          of fbkTerm:
+            result.incl alt.elems[0].tok
+          of fbkNterm:
+            result.incl table[ruleId(elem.nterm, altId)]
     of fbkTerm:
-      {elem.tok}
+      return {elem.tok}
     of fbkEmpty:
-      {}
+      return {}
 
 
 func getFollow*[Tk](
   grammar: BnfGrammar[Tk], first: FirstTable[Tk]): FollowTable[Tk] =
 
   for head, patts in grammar.rules:
-    for alt in patts:
+    for altIdx, alt in patts:
       let alt: seq[FlatBnf[Tk]] = alt.elems
       for i in 0 ..< alt.len - 1:
         if alt[i].kind == fbkNterm:
-          result[alt[i].nterm].incl getFirst(alt[i + 1], first)
+          result[ruleId(alt[i].nterm, altIdx)].incl getFirst(
+            alt[i + 1], first, grammar)
 
       if alt.last.kind == fbkNterm:
         discard

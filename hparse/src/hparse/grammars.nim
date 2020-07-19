@@ -100,10 +100,15 @@ type
     nterm*: BnfNterm
     patt*: BnfPatt[TKind]
 
-  RuleId* = tuple[head: BnfNterm, alt: int]
+  RuleId* = object
+   head*: BnfNterm
+   alt*: int
 
   BnfGrammar*[Tk] = object
     rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
+
+func ruleId*(nterm: BnfNterm, alt: int): RuleId =
+  RuleId(head: nterm, alt: alt)
 
 func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
   BnfNterm(generated: true, idx: idx, parent: parent)
@@ -128,6 +133,11 @@ func hash*(nterm: BnfNTerm): Hash =
     of false:
       h = h !& hash(nterm.name)
 
+  result = !$h
+
+func hash*(id: RuleId): Hash =
+  var h: Hash = 0
+  h = h !& hash(id.head) !& hash(id.alt)
   result = !$h
 
 func `==`*(lhs, rhs: BnfNterm): bool =
@@ -676,6 +686,9 @@ func exprRepr*[Tk](grammar: BnfGrammar[Tk], nojoin: bool = false): string =
         buf.add fmt(".{idx} | {alt.exprRepr()}")
 
   return buf.join("\n")
+
+func exprRepr*(id: RuleId): string =
+  fmt("{id.head.exprRepr()}.{id.alt}")
 
 #==============================  graphviz  ===============================#
 
