@@ -31,4 +31,5 @@ suite "EBNF -> BNF convesion":
 
   test "wee":
     conv(andP(nt("EEE"), tok(tkComma)))
+    conv(orP(tok(tkOpBrace), tok(tkComma)))
     conv(zeroP(nt("EEE")))

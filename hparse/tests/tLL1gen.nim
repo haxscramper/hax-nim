@@ -215,6 +215,6 @@ suite "LL(1) parser tree actions":
 suite "Predictive LL(1)":
   const nt = nterm[TokenKind]
   test "Simple grammar":
-    let rule = rule("X", andP(nt("EEE"), tok(tkComma)))
-    let gramm = makeGrammar(rule.toBNF())
+    let rule = rule("X", orP(tok(tkOpBrace), tok(tkComma)))
+    let gramm = makeGrammar(rule.toBNF(noAltFlatten = true))
     echo gramm.exprRepr()

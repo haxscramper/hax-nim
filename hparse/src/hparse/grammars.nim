@@ -494,7 +494,11 @@ func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
 func toBNF*[Tk](rule: Rule[Tk], noAltFlatten: bool = false): seq[BnfRule[Tk]] =
   let (top, newrules) = rule.patts.toBnf(rule.nterm)
   if noAltFlatten:
-    result.add rule(makeBnfNterm(rule.nterm), top)
+    block:
+      let topflat = top.flatten()
+      for elems in topflat:
+        result.add rule(makeBnfNterm(rule.nterm), patt(elems))
+
     for rule in newrules:
       let newpatts = rule.patt.flatten()
       for idx, elems in newpatts:
@@ -638,12 +642,17 @@ func exprRepr*[TKind](rule: BnfRule[TKind]): string =
 func exprRepr*[Tk](rule: Rule[Tk]): string =
   return fmt("{rule.nterm} ::= {rule.patts.exprRepr()}")
 
-func exprRepr*[Tk](grammar: BnfGrammar[Tk]): string =
-  grammar.rules.mapPairs(
-    block:
-      let rule = rhs.mapIt(it.exprRepr()).join(" | ")
-      fmt("{lhs.exprRepr()} ::= {rule}")
-  ).join("\n")
+func exprRepr*[Tk](grammar: BnfGrammar[Tk], nojoin: bool = false): string =
+  if nojoin:
+    grammar.rules.mapPairs(
+      rhs.mapIt(fmt("{lhs.exprRepr()} ::= {it.exprRepr()}")).joinl()
+    ).joinl()
+  else:
+    grammar.rules.mapPairs(
+      block:
+        let rule = rhs.mapIt(it.exprRepr()).join(" | ")
+        fmt("{lhs.exprRepr()} ::= {rule}")
+    ).join("\n")
 
 #==============================  graphviz  ===============================#
 
