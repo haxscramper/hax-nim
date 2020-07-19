@@ -1,7 +1,7 @@
 import tables, sugar, sequtils, strformat, options, colors
 export tables
 import hmisc/helpers
-import hmisc/types/graphviz_ast
+import hmisc/types/[graphviz_ast, hvariant]
 import hmisc/algo/[halgorithm, htree_mapping]
 
 
@@ -66,17 +66,35 @@ type
       of false:
         name*: string
 
+  FlatBnfKind = enum
+    fbkEmpty
+    fbkNterm
+    fbkTerm
+
+  FlatBnf*[Tk] = object
+    case kind: FlatBnfKind
+      of fbkEmpty: nil
+      of fbkNterm:
+        nterm*: BnfNterm
+      of fbkTerm:
+        tok*: Tk
+
+
   BnfPatt*[TKind] = ref object # REVIEW is it necessary to use `ref`?
     action*: TreeAct
-    case kind*: BnfPattKind
-      of bnfEmpty:
-        nil
-      of bnfNterm:
-        sym*: BnfNTerm ## Nonterminal to parse
-      of bnfTerm:
-        tok*: TKind ## Single token to match literally
-      of bnfAlternative, bnfConcat:
-        patts*: seq[BnfPatt[TKind]]
+    case flat*: bool
+      of false:
+        case kind*: BnfPattKind
+          of bnfEmpty:
+            nil
+          of bnfNterm:
+            sym*: BnfNTerm ## Nonterminal to parse
+          of bnfTerm:
+            tok*: TKind ## Single token to match literally
+          of bnfAlternative, bnfConcat:
+            patts*: seq[BnfPatt[TKind]]
+      of true:
+        elems*: seq[FlatBnf[Tkind]]
 
   BnfRule*[TKind] = object
     sym*: BnfNterm
@@ -137,6 +155,12 @@ type
         nil
 
 #====================  generic pattern construction  =====================#
+
+func rule*[Tk](name: string, patt: Patt[Tk]): Rule[Tk] =
+  Rule[Tk](nterm: name, patts: patt)
+
+func rule*[Tk](sym: BnfNterm, patt: BnfPatt[Tk]): BnfRule[Tk] =
+  BnfRule[Tk](sym: sym, patt: patt)
 
 func zeroP*[TKind](patt: Patt[TKind]): Patt[TKind] =
   Patt[TKind](kind: pkZeroOrMore, opt: patt)
@@ -324,15 +348,17 @@ func isNested*[Tk](patt: Patt[Tk]): bool =
 
 func toBNF*[Tk](
   patt: Patt[Tk],
-  parent: string, idx: seq[int] = @[]): tuple[
+  parent: string,
+  idx: seq[int] = @[]): tuple[
     toprule: BnfPatt[Tk],
     newrules: seq[BnfRule[Tk]]] =
 
   case patt.kind:
     of pkTerm:
-      result.toprule = BnfPatt[Tk](kind: bnfTerm, tok: patt.tok)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfTerm, tok: patt.tok)
     of pkNterm:
       result.toprule = BnfPatt[Tk](
+        flat: false,
         kind: bnfNTerm,
         sym: makeBnfNterm(patt.sym)
       )
@@ -345,57 +371,105 @@ func toBNF*[Tk](
         result.newrules &= bnfRules
 
       if patt.kind == pkAlternative:
-        result.toprule = BnfPatt[Tk](kind: bnfAlternative, patts: newsubp)
+        result.toprule = BnfPatt[Tk](flat: false, kind: bnfAlternative, patts: newsubp)
       else:
-        result.toprule = BnfPatt[Tk](kind: bnfConcat, patts: newsubp)
+        result.toprule = BnfPatt[Tk](flat: false, kind: bnfConcat, patts: newsubp)
     of pkZeroOrMore:
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](kind: bnfNterm, sym: newsym)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
         BnfRule[Tk](
           sym: newsym,
           patt: BnfPatt[Tk](
+            flat: false,
             kind: bnfAlternative,
             patts: @[
-              BnfPatt[Tk](kind: bnfEmpty),
-              BnfPatt[Tk](kind: bnfConcat, patts: @[
-                BnfPatt[Tk](kind: bnfNterm, sym: newsym),
+              BnfPatt[Tk](flat: false, kind: bnfEmpty),
+              BnfPatt[Tk](flat: false, kind: bnfConcat, patts: @[
+                BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym),
                 body])]))
       ] & subnewrules
     of pkOneOrMore:
       # NOTE I'm not 100% sure if this is correct way to convert
       # one-or-more to bnf
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](kind: bnfNterm, sym: newsym)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
         BnfRule[Tk](
           sym: newsym,
           patt: BnfPatt[Tk](
+            flat: false,
             kind: bnfConcat,
             patts: @[
               body,
-              BnfPatt[Tk](kind: bnfAlternative, patts: @[
-                BnfPatt[Tk](kind: bnfEmpty),
-                BnfPatt[Tk](kind: bnfNterm, sym: newsym)
+              BnfPatt[Tk](flat: false, kind: bnfAlternative, patts: @[
+                BnfPatt[Tk](flat: false, kind: bnfEmpty),
+                BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
         ])]))
       ] & subnewrules
     of pkOptional:
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](kind: bnfNterm, sym: newsym)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
         BnfRule[Tk](
           sym: newsym,
           patt: BnfPatt[Tk](
+            flat: false,
             kind: bnfAlternative,
-            patts: @[BnfPatt[Tk](kind: bnfEmpty), body]))
+            patts: @[BnfPatt[Tk](flat: false, kind: bnfEmpty), body]))
       ] & subnewrules
     # else:
     #   new(result.toprule)
 
+func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
+ if patt.flat:
+   return @[ patt.elems ]
+ else:
+   case patt.kind:
+     of bnfEmpty:
+       return @[ @[ FlatBnf[Tk](kind: fbkEmpty) ] ]
+     of bnfTerm:
+       return @[ @[ FlatBnf[Tk](kind: fbkTerm, tok: patt.tok) ] ]
+     of bnfNterm:
+       return @[ @[ FlatBnf[Tk](kind: fbkNterm, nterm: patt.sym) ] ]
+     of bnfConcat:
+       for idx, sub in patt.patts:
+         var newpatts: seq[seq[FlatBnf[Tk]]]
+         for patt in sub.flatten():
+           if result.len == 0:
+             newpatts.add patt
+           else:
+             for val in result:
+               newpatts.add val & patt
 
+         result = newpatts
+     of bnfAlternative:
+       for alt in patt.patts:
+         result &= alt.flatten()
+
+
+
+
+
+
+func toBNF*[Tk](rule: Rule[Tk], noAltFlatten: bool = false): seq[BnfRule[Tk]] =
+  let (top, newrules) = rule.patts.toBnf(rule.nterm)
+  if noAltFlatten:
+    let toprule = rule(makeBnfNterm(rule.nterm, @[]), top)
+    for rule in @[ toprule ] & newrules:
+      let newpatts = rule.patt.flatten()
+      for idx, patt in newpatts:
+        let nterm = makeBnfNterm(rule.sym.parent, rule.sym.idx & @[idx])
+        result.add BnfRule[Tk](
+          sym: nterm,
+          patt: BnfPatt[Tk](flat: true, elems: patt)
+        )
+  else:
+    result.add rule(makeBnfNterm(rule.nterm), top)
+    result &= newrules
 
 #=========================  FIRST set computat  ==========================#
 
@@ -497,23 +571,35 @@ func exprRepr*(sym: BnfNTerm): string =
   else:
     sym.name
 
+func exprRepr*[Tk](fbnf: FlatBnf[Tk]): string =
+  case fbnf.kind:
+    of fbkNterm: fmt("<{fbnf.nterm.exprRepr()}>")
+    of fbkTerm: fmt("'{fbnf.tok}'")
+    of fbkEmpty: "ε"
+
 func exprRepr*[TKind](bnf: BnfPatt[TKind]): string =
-  case bnf.kind:
-    of bnfEmpty:
-      "ε"
-    of bnfTerm:
-      fmt("'{bnf.tok}'")
-    of bnfNTerm:
-      fmt("<{bnf.sym.exprRepr()}>")
-    of bnfAlternative, bnfConcat:
-      bnf.patts.mapIt(it.exprRepr).join(
-        (bnf.kind == bnfConcat).tern(" & ", " | ")
-      ).wrap("{  }")
+  case bnf.flat:
+    of true:
+      bnf.elems.map(exprRepr).join(" & ")
+    of false:
+      case bnf.kind:
+        of bnfEmpty:
+          "ε"
+        of bnfTerm:
+          fmt("'{bnf.tok}'")
+        of bnfNTerm:
+          fmt("<{bnf.sym.exprRepr()}>")
+        of bnfAlternative, bnfConcat:
+          bnf.patts.mapIt(it.exprRepr).join(
+            (bnf.kind == bnfConcat).tern(" & ", " | ")
+          ).wrap("{  }")
 
 
 func exprRepr*[TKind](rule: BnfRule[TKind]): string =
   return fmt("{rule.sym.exprRepr()} ::= {rule.patt.exprRepr()}")
 
+func exprRepr*[Tk](rule: Rule[Tk]): string =
+  return fmt("{rule.nterm} ::= {rule.patts.exprRepr()}")
 
 #==============================  graphviz  ===============================#
 

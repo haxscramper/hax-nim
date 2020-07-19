@@ -19,6 +19,7 @@ func getTypeName*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3]): string =
     of 3: $typeof(T3)
 
 template get*[T0, T1, T2, T3](v: Var4[T0, T1, T2, T3], t: typed): auto =
+  mixin getTypeName
   const idx = when t is T0: 0
               elif t is T1: 1
               elif t is T2: 2
@@ -59,6 +60,15 @@ func setv*[T0, T1, T2, T3](
 var tmp: Var2[int, float]
 tmp.setv(1.2)
 
+
+template vmapIt*[T0, T1](v: Var2[T0, T1], t0Op, t1op: untyped): untyped =
+  mixin get
+  if v.idx == 0:
+    let it {.inject.}: T0 = v.get(T0)
+    t0op
+  else:
+    let it {.inject.}: T1 = v.get(T1)
+    t1op
 
 func add*[T0, T1, T2, T3](
   v: var seq[Var4[T0, T1, T2, T3]], val: T0 | T1 | T2 | T3) =
