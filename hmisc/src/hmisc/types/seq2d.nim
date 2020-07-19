@@ -65,6 +65,8 @@ func fillToSize*[T](grid: var Seq2D[T], size: ArrSize, val: T): void =
       let diff = expected - rowlen
       grid.elems[row] &= newSeqWith(diff, val)
 
+func fillToSize*[T](grid: var Seq2D[T], rows, cols: int, default: T): void =
+  grid.fillToSize(makeArrSize(w = cols, h = rows), default)
 
 func len*[T](s: Seq2D[T]): int =
   s.elems.len

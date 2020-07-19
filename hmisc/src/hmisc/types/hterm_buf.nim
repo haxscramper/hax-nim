@@ -42,6 +42,9 @@ func toTermBufGrid*(strs: seq[seq[string]]): Seq2D[TermBuf] =
   strs.makeSeq2D("").mapIt2D(it.toTermBuf())
   # TermBuf(buf: strs.mapIt(it.toRunes().concat()).makeSeq2D(whitespaceRune))
 
+func toTermBufGrid*(strs: Seq2D[string]): Seq2D[TermBuf] =
+  strs.mapIt2D(it.toTermBuf())
+
 func toTermBuf*(bufs: Seq2D[TermBuf]): TermBuf
 
 func toTermBuf*(bufs: seq[seq[TermBuf]]): TermBuf =

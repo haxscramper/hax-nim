@@ -1,12 +1,13 @@
 import grammars
 import hmisc/algo/hseq_mapping
-import sugar, sequtils, hashes
+import hmisc/types/[seq2d, hdrawing, hterm_buf]
+import sugar, sequtils, hashes, tables
 
 type
   FirstTable*[Tk] = Table[RuleId, set[Tk]]
   FollowTable*[Tk] = Table[RuleId, set[Tk]]
-  LL1Table*[Tk] = object
-    f1: int
+  LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
+    # [Current term + Current token] -> Rule to use
 
 iterator iterrules*[Tk](grammar: BnfGrammar[Tk]): tuple[
   id: RuleId, alt: BnfPatt[Tk]] =
@@ -86,6 +87,31 @@ func getFollow*[Tk](
         #[ IMPLEMENT get final token ]#
         # result[alt.last.nterm].incl getFinalTok[Tk]()
 
+func toGrid[A, B, C](table: Table[A, Table[B, C]]): Seq2D[string] =
+  let aIdx: Table[string, int] = collect(initTable(2)):
+    for rowIdx, key in toSeq(table.keys).mapIt($it).sorted():
+      {key : rowIdx + 1}
+
+  var bIdx: Table[string, int] = block:
+    let bKeys: seq[string] = collect(newSeq):
+      for _, subtable in table:
+        for bKey, _ in subtable:
+          $bKey
+
+    collect(initTable):
+      for colIdx, key in bKeys.deduplicate():
+        {key : colIdx + 1}
+
+  result.fillToSize(rows = aIdx.len + 1, cols = bIdx.len + 1, default = "")
+  for aKey, subtable in table:
+    for bKey, cVal in subtable:
+      result[aIdx[$aKey], bIdx[$bKey]] = $cVal
+
+  for key, rowIdx in aIdx:
+    result[rowIdx, 0] = $key
+
+  for key, colIdx in bIdx:
+    result[0, colIdx] = $key
 
 func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   let firstTable = getFirst(grammar)
@@ -96,3 +122,18 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
 
   for head, follow in followTable:
     debugecho head.exprRepr(), ": ", follow
+
+  for id, alt in grammar.iterrules():
+    for first in firstTable[id]:
+      if id.head notin result:
+        let newt = toTable({first : id})
+        result[id.head] = newt
+      else:
+        result[id.head][first] = id
+
+
+  debugecho newTermGrid(
+    (0,0),
+    toGrid(result).toTermBufGrid(),
+    makeThinLineGridBorders()
+  ).toTermBuf().toString()

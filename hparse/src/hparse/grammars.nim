@@ -690,6 +690,9 @@ func exprRepr*[Tk](grammar: BnfGrammar[Tk], nojoin: bool = false): string =
 func exprRepr*(id: RuleId): string =
   fmt("{id.head.exprRepr()}.{id.alt}")
 
+func `$`*(id: RuleId): string = id.exprRepr()
+func `$`*(nterm: BnfNterm): string = nterm.exprRepr()
+
 #==============================  graphviz  ===============================#
 
 func toDotGraphPretty*[Tok](
