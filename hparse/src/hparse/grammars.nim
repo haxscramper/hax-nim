@@ -35,7 +35,7 @@ type
     action*: TreeAct
     case kind*: PattKind
       of pkNterm:
-        sym*: NTermSym ## Nonterminal to parse
+        nterm*: NTermSym ## Nonterminal to parse
       of pkTerm:
         tok*: TKind ## Single token to match literally
       of pkAlternative, pkConcat:
@@ -72,7 +72,7 @@ type
     fbkTerm
 
   FlatBnf*[Tk] = object
-    case kind: FlatBnfKind
+    case kind*: FlatBnfKind
       of fbkEmpty: nil
       of fbkNterm:
         nterm*: BnfNterm
@@ -88,7 +88,7 @@ type
           of bnfEmpty:
             nil
           of bnfNterm:
-            sym*: BnfNTerm ## Nonterminal to parse
+            nterm*: BnfNTerm ## Nonterminal to parse
           of bnfTerm:
             tok*: TKind ## Single token to match literally
           of bnfAlternative, bnfConcat:
@@ -97,16 +97,13 @@ type
         elems*: seq[FlatBnf[Tkind]]
 
   BnfRule*[TKind] = object
-    sym*: BnfNterm
+    nterm*: BnfNterm
     patt*: BnfPatt[TKind]
 
   RuleId* = tuple[id, alt: int]
 
   BnfGrammar*[Tk] = object
-    rules*: seq[tuple[
-      head: BnfNterm,
-      patts: seq[BnfPatt[Tk]]
-    ]]
+    rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
 
 func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
   BnfNterm(generated: true, idx: idx, parent: parent)
@@ -144,18 +141,12 @@ func `==`*(lhs, rhs: BnfNterm): bool =
   )
 
 func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
-  var tmp: Table[BnfNterm, seq[BnfPatt[Tk]]]
   for rule in rules:
-    if rule.sym notin tmp:
-      tmp[rule.sym] = @[rule.patt]
+    if rule.nterm notin result.rules:
+      result.rules[rule.nterm] = @[rule.patt]
     else:
-      tmp[rule.sym].add rule.patt
+      result.rules[rule.nterm].add rule.patt
 
-  for head, patts in tmp:
-    result.rules.add (
-      head: head,
-      patts: patts
-    )
 
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
@@ -172,7 +163,7 @@ type
     first: FirstSet[TKind]
     case kind*: PattKind
       of pkNterm:
-        sym*: NTermSym ## Nonterminal to parse
+        nterm*: NTermSym ## Nonterminal to parse
       of pkTerm:
         tok*: TKind ## Single token to match literally
       of pkAlternative, pkConcat:
@@ -211,8 +202,8 @@ type
 func rule*[Tk](name: string, patt: Patt[Tk]): Rule[Tk] =
   Rule[Tk](nterm: name, patts: patt)
 
-func rule*[Tk](sym: BnfNterm, patt: BnfPatt[Tk]): BnfRule[Tk] =
-  BnfRule[Tk](sym: sym, patt: patt)
+func rule*[Tk](nterm: BnfNterm, patt: BnfPatt[Tk]): BnfRule[Tk] =
+  BnfRule[Tk](nterm: nterm, patt: patt)
 
 func zeroP*[TKind](patt: Patt[TKind]): Patt[TKind] =
   Patt[TKind](kind: pkZeroOrMore, opt: patt)
@@ -232,8 +223,8 @@ func orP*[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
 func tok*[TKind](tok: TKind): Patt[TKind] =
   Patt[TKind](kind: pkTerm, tok: tok)
 
-func nterm*[TKind](sym: string): Patt[TKind] =
-  Patt[TKind](kind: pkNTerm, sym: sym)
+func nterm*[TKind](nterm: string): Patt[TKind] =
+  Patt[TKind](kind: pkNTerm, nterm: nterm)
 
 
 
@@ -288,7 +279,7 @@ import strutils
 proc `$`*[TKind](patt: CompPatt[TKind]): string =
   case patt.kind:
     of pkNterm:
-       &"<{patt.sym}>"
+       &"<{patt.nterm}>"
     of pkTerm:
        &"'{patt.tok}'"
     of pkAlternative:
@@ -412,7 +403,7 @@ func toBNF*[Tk](
       result.toprule = BnfPatt[Tk](
         flat: false,
         kind: bnfNTerm,
-        sym: makeBnfNterm(patt.sym)
+        nterm: makeBnfNterm(patt.nterm)
       )
     of pkAlternative, pkConcat:
       var newsubp: seq[BnfPatt[Tk]]
@@ -428,29 +419,29 @@ func toBNF*[Tk](
         result.toprule = BnfPatt[Tk](flat: false, kind: bnfConcat, patts: newsubp)
     of pkZeroOrMore:
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
         BnfRule[Tk](
-          sym: newsym,
+          nterm: newsym,
           patt: BnfPatt[Tk](
             flat: false,
             kind: bnfAlternative,
             patts: @[
               BnfPatt[Tk](flat: false, kind: bnfEmpty),
               BnfPatt[Tk](flat: false, kind: bnfConcat, patts: @[
-                BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym),
+                BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym),
                 body])]))
       ] & subnewrules
     of pkOneOrMore:
       # NOTE I'm not 100% sure if this is correct way to convert
       # one-or-more to bnf
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
         BnfRule[Tk](
-          sym: newsym,
+          nterm: newsym,
           patt: BnfPatt[Tk](
             flat: false,
             kind: bnfConcat,
@@ -458,16 +449,16 @@ func toBNF*[Tk](
               body,
               BnfPatt[Tk](flat: false, kind: bnfAlternative, patts: @[
                 BnfPatt[Tk](flat: false, kind: bnfEmpty),
-                BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
+                BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
         ])]))
       ] & subnewrules
     of pkOptional:
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, sym: newsym)
+      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
         BnfRule[Tk](
-          sym: newsym,
+          nterm: newsym,
           patt: BnfPatt[Tk](
             flat: false,
             kind: bnfAlternative,
@@ -486,7 +477,7 @@ func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
      of bnfTerm:
        return @[ @[ FlatBnf[Tk](kind: fbkTerm, tok: patt.tok) ] ]
      of bnfNterm:
-       return @[ @[ FlatBnf[Tk](kind: fbkNterm, nterm: patt.sym) ] ]
+       return @[ @[ FlatBnf[Tk](kind: fbkNterm, nterm: patt.nterm) ] ]
      of bnfConcat:
        for idx, sub in patt.patts:
          var newpatts: seq[seq[FlatBnf[Tk]]]
@@ -521,7 +512,7 @@ func toBNF*[Tk](
     for rule in newrules:
       let newpatts = rule.patt.flatten()
       for idx, elems in newpatts:
-        let nterm = makeBnfNterm(rule.sym.parent, rule.sym.idx)
+        let nterm = makeBnfNterm(rule.nterm.parent, rule.nterm.idx)
         if elems.allOfIt(it.kind == fbkEmpty):
           result.add rule(nterm, patt(elems))
         else:
@@ -531,11 +522,12 @@ func toBNF*[Tk](
     result.add rule(makeBnfNterm(rule.nterm), top)
     result &= newrules
 
-  for idx, rule in result:
-    if rule.sym.generated:
-      var tmp = rule
-      tmp.sym.idx = @[idx]
-      result[idx] = tmp
+  if renumerate: #[ IMPLEMENT replace nonterminal names inside rules too ]#
+    for idx, rule in result:
+      if rule.nterm.generated:
+        var tmp = rule
+        tmp.nterm.idx = @[idx]
+        result[idx] = tmp
 
 
 #=========================  FIRST set computat  ==========================#
@@ -554,7 +546,7 @@ proc computeFirst*[TKind](
     of pkOptional, pkZeroOrMore, pkOneOrMore:
       result.incl computeFirst(patt.opt, other)
     of pkNterm:
-      result.incl other.first[patt.sym]
+      result.incl other.first[patt.nterm]
 
 proc computePatt*[TKind](
   patt: Patt[TKind], sets: NTermSets[TKind]): CompPatt[TKind] =
@@ -579,14 +571,14 @@ proc computePatt*[TKind](
       result.first.incl computeFirst(patt.opt, sets)
     of pkNterm:
       # FIRST sets for nonterminals are stored in `sets`
-      result = CompPatt[TKind](kind: pkNterm, sym: patt.sym)
+      result = CompPatt[TKind](kind: pkNterm, nterm: patt.nterm)
 
   result.action = patt.action
 
 func first*[TKind](
   patt: CompPatt[TKind], sets: NTermSets[TKind]): FirstSet[TKind] =
   case patt.kind:
-    of pkNTerm: sets.first[patt.sym]
+    of pkNTerm: sets.first[patt.nterm]
     else: patt.first
 
 #*************************************************************************#
@@ -616,7 +608,7 @@ func exprRepr*[TKind](patt: Patt[TKind]): string =
     of pkTerm:
       fmt("'{patt.tok}'")
     of pkNTerm:
-      fmt("<{patt.sym}>")
+      fmt("<{patt.nterm}>")
     of pkAlternative, pkConcat:
       patt.patts.mapIt(it.exprRepr).join(
         (patt.kind == pkConcat).tern(" & ", " | ")
@@ -632,11 +624,11 @@ func exprRepr*[TKind](patt: Patt[TKind]): string =
 
       fmt("( {patt.opt.exprRepr()} ){suff}")
 
-func exprRepr*(sym: BnfNTerm): string =
-  if sym.generated:
-    fmt("{sym.parent}`gen{sym.idx.join(\"_\")}")
+func exprRepr*(nterm: BnfNTerm): string =
+  if nterm.generated:
+    fmt("{nterm.parent}`gen{nterm.idx.join(\"_\")}")
   else:
-    sym.name
+    nterm.name
 
 func exprRepr*[Tk](fbnf: FlatBnf[Tk]): string =
   case fbnf.kind:
@@ -655,7 +647,7 @@ func exprRepr*[TKind](bnf: BnfPatt[TKind]): string =
         of bnfTerm:
           fmt("'{bnf.tok}'")
         of bnfNTerm:
-          fmt("<{bnf.sym.exprRepr()}>")
+          fmt("<{bnf.nterm.exprRepr()}>")
         of bnfAlternative, bnfConcat:
           bnf.patts.mapIt(it.exprRepr).join(
             (bnf.kind == bnfConcat).tern(" & ", " | ")
@@ -663,7 +655,7 @@ func exprRepr*[TKind](bnf: BnfPatt[TKind]): string =
 
 
 func exprRepr*[TKind](rule: BnfRule[TKind]): string =
-  return fmt("{rule.sym.exprRepr()} ::= {rule.patt.exprRepr()}")
+  return fmt("{rule.nterm.exprRepr()} ::= {rule.patt.exprRepr()}")
 
 func exprRepr*[Tk](rule: Rule[Tk]): string =
   return fmt("{rule.nterm} ::= {rule.patts.exprRepr()}")
@@ -671,17 +663,17 @@ func exprRepr*[Tk](rule: Rule[Tk]): string =
 func exprRepr*[Tk](grammar: BnfGrammar[Tk], nojoin: bool = false): string =
   var buf: seq[string]
   if nojoin:
-    for ruleId, rule in grammar.rules:
-      for idx, alt in rule.patts:
-        let head = rule.head.exprRepr()
-        buf.add fmt("{ruleId}.{idx} {head} ::= {alt.exprRepr()}")
+    for head, patts in grammar.rules:
+      for idx, alt in patts:
+        let head = head.exprRepr()
+        buf.add fmt("{head}.{idx} ::= {alt.exprRepr()}")
 
   else:
-    for ruleId, rule in grammar.rules:
-      let head = rule.head.exprRepr()
-      buf.add fmt("{ruleId}     {head} ::= ")
-      for idx, alt in rule.patts:
-        buf.add fmt(".{idx}    | {alt.exprRepr()}")
+    for head, patts in grammar.rules:
+      let head = head.exprRepr()
+      buf.add fmt("{head}  ::= ")
+      for idx, alt in patts:
+        buf.add fmt(".{idx} | {alt.exprRepr()}")
 
   return buf.join("\n")
 

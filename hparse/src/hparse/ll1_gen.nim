@@ -27,9 +27,9 @@ proc necessaryTerms[TKind](rhs: Patt[TKind]): seq[NTermSym] =
   ## Generate list of nonterminals that might appear at rhs of production
   case rhs.kind:
     of pkAlternative:
-      return rhs.patts.filterIt(it.kind == pkNTerm).mapIt(it.sym)
+      return rhs.patts.filterIt(it.kind == pkNTerm).mapIt(it.nterm)
     of pkNTerm:
-      return @[rhs.sym]
+      return @[rhs.nterm]
     of pkConcat:
       return necessaryTerms(rhs.patts[0])
     else:
@@ -42,7 +42,7 @@ proc computeGrammar*[TKind](g: Grammar[TKind]
   var sets: NTermSets[TKind]
   # Just because I can sqeeze it into <= 4 lines does not mean that it
   # is a good idea. But code above performs topological sort of the
-  # shole grammar based on which terms depend on which. If there is a
+  # whole grammar based on which terms depend on which. If there is a
   # cycle in grammar exception is thrown - it means grammar is
   # left-recursive. (REVIEW: check if left recursion cannot occur from
   # some other type of grammar)
@@ -102,9 +102,9 @@ proc makeAltBlock[TKind](
 
   result.add nnkElse.newTree(elsebody)
 
-proc makeParserName(sym: NTermSym): string =
+proc makeParserName(nterm: NTermSym): string =
   ## Converter nonterminal name into parsing proc name
-  "parse" & sym.capitalizeAscii()
+  "parse" & nterm.capitalizeAscii()
 
 proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
   assert term.kind == pkTerm
@@ -120,10 +120,10 @@ proc makeTermBlock[TKind](term: CompPatt[TKind], conf: CodeGenConf): NimNode =
 proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   assert nterm.kind == pkNTerm
   let
-    ntermIdent = ident(makeParserName(nterm.sym))
+    ntermIdent = ident(makeParserName(nterm.nterm))
     lexerIdent = ident(conf.toksIdent)
     # tree = ident "res"
-    symStr = newLit(nterm.sym)
+    ntermStr = newLit(nterm.nterm)
 
   quote do:
     `ntermIdent`(`lexerIdent`)
@@ -280,22 +280,22 @@ proc makeRuleParser[TKind](
     # stream used to get lookahead.
     proc `procName`[Tok](`toks`: var TokStream[Tok]): ParseTree[Tok]
 
-  let ntermSym = newLit(rule.nterm)
+  let ntermNterm = newLit(rule.nterm)
   let parseBody = rule.patts.makeParseBlock(conf, sets)
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok]): ParseTree[Tok] =
       `parseBody`
-      # echo "Parsed body for ", `ntermSym`, ", in tree:"
+      # echo "Parsed body for ", `ntermNterm`, ", in tree:"
       # echo treeRepr(`tree`)
       case `res`.kind:
         of pkTerm, pkNTerm:
           `res` = newTree(
-            name = `ntermSym`,
+            name = `ntermNterm`,
             subnodes = @[`res`]
           )
         else:
           `res` = newTree(
-            name = `ntermSym`,
+            name = `ntermNterm`,
             subnodes = `res`.getSubnodes(),
           )
 
