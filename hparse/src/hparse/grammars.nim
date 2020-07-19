@@ -100,7 +100,7 @@ type
     nterm*: BnfNterm
     patt*: BnfPatt[TKind]
 
-  RuleId* = tuple[id, alt: int]
+  RuleId* = tuple[head: BnfNterm, alt: int]
 
   BnfGrammar*[Tk] = object
     rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
