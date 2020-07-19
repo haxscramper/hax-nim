@@ -46,6 +46,7 @@ template anyOfIt*(sequence: typed, predicate: untyped): bool =
 
 template allOfIt*(s: untyped, op: untyped): bool =
   ## True if for all items in `s` predicate `op` returns true.
+  mixin anyOfIt
   not s.anyOfIt(not op)
 
 macro disjointIterImpl(x: typed): untyped =

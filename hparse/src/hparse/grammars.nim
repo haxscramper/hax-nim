@@ -2,7 +2,7 @@ import tables, sugar, sequtils, strformat, options, colors
 export tables
 import hmisc/helpers
 import hmisc/types/[graphviz_ast, hvariant]
-import hmisc/algo/[halgorithm, htree_mapping]
+import hmisc/algo/[halgorithm, htree_mapping, hseq_mapping]
 
 
 type
@@ -105,6 +105,10 @@ func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
 
 func makeBnfNterm(name: string): BnfNTerm =
   BnfNterm(generated: false, name: name)
+
+func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
+  BnfPatt[Tk](flat: true, elems: elems)
+
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
   result = patt
@@ -461,12 +465,13 @@ func toBNF*[Tk](rule: Rule[Tk], noAltFlatten: bool = false): seq[BnfRule[Tk]] =
     let toprule = rule(makeBnfNterm(rule.nterm, @[]), top)
     for rule in @[ toprule ] & newrules:
       let newpatts = rule.patt.flatten()
-      for idx, patt in newpatts:
+      for idx, elems in newpatts:
         let nterm = makeBnfNterm(rule.sym.parent, rule.sym.idx & @[idx])
-        result.add BnfRule[Tk](
-          sym: nterm,
-          patt: BnfPatt[Tk](flat: true, elems: patt)
-        )
+        if elems.allOfIt(it.kind == fbkEmpty):
+          result.add rule(nterm, patt(elems))
+        else:
+          let elems = elems.filterIt(it.kind != fbkEmpty)
+          result.add rule(nterm, patt(elems))
   else:
     result.add rule(makeBnfNterm(rule.nterm), top)
     result &= newrules
