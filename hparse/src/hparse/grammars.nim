@@ -1,4 +1,4 @@
-import tables, sugar, sequtils, strformat, options, colors
+import tables, hashes, sugar, sequtils, strformat, options, colors
 export tables
 import hmisc/helpers
 import hmisc/types/[graphviz_ast, hvariant]
@@ -100,6 +100,9 @@ type
     sym*: BnfNterm
     patt*: BnfPatt[TKind]
 
+  BnfGrammar*[Tk] = object
+    rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
+
 func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
   BnfNterm(generated: true, idx: idx, parent: parent)
 
@@ -108,6 +111,35 @@ func makeBnfNterm(name: string): BnfNTerm =
 
 func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
   BnfPatt[Tk](flat: true, elems: elems)
+
+func hash*(nterm: BnfNTerm): Hash =
+  var h: Hash = 0
+  h = h !& hash(nterm.generated)
+  case nterm.generated:
+    of true:
+      h = h !& hash(nterm.parent)
+      h = h !& hash(nterm.idx)
+    of false:
+      h = h !& hash(nterm.name)
+
+  result = !$h
+
+func `==`*(lhs, rhs: BnfNterm): bool =
+  lhs.generated == rhs.generated and (
+    case lhs.generated:
+      of true:
+        (lhs.parent == rhs.parent) and
+        (lhs.idx == rhs.idx)
+      of false:
+        (lhs.name == rhs.name)
+  )
+
+func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
+  for rule in rules:
+    if rule.sym notin result.rules:
+      result.rules[rule.sym] = @[rule.patt]
+    else:
+      result.rules[rule.sym].add rule.patt
 
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
@@ -462,11 +494,11 @@ func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
 func toBNF*[Tk](rule: Rule[Tk], noAltFlatten: bool = false): seq[BnfRule[Tk]] =
   let (top, newrules) = rule.patts.toBnf(rule.nterm)
   if noAltFlatten:
-    let toprule = rule(makeBnfNterm(rule.nterm, @[]), top)
-    for rule in @[ toprule ] & newrules:
+    result.add rule(makeBnfNterm(rule.nterm), top)
+    for rule in newrules:
       let newpatts = rule.patt.flatten()
       for idx, elems in newpatts:
-        let nterm = makeBnfNterm(rule.sym.parent, rule.sym.idx & @[idx])
+        let nterm = makeBnfNterm(rule.sym.parent, rule.sym.idx)
         if elems.allOfIt(it.kind == fbkEmpty):
           result.add rule(nterm, patt(elems))
         else:
@@ -605,6 +637,13 @@ func exprRepr*[TKind](rule: BnfRule[TKind]): string =
 
 func exprRepr*[Tk](rule: Rule[Tk]): string =
   return fmt("{rule.nterm} ::= {rule.patts.exprRepr()}")
+
+func exprRepr*[Tk](grammar: BnfGrammar[Tk]): string =
+  grammar.rules.mapPairs(
+    block:
+      let rule = rhs.mapIt(it.exprRepr()).join(" | ")
+      fmt("{lhs.exprRepr()} ::= {rule}")
+  ).join("\n")
 
 #==============================  graphviz  ===============================#
 

@@ -17,7 +17,7 @@ template makeGrammarParser(body: untyped): untyped =
     let compGrammar = computeGrammar(grammar)
     # pprint compGrammar
     result = makeGrammarParser(compGrammar)
-    colorPrint result
+    # colorPrint result
 
   buildGrammar()
 
@@ -59,19 +59,6 @@ proc parseToplevel[Tok](
 
 proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
   inseq.mapIt(Token(kind: it))
-
-# proc parseTokens[Tok, TokKind](
-#   toks: seq[TokKind],
-#   parseCb: proc(
-#     toks: var TokStream[Tok],
-#     tree: var ParseTree[Tok])): ParseTree[Token] =
-
-#   var root = ParseTree[Token](kind: pkNTerm)
-#   var stream = makeStream(toks.mapIt(Token(kind: it)))
-#   parseList(stream, root)
-#   return root
-
-
 
 suite "LL(1) parser simple":
   const nt = nterm[TokenKind]
@@ -225,15 +212,9 @@ suite "LL(1) parser tree actions":
 
     tree.topng("/tmp/image.png", "tk", bottomTokens = true)
 
-  # test "EEE":
-  #   makeGrammarParser({
-  #       "hello" : orP(
-  #         tok(tkOpBrace),
-  #         andP(
-  #           zeroP(andP(
-  #             tok(tkComma),
-  #           ))
-  #         ),
-  #         tok(tkCloseBrace)
-  #       )
-  #     })
+suite "Predictive LL(1)":
+  const nt = nterm[TokenKind]
+  test "Simple grammar":
+    let rule = rule("X", andP(nt("EEE"), tok(tkComma)))
+    let gramm = makeGrammar(rule.toBNF())
+    echo gramm.exprRepr()

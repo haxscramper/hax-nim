@@ -31,11 +31,4 @@ suite "EBNF -> BNF convesion":
 
   test "wee":
     conv(andP(nt("EEE"), tok(tkComma)))
-
-    conv(andP(
-      nt("element"),
-      zeroP(andP(
-        oneP(tok(tkComma)),
-        zeroP(nt("element"))
-      )),
-      optP(tok(tkCloseBrace))))
+    conv(zeroP(nt("EEE")))
