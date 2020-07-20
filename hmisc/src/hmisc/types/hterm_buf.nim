@@ -35,6 +35,10 @@ func toTermBuf*(str: string): TermBuf =
   TermBuf(buf: str.split("\n").mapIt(
     it.toRunes()).makeSeq2D(whitespaceRune))
 
+
+# func toTermBuf*(rows: seq[string]): TermBuf =
+#   TermBuf(buf: rows.mapIt(it.toRunes()).makeSeq2D(whitespaceRune))
+
 func toTermBuf*(strs: seq[seq[string]]): TermBuf =
   TermBuf(buf: strs.mapIt(it.toRunes().concat()).makeSeq2D(whitespaceRune))
 
@@ -54,6 +58,9 @@ func toTermBuf*(bufs: seq[seq[TermBuf]]): TermBuf =
 func toTermBuf*(bufs: seq[TermBuf]): TermBuf =
   ## Merge multiple string buffers together
   toTermBuf(makeSeq2D(bufs))
+
+func concatBufsLeft*(bufs: seq[TermBuf]): TermBuf =
+  toTermBuf(@[bufs])
 
 func toTermBuf*(strs: StrBlock): TermBuf =
   TermBuf(buf: strs.mapIt(it.toRunes()).makeSeq2D(whitespaceRune))

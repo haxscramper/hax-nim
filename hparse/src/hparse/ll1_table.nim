@@ -36,9 +36,9 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
     for id, alt in grammar.iterrules():
       (id, alt)
 
-  debugecho "\e[33munsorted rules\e[39m"
-  for (id, rule) in rules:
-    debugecho id.exprRepr(true), " ", rule.exprRepr()
+  # debugecho "\e[33munsorted rules\e[39m"
+  # for (id, rule) in rules:
+  #   debugecho id.exprRepr(true), " ", rule.exprRepr()
 
   let sortedRules: seq[(RuleId, BnfPatt[Tk])] = rules.topoSort(
     deps = (
@@ -50,9 +50,9 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
     )
   )
 
-  debugecho "\e[33msorted rules\e[39m"
-  for (id, rule) in sortedRules:
-    debugecho id.exprRepr(), " ", rule.exprRepr()
+  # debugecho "\e[33msorted rules\e[39m"
+  # for (id, rule) in sortedRules:
+  #   debugecho id.exprRepr(), " ", rule.exprRepr()
 
 
 
@@ -92,6 +92,18 @@ func getFirst*[Tk](
 func getFollow*[Tk](
   grammar: BnfGrammar[Tk], first: FirstTable[Tk]): FollowTable[Tk] =
 
+  block:
+    var endNterms = initDeque[RuleId]()
+    endNterms.addLast ruleId(grammar.start, 0)
+    while endNterms.len > 0:
+      let rule = endNterms.popFirst()
+      result[rule] = makeTKindSet[Tk](eofTok)
+      for altId, alt in grammar.rules[rule.head]:
+        if alt.elems.last.kind == fbkNterm:
+          endNterms.addLast ruleId(alt.elems.last.nterm, altId)
+
+
+
   for head, patts in grammar.rules:
     for altIdx, alt in patts:
       let alt: seq[FlatBnf[Tk]] = alt.elems
@@ -104,13 +116,6 @@ func getFollow*[Tk](
           else:
             result[id].incl first
 
-      if alt.last.kind == fbkNterm:
-        let id = ruleId(alt.last.nterm, altIdx)
-        if id notin result:
-          result[id] = makeTKindSet[Tk](eofTok)
-        else:
-          result[id].incl eofTok
-        discard
         #[ IMPLEMENT get final token ]#
         # result[alt.last.nterm].incl getFinalTok[Tk]()
 
@@ -167,8 +172,11 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
 
   debugecho "\e[35mFOLLOW\e[39m set"
   for rule, follow in followTable:
-    debugecho fmt("{rule.exprRepr():>20}: {follow:<20}")
+    {.noSideEffect.}:
+      stdout.write fmt("{rule.exprRepr():>20}: {follow:<20} -> ")
+      debugecho fmt("{grammar[rule].exprRepr(pconf)}")
 
+  # if true: quit 0
   for id, alt in grammar.iterrules():
     if id notin firstTable:
       #[ IMPLEMENT REVIEW what has to be done ]#
@@ -214,11 +222,23 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
   stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
   var curr: Tok = toks.next()
   while true:
+    var stackshots: seq[TermBuf]
+    var msg: string
+
+    block:
+      var stackstr: seq[string]
+      stackstr.add fmt(" {\"Stack\":^20} ")
+      for it in stack.reversed():
+        stackstr.add fmt("[{it.exprRepr():^20}]")
+
+      stackshots.add stackstr.toTermBuf()
+
+
     let top: FlatBnf[Tk] = stack.pop()
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
-          echo "Accepted token ", curr
+          msg = fmt("Accepted token {curr}")
           curr = toks.next()
         else:
           # ERROR IMPLEMENT
@@ -227,7 +247,7 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          echo "Used rule ", rule.exprRepr()
+          msg = fmt("{top.exprRepr()}, {curr.kind} => {rule.exprRepr()}")
           stack &= parser.grammar.getProductions(rule).reversed()
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
@@ -237,9 +257,18 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         echo "Empty token"
         discard # ERROR ?
 
-    echo fmt " \e[94m{\"Stack\":^20}\e[39m "
-    for it in stack.reversed():
-      echo fmt("[{it.exprRepr():^20}]")
+    stackshots.add toTermBufFast(fmt "  {msg:^40}  ")
+
+    block:
+      var stackstr: seq[string]
+      stackstr.add fmt(" {\"Stack\":^20} ")
+      for it in stack.reversed():
+        stackstr.add fmt("[{it.exprRepr():^20}]")
+
+      stackshots.add stackstr.toTermBuf()
+
+    echo stackshots.toTermBuf().toString()
+    echo "----"
 
     if toks.finished():
       echo "token stream finished"
