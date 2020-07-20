@@ -4,8 +4,8 @@ import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables
 
 type
-  FirstTable*[Tk] = Table[RuleId, set[Tk]]
-  FollowTable*[Tk] = Table[RuleId, set[Tk]]
+  FirstTable*[Tk] = Table[RuleId, TkindSet[Tk]]
+  FollowTable*[Tk] = Table[RuleId, TKindSet[Tk]]
   LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
     # [Current term + Current token] -> Rule to use
 
@@ -49,7 +49,7 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
 
   for (id, patt) in sortedRules:
     if id notin result:
-      result[id] = {}
+      result[id] = makeTkindSet[Tk]()
 
     case patt.first.kind:
       of fbkEmpty:
@@ -61,7 +61,7 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
 
 func getFirst*[Tk](
   elem: FlatBnf[Tk],
-  table: FirstTable[Tk], grammar: BnfGrammar[Tk]): set[Tk] =
+  table: FirstTable[Tk], grammar: BnfGrammar[Tk]): TKindSet[Tk] =
   case elem.kind:
     of fbkNTerm:
       for altId, alt in grammar.rules[elem.nterm]:
@@ -73,9 +73,9 @@ func getFirst*[Tk](
           of fbkNterm:
             result.incl table[ruleId(elem.nterm, altId)]
     of fbkTerm:
-      return {elem.tok}
+      return {elem.tok}.toTkind()
     of fbkEmpty:
-      return {}
+      return makeTKindSet[Tk]()
 
 
 func getFollow*[Tk](
@@ -130,11 +130,11 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
 
   debugecho "FIRST set"
   for head, first in firstTable:
-    debugecho head.exprRepr(), ": ", first
+    debugecho head.exprRepr(), ": ", $first
 
   debugecho "FOLLOW set"
   for head, follow in followTable:
-    debugecho head.exprRepr(), ": ", follow
+    debugecho head.exprRepr(), ": ", $follow
 
   for id, alt in grammar.iterrules():
     if id notin firstTable:

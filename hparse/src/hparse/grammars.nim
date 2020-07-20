@@ -1,4 +1,5 @@
 import tables, hashes, sugar, sequtils, strformat, options, colors
+import strutils
 export tables
 import hmisc/helpers
 import hmisc/types/[graphviz_ast, hvariant]
@@ -167,6 +168,34 @@ func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
   result = patt
   result.action = act
+
+#==============================  token set  ==============================#
+
+type
+  EofTok* = object
+  TkindSet*[Tk] = object
+    vals: set[Tk]
+    hasEof: bool
+
+const eofTok*: EofTok = EofTok()
+
+func contains*[Tk](s: TKindSet[Tk], tk: Tk): bool = tk in s.vals
+func contains*[Tk](s: TKindSet[Tk], tk: EofTok): bool = s.hasEof
+func incl*[Tk](s: var TKindSet[Tk], tk: Tk): void = s.vals.incl tk
+func incl*[Tk](s: var TKindSet[Tk], tk: EofTok): void = (s.hasEof = true)
+func incl*[Tk](s: var TKindSet[Tk], other: TKindSet[Tk]): void =
+  s.vals.incl other.vals
+
+func `$`*[Tk](s: TKindSet[Tk]): string =
+  (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
+
+func toTkind*[Tk](s: set[Tk]): TKindSet[Tk] = (result.vals = s)
+func makeTKindSet*[Tk](): TkindSet[Tk] = discard
+iterator items*[Tk](s: TKindSet[Tk]): Tk =
+  for it in s.vals:
+    yield it
+
+#=================================  ===  =================================#
 
 type
   FirstSet*[TKind] = set[TKind]
