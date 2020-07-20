@@ -191,6 +191,7 @@ func `$`*[Tk](s: TKindSet[Tk]): string =
 
 func toTkind*[Tk](s: set[Tk]): TKindSet[Tk] = (result.vals = s)
 func makeTKindSet*[Tk](): TkindSet[Tk] = discard
+func makeTKindSet*[Tk](eof: EofTok): TKindSet[Tk] = (result.hasEof = true)
 iterator items*[Tk](s: TKindSet[Tk]): Tk =
   for it in s.vals:
     yield it
@@ -791,8 +792,11 @@ func exprRepr*[Tk](
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   grammar.rules.mapIt(exprRepr(it, conf)).joinl()
 
-func exprRepr*(id: RuleId): string =
-  fmt("{id.head.exprRepr()}.{id.alt}")
+func exprRepr*(id: RuleId, normalize: bool = false): string =
+  if normalize:
+    fmt("{id.head.exprRepr(true)}")
+  else:
+    fmt("{id.head.exprRepr(false)}.{id.alt}")
 
 func `$`*(id: RuleId): string = id.exprRepr()
 func `$`*(nterm: BnfNterm): string = nterm.exprRepr()

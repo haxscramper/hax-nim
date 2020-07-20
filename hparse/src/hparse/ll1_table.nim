@@ -1,7 +1,8 @@
 import grammars, lexer
+import hmisc/helpers
 import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
-import sugar, sequtils, hashes, tables
+import sugar, sequtils, hashes, tables, strutils, strformat
 
 type
   FirstTable*[Tk] = Table[RuleId, TkindSet[Tk]]
@@ -94,6 +95,11 @@ func getFollow*[Tk](
             result[id].incl first
 
       if alt.last.kind == fbkNterm:
+        let id = ruleId(alt.last.nterm, altIdx)
+        if id notin result:
+          result[id] = makeTKindSet[Tk](eofTok)
+        else:
+          result[id].incl eofTok
         discard
         #[ IMPLEMENT get final token ]#
         # result[alt.last.nterm].incl getFinalTok[Tk]()
@@ -124,17 +130,26 @@ func toGrid[A, B, C](table: Table[A, Table[B, C]]): Seq2D[string] =
   for key, colIdx in bIdx:
     result[0, colIdx] = $key
 
+
+const pconf = GrammarPrintConf(
+  prodArrow: "->",
+  emptyProd: "''",
+  ntermWrap: ("", ""),
+  concatSep: " ",
+  normalizeNterms: true
+)
+
 func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   let firstTable = getFirst(grammar)
   let followTable = getFollow(grammar, firstTable)
 
-  debugecho "FIRST set"
+  debugecho "\e[35mFIRST\e[39m set"
   for head, first in firstTable:
-    debugecho head.exprRepr(), ": ", $first
+    debugecho head.exprRepr(true).align(20), ": ", $first
 
-  debugecho "FOLLOW set"
+  debugecho "\e[35mFOLLOW\e[39m set"
   for head, follow in followTable:
-    debugecho head.exprRepr(), ": ", $follow
+    debugecho head.exprRepr(true).align(20), ": ", $follow
 
   for id, alt in grammar.iterrules():
     if id notin firstTable:
@@ -167,15 +182,6 @@ func newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   new(result)
   let bnfg = grammar.toBNF()
   debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
-
-  let pconf = GrammarPrintConf(
-    prodArrow: "->",
-    emptyProd: "''",
-    ntermWrap: ("", ""),
-    concatSep: " ",
-    normalizeNterms: true
-  )
-
   debugecho "\e[41mBNF grammar\e[49m:\n", bnfg.exprRepr(true, conf = pconf), "\n"
   result.parseTable = makeLL1TableParser(bnfg)
   result.start = bnfg.start
@@ -195,19 +201,23 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         else:
           # ERROR IMPLEMENT
           discard
-          echo "unexpected token"
+          echo "unexpected token ", curr
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
           echo "Used rule ", rule.exprRepr()
-          stack &= parser.grammar.getProductions(rule)
+          stack &= parser.grammar.getProductions(rule).reversed()
         else:
-          echo "Cannot reduce \e[32m", top.exprRepr(),
-           "\e[39m, current token: \e[33m'", curr, "'\e[39m "
+          raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
+           "\e[39m, current token: \e[33m'", curr, "'\e[39m ")
 
       of fbkEmpty:
         echo "Empty token"
         discard # ERROR ?
+
+    echo "Stack"
+    for it in stack.reversed():
+      echo fmt("[{it.exprRepr():^20}]")
 
     if toks.finished():
       echo "token stream finished"
