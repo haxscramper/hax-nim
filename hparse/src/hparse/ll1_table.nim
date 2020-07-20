@@ -1,4 +1,4 @@
-import grammars
+import grammars, lexer
 import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables
@@ -8,6 +8,13 @@ type
   FollowTable*[Tk] = Table[RuleId, set[Tk]]
   LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
     # [Current term + Current token] -> Rule to use
+
+func `[]`*[A, B, C](
+  table: Table[A, Table[B, C]], aKey: A, bKey: B): C =
+  table[aKey][bKey]
+
+func contains*[A, B, C](table: Table[A, Table[B, C]], pair: (A, B)): bool =
+  (pair[0] in table) and (pair[1] in table[pair[0]])
 
 iterator iterrules*[Tk](grammar: BnfGrammar[Tk]): tuple[
   id: RuleId, alt: BnfPatt[Tk]] =
@@ -137,3 +144,39 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
     toGrid(result).toTermBufGrid(),
     makeThinLineGridBorders()
   ).toTermBuf().toString()
+
+#============================  Parser object  ============================#
+
+type
+  LL1TableParser*[Tk] = ref object of Parser
+    start: BnfNterm
+    grammar: BnfGrammar[Tk]
+    parseTable: LL1Table[Tk]
+
+func newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
+  new(result)
+  let bnfg = grammar.toBNF()
+  result.parseTable = makeLL1TableParser(bnfg)
+  result.start = bnfg.start
+  result.grammar = bnfg
+
+method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): ParseTree[Tok] =
+  var stack: seq[FlatBnf[Tk]]
+  stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
+  var curr: Tok = toks.next()
+  while true:
+    let top: FlatBnf[Tk] = stack.pop()
+    case top.kind:
+      of fbkTerm:
+        if top.tok == curr.kind:
+          curr = toks.next()
+        else:
+          # ERROR IMPLEMENT
+          discard
+      of fbkNterm:
+        if parser.parseTable.contains((top.nterm, curr.kind)):
+          let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
+          stack &= parser.grammar.getProductions(rule)
+
+      of fbkEmpty:
+        discard # ERROR ?

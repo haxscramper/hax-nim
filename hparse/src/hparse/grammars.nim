@@ -3,6 +3,7 @@ export tables
 import hmisc/helpers
 import hmisc/types/[graphviz_ast, hvariant]
 import hmisc/algo/[halgorithm, htree_mapping, hseq_mapping]
+import lexer
 
 
 type
@@ -56,15 +57,16 @@ type
     patts*: Patt[TKind]
 
   Grammar*[TKind] = object
+    start*: NtermSym
     rules*: seq[Rule[TKind]]
 
   BnfNTerm* = object
     case generated*: bool
       of true:
         idx*: seq[int]
-        parent*: string
+        parent*: NtermSym
       of false:
-        name*: string
+        name*: NtermSym
 
   FlatBnfKind* = enum
     fbkEmpty
@@ -105,7 +107,12 @@ type
    alt*: int
 
   BnfGrammar*[Tk] = object
+    start*: BnfNterm
     rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
+
+func getProductions*[Tk](
+  grammar: BnfGrammar[Tk], id: RuleId): seq[FlatBnf[Tk]] =
+  grammar.rules[id.head][id.alt].elems
 
 func ruleId*(nterm: BnfNterm, alt: int): RuleId =
   RuleId(head: nterm, alt: alt)
@@ -156,8 +163,6 @@ func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
       result.rules[rule.nterm] = @[rule.patt]
     else:
       result.rules[rule.nterm].add rule.patt
-
-
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
   result = patt
@@ -538,6 +543,13 @@ func toBNF*[Tk](
         var tmp = rule
         tmp.nterm.idx = @[idx]
         result[idx] = tmp
+
+func toBNF*[Tk](grammar: Grammar[Tk]): BnfGrammar[Tk] =
+  result = makeGrammar(
+    grammar.rules.mapIt(it.toBNF(noAltFlatten = true)).concat()
+  )
+
+  result.start = BnfNterm(generated: false, name: grammar.start)
 
 
 #=========================  FIRST set computat  ==========================#
@@ -930,3 +942,12 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
 
   # debugechoi 1, "Result"
   # debugechoi 1, tree.treeRepr()
+
+#===============================  parser  ================================#
+
+type
+  Parser* = ref object of RootObj
+
+method parse*[Tok](parser: Parser, toks: var TokStream[Tok]): ParseTree[Tok] =
+  raiseAssert("No implementation for base parser class")
+

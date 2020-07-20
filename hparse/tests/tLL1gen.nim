@@ -217,8 +217,9 @@ import hparse/ll1_table
 suite "Predictive LL(1)":
   const nt = nterm[TokenKind]
   test "Simple grammar":
-    let rule = rule("X", orP(tok(tkOpBrace), tok(tkComma)))
-    let gramm = makeGrammar(rule.toBNF(noAltFlatten = true))
-    echo gramm.exprRepr(false)
+    let parser = newLL1TableParser({
+      "X" : orP(tok(tkOpBrace), tok(tkComma)) 
+    }.toGrammar())
 
-    discard makeLL1TableParser(gramm)
+    var stream = @[tkOpBrace].toTokSeq().makeStream()
+    let tree = parser.parse(stream)
