@@ -390,3 +390,35 @@ template assertEq*(lhs, rhs: untyped): untyped =
   let lInfo = instantiationInfo()
   if not (lhsVal == rhsVal):
     raiseAssert("Comparison failed on line " & $lInfo.line)
+
+#=========================  functional helpers  ==========================#
+
+func curry1*[A, B, C](arg: proc(a: A, b: B): C, a: A): proc(b: B): C =
+  return proc(b: B): C = arg(a, b)
+
+func curry2*[A, B, C](arg: proc(a: A, b: B): C, b: B): proc(a: A): C =
+  return proc(a: A): C = arg(a, b)
+
+template matchProc1*[A, B](pr: untyped): proc(a: A): B =
+  block:
+    proc tmp(a: A): B = pr(a)
+    tmp
+
+template matchProc2*[A, B, C](pr: untyped): proc(a: A, b: B): C =
+  block:
+    proc tmp(a: A, b: B): C = pr(a, b)
+    tmp
+
+template matchCurry2*[B](tA: typed, val: B, pr: untyped): untyped =
+  block:
+    type ResT = typeof((var a: tA; pr(a, val)))
+    proc tmp(a: tA): ResT = pr(a, val)
+    tmp
+
+
+when isMainModule:
+  proc t(a, b: int): string = $a & $b
+  proc t(a, b: string): string = a & b
+  assert matchProc2[int, int, string](t).curry1(9)(3) == "93"
+  assert matchProc2[int, int, string](t).curry2(9)(3) == "39"
+  assert matchCurry2(int, 9, t)(3) == "39"

@@ -104,16 +104,24 @@ func getFollow*[Tk](
         #[ IMPLEMENT get final token ]#
         # result[alt.last.nterm].incl getFinalTok[Tk]()
 
-func toGrid[A, B, C](table: Table[A, Table[B, C]]): Seq2D[string] =
+func toGrid[A, B, C](
+  table: Table[A, Table[B, C]],
+  aConvCb: proc(a: A): string {.noSideEffect.} = nil,
+  bConvCb: proc(b: B): string {.noSideEffect.} = nil,
+  cConvCb: proc(a: C): string {.noSideEffect.} = nil): Seq2D[string] =
+  let aConvCb = (aConvCb != nil).tern(aConvCb, proc(a: A): string = $a)
+  let bConvCb = (bConvCb != nil).tern(bConvCb, proc(b: B): string = $b)
+  let cConvCb = (cConvCb != nil).tern(cConvCb, proc(c: C): string = $c)
+
   let aIdx: Table[string, int] = collect(initTable(2)):
-    for rowIdx, key in toSeq(table.keys).mapIt($it).sorted():
+    for rowIdx, key in toSeq(table.keys).mapIt(aConvCb(it)).sorted():
       {key : rowIdx + 1}
 
   var bIdx: Table[string, int] = block:
     let bKeys: seq[string] = collect(newSeq):
       for _, subtable in table:
         for bKey, _ in subtable:
-          $bKey
+          bConvCb(bKey)
 
     collect(initTable):
       for colIdx, key in bKeys.deduplicate():
@@ -122,7 +130,7 @@ func toGrid[A, B, C](table: Table[A, Table[B, C]]): Seq2D[string] =
   result.fillToSize(rows = aIdx.len + 1, cols = bIdx.len + 1, default = "")
   for aKey, subtable in table:
     for bKey, cVal in subtable:
-      result[aIdx[$aKey], bIdx[$bKey]] = $cVal
+      result[aIdx[aConvCb(aKey)], bIdx[bConvCb(bKey)]] = cConvCb(cVal)
 
   for key, rowIdx in aIdx:
     result[rowIdx, 0] = $key
@@ -166,7 +174,12 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
 
   debugecho "Parse table:\n", newTermGrid(
     (0,0),
-    toGrid(result).toTermBufGrid(),
+    toGrid(
+      result,
+      aConvCb = matchCurry2(BnfNterm, true, exprRepr),
+      # bConvCb = matchCurry2(Tk, pconf, exprRepr),
+      cConvCb = matchCurry2(RuleId, true, exprRepr)
+    ).toTermBufGrid(),
     makeThinLineGridBorders()
   ).toTermBuf().toString()
 
@@ -215,11 +228,10 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         echo "Empty token"
         discard # ERROR ?
 
-    echo "Stack"
+    echo fmt " \e[94m{\"Stack\":^20}\e[39m "
     for it in stack.reversed():
       echo fmt("[{it.exprRepr():^20}]")
 
     if toks.finished():
       echo "token stream finished"
       break
-
