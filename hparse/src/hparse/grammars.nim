@@ -714,7 +714,7 @@ func exprRepr*(nterm: BnfNTerm, normalize: bool = false): string =
     if normalize:
       fmt("{nterm.parent.toUpperAscii()}{nterm.idx.join(\"\")}")
     else:
-      fmt("{nterm.parent}`gen{nterm.idx.join(\"_\")}")
+      fmt("{nterm.parent}{nterm.idx.join(\"_\")}")
   else:
     if normalize:
       nterm.name.toUpperAscii()
@@ -797,7 +797,7 @@ func exprRepr*[Tk](
 
 func exprRepr*(id: RuleId, normalize: bool = false): string =
   if normalize:
-    fmt("{id.head.exprRepr(true)}")
+    fmt("{id.head.exprRepr(true)}{id.alt}")
   else:
     fmt("{id.head.exprRepr(false)}.{id.alt}")
 

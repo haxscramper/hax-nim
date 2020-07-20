@@ -239,5 +239,5 @@ suite "Predictive LL(1)":
       )
     }.toGrammar())
 
-    var stream = mapString("[[c,z,d,[e,d]],[e,d,f]]").makeStream()
+    var stream = mapString("[a]").makeStream()
     let tree = parser.parse(stream)

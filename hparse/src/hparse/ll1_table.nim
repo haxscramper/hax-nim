@@ -5,8 +5,8 @@ import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques
 
 type
-  FirstTable*[Tk] = Table[RuleId, TkindSet[Tk]]
-  FollowTable*[Tk] = Table[RuleId, TKindSet[Tk]]
+  FirstTable*[Tk] = OrderedTable[RuleId, TkindSet[Tk]]
+  FollowTable*[Tk] = OrderedTable[RuleId, TKindSet[Tk]]
   LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
     # [Current term + Current token] -> Rule to use
 
@@ -38,7 +38,7 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
 
   debugecho "\e[33munsorted rules\e[39m"
   for (id, rule) in rules:
-    debugecho id.exprRepr(), " ", rule.exprRepr()
+    debugecho id.exprRepr(true), " ", rule.exprRepr()
 
   let sortedRules: seq[(RuleId, BnfPatt[Tk])] = rules.topoSort(
     deps = (
@@ -66,7 +66,9 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
       of fbkTerm:
         result[id].incl patt.first.tok
       of fbkNTerm:
-        result[id].incl result[id]
+        let nterm = patt.first.nterm
+        for altId, alt in grammar.rules[nterm]:
+          result[id].incl result[ruleId(nterm, altId)]
 
 func getFirst*[Tk](
   elem: FlatBnf[Tk],
@@ -161,11 +163,11 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
 
   debugecho "\e[35mFIRST\e[39m set"
   for rule, first in firstTable:
-    debugecho fmt("{rule.exprRepr(true):>20}: {first:<20} -> {grammar[rule].exprRepr(pconf)}")
+    debugecho fmt("{rule.exprRepr():>20}: {first:<20} -> {grammar[rule].exprRepr(pconf)}")
 
   debugecho "\e[35mFOLLOW\e[39m set"
   for rule, follow in followTable:
-    debugecho fmt("{rule.exprRepr(true):>20}: {follow:<20}")
+    debugecho fmt("{rule.exprRepr():>20}: {follow:<20}")
 
   for id, alt in grammar.iterrules():
     if id notin firstTable:
@@ -179,14 +181,13 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
         else:
           result[id.head][first] = id
 
-
   debugecho "Parse table:\n", newTermGrid(
     (0,0),
     toGrid(
       result,
-      aConvCb = matchCurry2(BnfNterm, true, exprRepr),
-      # bConvCb = matchCurry2(Tk, pconf, exprRepr),
-      cConvCb = matchCurry2(RuleId, true, exprRepr)
+      # aConvCb = matchCurry2(BnfNterm, true, exprRepr),
+      # # bConvCb = matchCurry2(Tk, pconf, exprRepr),
+      # cConvCb = matchCurry2(RuleId, true, exprRepr)
     ).toTermBufGrid(),
     makeThinLineGridBorders()
   ).toTermBuf().toString()
@@ -226,7 +227,7 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          echo "Used rule ", rule.exprRepr(true)
+          echo "Used rule ", rule.exprRepr()
           stack &= parser.grammar.getProductions(rule).reversed()
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
