@@ -111,6 +111,9 @@ type
     start*: BnfNterm
     rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
 
+func `[]`*[Tk](grammar: BnfGrammar[Tk], rule: RuleId): BnfPatt[Tk] =
+  grammar.rules[rule.head][rule.alt]
+
 func getProductions*[Tk](
   grammar: BnfGrammar[Tk], id: RuleId): seq[FlatBnf[Tk]] =
   grammar.rules[id.head][id.alt].elems
@@ -364,7 +367,7 @@ func topoSort*[Vertex](
     )
 
   var adjList: Table[Hash, HashSet[Hash]]
-  var vertData: Table[Hash, Vertex]
+  var vertData: Table[Hash, seq[Vertex]]
   var inCounts: Table[Hash, int]
 
   for vert in verts:
@@ -374,7 +377,7 @@ func topoSort*[Vertex](
     # debugecho "Id: ", vHash, "\n-----"
 
     adjList[vHash] = depsList.toHashSet()
-    vertData[vHash] = vert
+    vertData.mgetOrPut(vHash, @[]).add vert
 
 
     for dep in depsList:
@@ -414,9 +417,9 @@ func topoSort*[Vertex](
       ))
 
   if revese:
-    return sortednodes.reversed().mapIt(vertData[it])
+    return sortednodes.reversed().mapIt(vertData[it]).concat()
   else:
-    return sortednodes.mapIt(vertData[it])
+    return sortednodes.mapIt(vertData[it]).concat()
 
 
 func topoSort*[Vertex](
@@ -1046,4 +1049,3 @@ type
 
 method parse*[Tok](parser: Parser, toks: var TokStream[Tok]): ParseTree[Tok] =
   raiseAssert("No implementation for base parser class")
-

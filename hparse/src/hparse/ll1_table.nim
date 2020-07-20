@@ -2,7 +2,7 @@ import grammars, lexer
 import hmisc/helpers
 import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
-import sugar, sequtils, hashes, tables, strutils, strformat
+import sugar, sequtils, hashes, tables, strutils, strformat, deques
 
 type
   FirstTable*[Tk] = Table[RuleId, TkindSet[Tk]]
@@ -36,6 +36,9 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
     for id, alt in grammar.iterrules():
       (id, alt)
 
+  debugecho "\e[33munsorted rules\e[39m"
+  for (id, rule) in rules:
+    debugecho id.exprRepr(), " ", rule.exprRepr()
 
   let sortedRules: seq[(RuleId, BnfPatt[Tk])] = rules.topoSort(
     deps = (
@@ -46,6 +49,11 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
       proc(r: (RuleId, BnfPatt[Tk])): Hash = r[0].head.hash
     )
   )
+
+  debugecho "\e[33msorted rules\e[39m"
+  for (id, rule) in sortedRules:
+    debugecho id.exprRepr(), " ", rule.exprRepr()
+
 
 
   for (id, patt) in sortedRules:
@@ -139,7 +147,7 @@ func toGrid[A, B, C](
     result[0, colIdx] = $key
 
 
-const pconf = GrammarPrintConf(
+const pconf* = GrammarPrintConf(
   prodArrow: "->",
   emptyProd: "''",
   ntermWrap: ("", ""),
@@ -152,12 +160,12 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   let followTable = getFollow(grammar, firstTable)
 
   debugecho "\e[35mFIRST\e[39m set"
-  for head, first in firstTable:
-    debugecho head.exprRepr(true).align(20), ": ", $first
+  for rule, first in firstTable:
+    debugecho fmt("{rule.exprRepr(true):>20}: {first:<20} -> {grammar[rule].exprRepr(pconf)}")
 
   debugecho "\e[35mFOLLOW\e[39m set"
-  for head, follow in followTable:
-    debugecho head.exprRepr(true).align(20), ": ", $follow
+  for rule, follow in followTable:
+    debugecho fmt("{rule.exprRepr(true):>20}: {follow:<20}")
 
   for id, alt in grammar.iterrules():
     if id notin firstTable:
@@ -218,7 +226,7 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          echo "Used rule ", rule.exprRepr()
+          echo "Used rule ", rule.exprRepr(true)
           stack &= parser.grammar.getProductions(rule).reversed()
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
