@@ -169,14 +169,25 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
+          echo "Accepted token ", curr
           curr = toks.next()
         else:
           # ERROR IMPLEMENT
           discard
+          echo "unexpected token"
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
+          echo "Used rule ", rule.exprRepr()
           stack &= parser.grammar.getProductions(rule)
+        else:
+          echo "Cannot reduce ", top.exprRepr(), " '", curr, "' "
 
       of fbkEmpty:
+        echo "Empty token"
         discard # ERROR ?
+
+    if toks.finished():
+      echo "token stream finished"
+      break
+

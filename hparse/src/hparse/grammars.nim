@@ -288,6 +288,7 @@ func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
 proc toGrammar*[TKind](
   table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
   result.rules = table.mapPairs(Rule[TKind](nterm: lhs, patts: rhs))
+  result.start = result.rules[0].nterm
 
 import strutils
 
