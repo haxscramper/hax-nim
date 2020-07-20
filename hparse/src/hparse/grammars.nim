@@ -340,6 +340,8 @@ func topoSort*[Vertex](
   for vert in verts:
     let depsList = deps(vert)
     let vHash = idgen(vert)
+    # debugecho "Deps for vert ", $vert, ": ", depsList
+    # debugecho "Id: ", vHash, "\n-----"
 
     adjList[vHash] = depsList.toHashSet()
     vertData[vHash] = vert
@@ -376,8 +378,10 @@ func topoSort*[Vertex](
 
   for vert, adj in adjList:
     if adj.len > 0:
-      raise LogicError(
-        msg: "Cannot perform topological sort on graph with cycles")
+      raiseAssert(msgjoin(
+        "Cannot perform topological sort on graph with cycles",
+        adj
+      ))
 
   if revese:
     return sortednodes.reversed().mapIt(vertData[it])
@@ -446,10 +450,12 @@ func toBNF*[Tk](
             patts: @[
               BnfPatt[Tk](flat: false, kind: bnfEmpty),
               BnfPatt[Tk](flat: false, kind: bnfConcat, patts: @[
-                BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym),
-                body])]))
+                body,
+                BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
+        ])]))
       ] & subnewrules
     of pkOneOrMore:
+      # IMPLEMENT
       # NOTE I'm not 100% sure if this is correct way to convert
       # one-or-more to bnf
       let newsym = makeBnfNterm(parent, idx)
@@ -538,7 +544,9 @@ func toBNF*[Tk](
     result.add rule(makeBnfNterm(rule.nterm), top)
     result &= newrules
 
-  if renumerate: #[ IMPLEMENT replace nonterminal names inside rules too ]#
+  if renumerate:
+    #[ IMPLEMENT replace nonterminal names inside rules too ]#
+    #[ IMPLEMENT do not change numbering of non-generated terms ]#
     for idx, rule in result:
       if rule.nterm.generated:
         var tmp = rule
@@ -547,7 +555,7 @@ func toBNF*[Tk](
 
 func toBNF*[Tk](grammar: Grammar[Tk]): BnfGrammar[Tk] =
   result = makeGrammar(
-    grammar.rules.mapIt(it.toBNF(noAltFlatten = true)).concat()
+    grammar.rules.mapIt(it.toBNF(noAltFlatten = true, renumerate = false)).concat()
   )
 
   result.start = BnfNterm(generated: false, name: grammar.start)
@@ -626,15 +634,36 @@ func tokKindStr*[TKind](tkind: TKind, prefStr: string): string =
 
 #=======================  grammar representation  ========================#
 
-func exprRepr*[TKind](patt: Patt[TKind]): string =
+type
+  GrammarPrintConf* = object
+    emptyProd*: string
+    prodArrow*: string
+    concatSep*: string
+    alternSep*: string
+    ntermWrap*: (string, string)
+    termWrap*: (string, string)
+    normalizeNterms*: bool
+
+const defaultGrammarPrintConf*: GrammarPrintConf = GrammarPrintConf(
+  emptyProd: "ε",
+  prodArrow: "::=",
+  concatSep: " & ",
+  alternSep: " | ",
+  ntermWrap: ("<", ">"),
+  termWrap: ("'", "'")
+)
+
+func exprRepr*[TKind](
+  patt: Patt[TKind],
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   case patt.kind:
     of pkTerm:
-      fmt("'{patt.tok}'")
+      ($patt.tok).wrap(conf.termWrap)
     of pkNTerm:
-      fmt("<{patt.nterm}>")
+      ($patt.nterm).wrap(conf.ntermWrap)
     of pkAlternative, pkConcat:
-      patt.patts.mapIt(it.exprRepr).join(
-        (patt.kind == pkConcat).tern(" & ", " | ")
+      patt.patts.mapIt(exprRepr(it, conf)).join(
+        (patt.kind == pkConcat).tern(conf.concatSep, conf.alternSep)
       ).wrap("{  }")
     of pkOptional, pkZeroOrMore, pkOneOrMore:
       let suff =
@@ -645,60 +674,93 @@ func exprRepr*[TKind](patt: Patt[TKind]): string =
           else:
             ""
 
-      fmt("( {patt.opt.exprRepr()} ){suff}")
+      fmt("( {patt.opt.exprRepr(conf)} ){suff}")
 
-func exprRepr*(nterm: BnfNTerm): string =
+func exprRepr*(nterm: BnfNTerm, normalize: bool = false): string =
   if nterm.generated:
-    fmt("{nterm.parent}`gen{nterm.idx.join(\"_\")}")
+    if normalize:
+      fmt("{nterm.parent.toUpperAscii()}{nterm.idx.join(\"\")}")
+    else:
+      fmt("{nterm.parent}`gen{nterm.idx.join(\"_\")}")
   else:
-    nterm.name
+    if normalize:
+      nterm.name.toUpperAscii()
+    else:
+      nterm.name
 
-func exprRepr*[Tk](fbnf: FlatBnf[Tk]): string =
+func exprRepr*[Tk](
+  fbnf: FlatBnf[Tk],
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   case fbnf.kind:
-    of fbkNterm: fmt("<{fbnf.nterm.exprRepr()}>")
-    of fbkTerm: fmt("'{fbnf.tok}'")
-    of fbkEmpty: "ε"
+    of fbkNterm:
+      (fbnf.nterm.exprRepr(conf.normalizeNterms)).wrap(conf.ntermWrap)
+    of fbkTerm:
+      ($fbnf.tok).wrap(conf.termWrap)
+    of fbkEmpty:
+      conf.emptyProd
 
-func exprRepr*[TKind](bnf: BnfPatt[TKind]): string =
+func exprRepr*[TKind](
+  bnf: BnfPatt[TKind],
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   case bnf.flat:
     of true:
-      bnf.elems.map(exprRepr).join(" & ")
+      bnf.elems.mapIt(exprRepr(it, conf)).join(conf.concatSep)
     of false:
       case bnf.kind:
         of bnfEmpty:
-          "ε"
+          conf.emptyProd
         of bnfTerm:
-          fmt("'{bnf.tok}'")
+          ($bnf.tok).wrap(conf.termWrap)
         of bnfNTerm:
-          fmt("<{bnf.nterm.exprRepr()}>")
+          (bnf.nterm.exprRepr()).wrap(conf.ntermWrap)
         of bnfAlternative, bnfConcat:
-          bnf.patts.mapIt(it.exprRepr).join(
-            (bnf.kind == bnfConcat).tern(" & ", " | ")
+          bnf.patts.mapIt(exprRepr(it, conf)).join(
+            (bnf.kind == bnfConcat).tern(conf.concatSep, conf.alternSep)
           ).wrap("{  }")
 
 
-func exprRepr*[TKind](rule: BnfRule[TKind]): string =
-  return fmt("{rule.nterm.exprRepr()} ::= {rule.patt.exprRepr()}")
+func exprRepr*[TKind](
+  rule: BnfRule[TKind],
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
+  let head = rule.nterm.exprRepr(conf.normalizeNterms)
+  return fmt("{head} {conf.prodArrow} {rule.patt.exprRepr(conf)}")
 
-func exprRepr*[Tk](rule: Rule[Tk]): string =
-  return fmt("{rule.nterm} ::= {rule.patts.exprRepr()}")
+func exprRepr*[Tk](
+  rule: Rule[Tk],
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
+  return fmt("{rule.nterm} {conf.prodArrow} {rule.patts.exprRepr(conf)}")
 
-func exprRepr*[Tk](grammar: BnfGrammar[Tk], nojoin: bool = false): string =
+func exprRepr*[Tk](
+  grammar: BnfGrammar[Tk],
+  nojoin: bool = false,
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   var buf: seq[string]
   if nojoin:
     for head, patts in grammar.rules:
       for idx, alt in patts:
-        let head = head.exprRepr()
-        buf.add fmt("{head}.{idx} ::= {alt.exprRepr()}")
+        let head =
+          if conf.normalizeNterms:
+            fmt("{head.exprRepr(true)}")
+          else:
+            fmt("{head.exprRepr()}.{idx}")
+
+        buf.add fmt("{head} {conf.prodArrow} {alt.exprRepr(conf)}")
 
   else:
     for head, patts in grammar.rules:
-      let head = head.exprRepr()
-      buf.add fmt("{head}  ::= ")
+      let head = head.exprRepr(conf.normalizeNterms)
+      buf.add fmt("{head}  {conf.prodArrow} ")
       for idx, alt in patts:
-        buf.add fmt(".{idx} | {alt.exprRepr()}")
+        buf.add fmt(".{idx}{conf.alternSep}{alt.exprRepr(conf)}")
+      buf.add ""
 
   return buf.join("\n")
+
+
+func exprRepr*[Tk](
+  grammar: Grammar[Tk],
+  conf: GrammarPrintConf = defaultGrammarPrintConf): string =
+  grammar.rules.mapIt(exprRepr(it, conf)).joinl()
 
 func exprRepr*(id: RuleId): string =
   fmt("{id.head.exprRepr()}.{id.alt}")

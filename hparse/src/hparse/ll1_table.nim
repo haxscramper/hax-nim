@@ -42,7 +42,7 @@ func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
         necessaryTerms[Tk](r[0], grammar).mapIt(it.hash)
     ),
     idgen = (
-      proc(r: (RuleId, BnfPatt[Tk])): Hash = r[0].hash
+      proc(r: (RuleId, BnfPatt[Tk])): Hash = r[0].head.hash
     )
   )
 
@@ -86,8 +86,12 @@ func getFollow*[Tk](
       let alt: seq[FlatBnf[Tk]] = alt.elems
       for i in 0 ..< alt.len - 1:
         if alt[i].kind == fbkNterm:
-          result[ruleId(alt[i].nterm, altIdx)].incl getFirst(
-            alt[i + 1], first, grammar)
+          let first = getFirst(alt[i + 1], first, grammar)
+          let id = ruleId(alt[i].nterm, altIdx)
+          if id notin result:
+            result[id] = first
+          else:
+            result[id].incl first
 
       if alt.last.kind == fbkNterm:
         discard
@@ -124,22 +128,28 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   let firstTable = getFirst(grammar)
   let followTable = getFollow(grammar, firstTable)
 
+  debugecho "FIRST set"
   for head, first in firstTable:
     debugecho head.exprRepr(), ": ", first
 
+  debugecho "FOLLOW set"
   for head, follow in followTable:
     debugecho head.exprRepr(), ": ", follow
 
   for id, alt in grammar.iterrules():
-    for first in firstTable[id]:
-      if id.head notin result:
-        let newt = toTable({first : id})
-        result[id.head] = newt
-      else:
-        result[id.head][first] = id
+    if id notin firstTable:
+      #[ IMPLEMENT REVIEW what has to be done ]#
+      discard
+    else:
+      for first in firstTable[id]:
+        if id.head notin result:
+          let newt = toTable({first : id})
+          result[id.head] = newt
+        else:
+          result[id.head][first] = id
 
 
-  debugecho newTermGrid(
+  debugecho "Parse table:\n", newTermGrid(
     (0,0),
     toGrid(result).toTermBufGrid(),
     makeThinLineGridBorders()
@@ -156,6 +166,17 @@ type
 func newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   new(result)
   let bnfg = grammar.toBNF()
+  debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
+
+  let pconf = GrammarPrintConf(
+    prodArrow: "->",
+    emptyProd: "''",
+    ntermWrap: ("", ""),
+    concatSep: " ",
+    normalizeNterms: true
+  )
+
+  debugecho "\e[41mBNF grammar\e[49m:\n", bnfg.exprRepr(true, conf = pconf), "\n"
   result.parseTable = makeLL1TableParser(bnfg)
   result.start = bnfg.start
   result.grammar = bnfg
@@ -181,7 +202,8 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
           echo "Used rule ", rule.exprRepr()
           stack &= parser.grammar.getProductions(rule)
         else:
-          echo "Cannot reduce ", top.exprRepr(), " '", curr, "' "
+          echo "Cannot reduce \e[32m", top.exprRepr(),
+           "\e[39m, current token: \e[33m'", curr, "'\e[39m "
 
       of fbkEmpty:
         echo "Empty token"

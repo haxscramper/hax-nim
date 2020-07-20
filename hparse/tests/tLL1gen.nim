@@ -218,8 +218,26 @@ suite "Predictive LL(1)":
   const nt = nterm[TokenKind]
   test "Simple grammar":
     let parser = newLL1TableParser({
-      "X" : orP(tok(tkOpBrace), tok(tkComma)) 
+      # list ::= '[' <elements> ']'
+      "list" : andP(
+        tok(tkOpBrace),
+        nt("elements"),
+        tok(tkCloseBrace)
+      ),
+      # elements ::= <element> (',' <element>)*
+      "elements" : andP(
+        nt("element"),
+        zeroP(andP(
+          tok(tkComma),
+          nt("element")
+        ))
+      ),
+      # element ::= 'ident' | <list>
+      "element" : orP(
+        tok(tkIdent),
+        nt("list")
+      )
     }.toGrammar())
 
-    var stream = @[tkOpBrace].toTokSeq().makeStream()
+    var stream = mapString("[[c,z,d,[e,d]],[e,d,f]]").makeStream()
     let tree = parser.parse(stream)
