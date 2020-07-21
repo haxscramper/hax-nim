@@ -111,6 +111,9 @@ type
     start*: BnfNterm
     rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
 
+func isEmpty*[Tk](patt: BnfPatt[Tk]): bool =
+  (patt.elems.len == 1) and (patt.elems[0].kind == fbkEmpty)
+
 func `[]`*[Tk](grammar: BnfGrammar[Tk], rule: RuleId): BnfPatt[Tk] =
   grammar.rules[rule.head][rule.alt]
 
@@ -756,12 +759,12 @@ func exprRepr*[TKind](
   rule: BnfRule[TKind],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   let head = rule.nterm.exprRepr(conf.normalizeNterms)
-  return fmt("{head} {conf.prodArrow} {rule.patt.exprRepr(conf)}")
+  return fmt("{head:<12} {conf.prodArrow} {rule.patt.exprRepr(conf)}")
 
 func exprRepr*[Tk](
   rule: Rule[Tk],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
-  return fmt("{rule.nterm} {conf.prodArrow} {rule.patts.exprRepr(conf)}")
+  return fmt("{rule.nterm:<12} {conf.prodArrow} {rule.patts.exprRepr(conf)}")
 
 func exprRepr*[Tk](
   grammar: BnfGrammar[Tk],
@@ -777,7 +780,7 @@ func exprRepr*[Tk](
           else:
             fmt("{head.exprRepr()}.{idx}")
 
-        buf.add fmt("{head} {conf.prodArrow} {alt.exprRepr(conf)}")
+        buf.add fmt("{head:<12} {conf.prodArrow} {alt.exprRepr(conf)}")
 
   else:
     for head, patts in grammar.rules:

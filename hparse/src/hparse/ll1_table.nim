@@ -2,7 +2,7 @@ import grammars, lexer
 import hmisc/helpers
 import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
-import sugar, sequtils, hashes, tables, strutils, strformat, deques
+import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
 
 type
   FirstTable*[Tk] = OrderedTable[RuleId, TkindSet[Tk]]
@@ -88,6 +88,21 @@ func getFirst*[Tk](
     of fbkEmpty:
       return makeTKindSet[Tk]()
 
+func getNullable*[Tk](grammar: BnfGrammar[Tk]): seq[RuleId] =
+  ## Get list of all nonterminals which can generate empty string
+  let noTerms: seq[(RuleId, BnfPatt[Tk])] = collect(newSeq):
+    for ruleId, alt in grammar.iterrules():
+      if alt.elems.noneOfIt(it.kind == fbkTerm):
+        (ruleId, alt)
+
+  let null: HashSet[RuleId] = noTerms.filterIt(
+    it[1].elems.len == 1 and it[1].first.kind == fbkEmpty
+  ).mapIt(it[0]).toHashSet()
+
+  #[ IMPLEMENT check for all rules which might use null ones ]#
+
+  for n in null:
+    result.add n
 
 func getFollow*[Tk](
   grammar: BnfGrammar[Tk], first: FirstTable[Tk]): FollowTable[Tk] =
@@ -103,7 +118,6 @@ func getFollow*[Tk](
           endNterms.addLast ruleId(alt.elems.last.nterm, altId)
 
 
-
   for head, patts in grammar.rules:
     for altIdx, alt in patts:
       let alt: seq[FlatBnf[Tk]] = alt.elems
@@ -116,8 +130,33 @@ func getFollow*[Tk](
           else:
             result[id].incl first
 
-        #[ IMPLEMENT get final token ]#
-        # result[alt.last.nterm].incl getFinalTok[Tk]()
+func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
+  first: FirstTable[Tk],
+  follow: FollowTable[Tk],
+  nullable: HashSet[BnfNterm]] =
+
+  for ruleId, altBody in grammar.iterrules():
+    result.first[ruleId] = makeTKindSet[Tk]()
+    result.follow[ruleId] = makeTKindSet[Tk]()
+
+  while true:
+    var updated: bool = false
+    for ruleId, body in grammar.iterrules():
+      if body.isEmpty():
+        updated = result.nullable.containsOrIncl(ruleId.head)
+      else:
+        for elem in body.elems:
+          discard
+          # case elem.kind:
+          #   of fbkNterm:
+          #     updated = result.first[ruleId].containsOrIncl(
+          #       result.first[elem.nterm]
+          #     )
+
+    if not updated:
+      break
+
+
 
 func toGrid[A, B, C](
   table: Table[A, Table[B, C]],
@@ -166,6 +205,9 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   let firstTable = getFirst(grammar)
   let followTable = getFollow(grammar, firstTable)
 
+  block:
+    let (first, follow, nullable) = getSets(grammar)
+
   debugecho "\e[35mFIRST\e[39m set"
   for rule, first in firstTable:
     debugecho fmt("{rule.exprRepr():>20}: {first:<20} -> {grammar[rule].exprRepr(pconf)}")
@@ -189,6 +231,13 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
         else:
           result[id.head][first] = id
 
+  for rule in grammar.getNullable():
+    if rule in followTable:
+      for tok in followTable[rule]:
+        result[rule.head][tok] = rule
+    else:
+      debugecho fmt("Rule \e[32m{rule.exprRepr()}\e[39m does not have FOLLOW")
+
   debugecho "Parse table:\n", newTermGrid(
     (0,0),
     toGrid(
@@ -199,6 +248,7 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
     ).toTermBufGrid(),
     makeThinLineGridBorders()
   ).toTermBuf().toString()
+  quit 0
 
 #============================  Parser object  ============================#
 

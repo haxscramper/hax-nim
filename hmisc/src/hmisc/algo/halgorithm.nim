@@ -49,6 +49,12 @@ template allOfIt*(s: untyped, op: untyped): bool =
   mixin anyOfIt
   not s.anyOfIt(not op)
 
+
+template noneOfIt*(s: untyped, op: untyped): bool =
+  ## True if for all items in `s` predicate `op` returns true.
+  mixin anyOfIt
+  s.anyOfIt(not op)
+
 macro disjointIterImpl(x: typed): untyped =
   var values: seq[NimNode]
   for value in x.getTypeImpl[1..^1]:

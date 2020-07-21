@@ -5,6 +5,7 @@ export halgorithm
 export hseq_mapping
 import sequtils
 include hdebug_misc
+import strformat
 
 proc colorPrint*(
   node: NimNode, tmpfile: string = "/tmp/nimast.tmp.nim"): void =
@@ -24,6 +25,9 @@ proc echoi*(indent: int, message: varargs[string, `$`]): void =
 proc debugechoi*(indent: int, message: string): void =
   for line in message.split("\n"):
     debugecho "  ".repeat(indent), line
+
+template dechofmt*(arg: string): untyped =
+  debugecho fmt(arg)
 
 proc echoi*(message: varargs[string, `$`]): void =
   ## Echo with message joined by spaces
