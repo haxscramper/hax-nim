@@ -363,25 +363,37 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
   var stack: seq[FlatBnf[Tk]]
   stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
   var curr: Tok = toks.next()
+  var prevPop: FlatBnf[Tk]
   while true:
     var stackshots: seq[TermBuf]
     var msg: string
 
     block:
       var stackstr: seq[string]
-      stackstr.add fmt(" {\"Stack\":^20} ")
-      for it in stack.reversed():
-        stackstr.add fmt("[{it.exprRepr():^20}]")
+      stackstr.add fmt(" {\"VV\":^20} ")
+      for idx, it in stack.reversed():
+        stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
 
       stackshots.add stackstr.toTermBuf()
 
 
     let top: FlatBnf[Tk] = stack.pop()
+    # if prevPop.kind == fbkTerm and top.kind == fbkNterm:
+    #   msg &= fmt "Processed all rules for {top.exprRepr()}\n"
+
+    # prevPop = top
+
+    msg &= fmt "Popped {top.exprRepr()} from top\n"
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
-          msg = fmt("Accepted token {curr}")
-          curr = toks.next()
+          if toks.finished():
+            echo "token stream finished"
+            break
+          else:
+            msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
+            curr = toks.next()
+            msg &= fmt "Read token {curr} ({curr.kind})"
         else:
           # ERROR IMPLEMENT
           discard
@@ -389,8 +401,12 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          msg = fmt("{top.exprRepr()}, {curr.kind} => {rule.exprRepr()}")
-          stack &= parser.grammar.getProductions(rule).reversed()
+          msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
+          msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
+          let stackadd = parser.grammar.getProductions(rule).reversed().filterIt(
+            it.kind != fbkEmpty)
+          msg &= fmt "Added {stackadd.mapIt(it.exprRepr()).joinw()}"
+          stack &= stackadd
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
            "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
@@ -401,19 +417,15 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         echo "Empty token"
         discard # ERROR ?
 
-    stackshots.add toTermBufFast(fmt "  {msg:^40}  ")
+    stackshots.add toTermBuf(msg.split("\n").mapIt(fmt "  {it:<47}  "))
 
     block:
       var stackstr: seq[string]
-      stackstr.add fmt(" {\"Stack\":^20} ")
-      for it in stack.reversed():
-        stackstr.add fmt("[{it.exprRepr():^20}]")
+      # stackstr.add fmt(" {\"Stack\":^20} ")
+      for idx, it in stack.reversed():
+        stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
 
       stackshots.add stackstr.toTermBuf()
 
     echo stackshots.toTermBuf().toString()
-    echo "----"
-
-    if toks.finished():
-      echo "token stream finished"
-      break
+    echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
