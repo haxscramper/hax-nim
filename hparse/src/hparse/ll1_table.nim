@@ -5,8 +5,9 @@ import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
 
 type
-  FirstTable*[Tk] = OrderedTable[RuleId, TkindSet[Tk]]
-  FollowTable*[Tk] = OrderedTable[RuleId, TKindSet[Tk]]
+  AltId* = int
+  FirstTable*[Tk] = Table[BnfNterm, Table[AltId, TkindSet[Tk]]]
+  FollowTable*[Tk] = Table[BnfNterm, TKindSet[Tk]]
   LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
     # [Current term + Current token] -> Rule to use
 
@@ -31,127 +32,199 @@ proc necessaryTerms*[Tk](
     result.add patt.elems[0].nterm
 
 
-func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
-  let rules: seq[(RuleId, BnfPatt[Tk])] = collect(newSeq):
-    for id, alt in grammar.iterrules():
-      (id, alt)
+# func getFirst*[Tk](grammar: BnfGrammar[Tk]): FirstTable[Tk] =
+#   let rules: seq[(RuleId, BnfPatt[Tk])] = collect(newSeq):
+#     for id, alt in grammar.iterrules():
+#       (id, alt)
 
-  # debugecho "\e[33munsorted rules\e[39m"
-  # for (id, rule) in rules:
-  #   debugecho id.exprRepr(true), " ", rule.exprRepr()
+#   # debugecho "\e[33munsorted rules\e[39m"
+#   # for (id, rule) in rules:
+#   #   debugecho id.exprRepr(true), " ", rule.exprRepr()
 
-  let sortedRules: seq[(RuleId, BnfPatt[Tk])] = rules.topoSort(
-    deps = (
-      proc(r: (RuleId, BnfPatt[Tk])): seq[Hash] =
-        necessaryTerms[Tk](r[0], grammar).mapIt(it.hash)
-    ),
-    idgen = (
-      proc(r: (RuleId, BnfPatt[Tk])): Hash = r[0].head.hash
-    )
-  )
+#   let sortedRules: seq[(RuleId, BnfPatt[Tk])] = rules.topoSort(
+#     deps = (
+#       proc(r: (RuleId, BnfPatt[Tk])): seq[Hash] =
+#         necessaryTerms[Tk](r[0], grammar).mapIt(it.hash)
+#     ),
+#     idgen = (
+#       proc(r: (RuleId, BnfPatt[Tk])): Hash = r[0].head.hash
+#     )
+#   )
 
-  # debugecho "\e[33msorted rules\e[39m"
-  # for (id, rule) in sortedRules:
-  #   debugecho id.exprRepr(), " ", rule.exprRepr()
-
-
-
-  for (id, patt) in sortedRules:
-    if id notin result:
-      result[id] = makeTkindSet[Tk]()
-
-    case patt.first.kind:
-      of fbkEmpty:
-        discard
-      of fbkTerm:
-        result[id].incl patt.first.tok
-      of fbkNTerm:
-        let nterm = patt.first.nterm
-        for altId, alt in grammar.rules[nterm]:
-          result[id].incl result[ruleId(nterm, altId)]
-
-func getFirst*[Tk](
-  elem: FlatBnf[Tk],
-  table: FirstTable[Tk], grammar: BnfGrammar[Tk]): TKindSet[Tk] =
-  case elem.kind:
-    of fbkNTerm:
-      for altId, alt in grammar.rules[elem.nterm]:
-        case alt.elems[0].kind:
-          of fbkEmpty:
-            discard
-          of fbkTerm:
-            result.incl alt.elems[0].tok
-          of fbkNterm:
-            result.incl table[ruleId(elem.nterm, altId)]
-    of fbkTerm:
-      return {elem.tok}.toTkind()
-    of fbkEmpty:
-      return makeTKindSet[Tk]()
-
-func getNullable*[Tk](grammar: BnfGrammar[Tk]): seq[RuleId] =
-  ## Get list of all nonterminals which can generate empty string
-  let noTerms: seq[(RuleId, BnfPatt[Tk])] = collect(newSeq):
-    for ruleId, alt in grammar.iterrules():
-      if alt.elems.noneOfIt(it.kind == fbkTerm):
-        (ruleId, alt)
-
-  let null: HashSet[RuleId] = noTerms.filterIt(
-    it[1].elems.len == 1 and it[1].first.kind == fbkEmpty
-  ).mapIt(it[0]).toHashSet()
-
-  #[ IMPLEMENT check for all rules which might use null ones ]#
-
-  for n in null:
-    result.add n
-
-func getFollow*[Tk](
-  grammar: BnfGrammar[Tk], first: FirstTable[Tk]): FollowTable[Tk] =
-
-  block:
-    var endNterms = initDeque[RuleId]()
-    endNterms.addLast ruleId(grammar.start, 0)
-    while endNterms.len > 0:
-      let rule = endNterms.popFirst()
-      result[rule] = makeTKindSet[Tk](eofTok)
-      for altId, alt in grammar.rules[rule.head]:
-        if alt.elems.last.kind == fbkNterm:
-          endNterms.addLast ruleId(alt.elems.last.nterm, altId)
+#   # debugecho "\e[33msorted rules\e[39m"
+#   # for (id, rule) in sortedRules:
+#   #   debugecho id.exprRepr(), " ", rule.exprRepr()
 
 
-  for head, patts in grammar.rules:
-    for altIdx, alt in patts:
-      let alt: seq[FlatBnf[Tk]] = alt.elems
-      for i in 0 ..< alt.len - 1:
-        if alt[i].kind == fbkNterm:
-          let first = getFirst(alt[i + 1], first, grammar)
-          let id = ruleId(alt[i].nterm, altIdx)
-          if id notin result:
-            result[id] = first
-          else:
-            result[id].incl first
+
+#   for (id, patt) in sortedRules:
+#     if id notin result:
+#       result[id] = makeTkindSet[Tk]()
+
+#     case patt.first.kind:
+#       of fbkEmpty:
+#         discard
+#       of fbkTerm:
+#         result[id].incl patt.first.tok
+#       of fbkNTerm:
+#         let nterm = patt.first.nterm
+#         for altId, alt in grammar.rules[nterm]:
+#           result[id].incl result[ruleId(nterm, altId)]
+
+# func getFirst*[Tk](
+#   elem: FlatBnf[Tk],
+#   table: FirstTable[Tk], grammar: BnfGrammar[Tk]): TKindSet[Tk] =
+#   case elem.kind:
+#     of fbkNTerm:
+#       for altId, alt in grammar.rules[elem.nterm]:
+#         case alt.elems[0].kind:
+#           of fbkEmpty:
+#             discard
+#           of fbkTerm:
+#             result.incl alt.elems[0].tok
+#           of fbkNterm:
+#             result.incl table[ruleId(elem.nterm, altId)]
+#     of fbkTerm:
+#       return {elem.tok}.toTkind()
+#     of fbkEmpty:
+#       return makeTKindSet[Tk]()
+
+# func getNullable*[Tk](grammar: BnfGrammar[Tk]): seq[RuleId] =
+#   ## Get list of all nonterminals which can generate empty string
+#   let noTerms: seq[(RuleId, BnfPatt[Tk])] = collect(newSeq):
+#     for ruleId, alt in grammar.iterrules():
+#       if alt.elems.noneOfIt(it.kind == fbkTerm):
+#         (ruleId, alt)
+
+#   let null: HashSet[RuleId] = noTerms.filterIt(
+#     it[1].elems.len == 1 and it[1].first.kind == fbkEmpty
+#   ).mapIt(it[0]).toHashSet()
+
+#   #[ IMPLEMENT check for all rules which might use null ones ]#
+
+#   for n in null:
+#     result.add n
+
+# func getFollow*[Tk](
+#   grammar: BnfGrammar[Tk], first: FirstTable[Tk]): FollowTable[Tk] =
+
+#   block:
+#     var endNterms = initDeque[RuleId]()
+#     endNterms.addLast ruleId(grammar.start, 0)
+#     while endNterms.len > 0:
+#       let rule = endNterms.popFirst()
+#       result[rule] = makeTKindSet[Tk](eofTok)
+#       for altId, alt in grammar.rules[rule.head]:
+#         if alt.elems.last.kind == fbkNterm:
+#           endNterms.addLast ruleId(alt.elems.last.nterm, altId)
+
+
+#   for head, patts in grammar.rules:
+#     for altIdx, alt in patts:
+#       let alt: seq[FlatBnf[Tk]] = alt.elems
+#       for i in 0 ..< alt.len - 1:
+#         if alt[i].kind == fbkNterm:
+#           let first = getFirst(alt[i + 1], first, grammar)
+#           let id = ruleId(alt[i].nterm, altIdx)
+#           if id notin result:
+#             result[id] = first
+#           else:
+#             result[id].incl first
+
+func isNullable[Tk](
+  fbnf: FlatBnf[Tk],
+  nulls: Table[BnfNterm, seq[AltId]]): bool =
+  case fbnf.kind:
+    of fbkEmpty: true
+    of fbkTerm: false
+    of fbkNterm: fbnf.nterm in nulls
 
 func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
   first: FirstTable[Tk],
   follow: FollowTable[Tk],
-  nullable: HashSet[BnfNterm]] =
+  nullable: Table[BnfNterm, seq[AltId]]] =
 
-  for ruleId, altBody in grammar.iterrules():
-    result.first[ruleId] = makeTKindSet[Tk]()
-    result.follow[ruleId] = makeTKindSet[Tk]()
+  for head, alts in grammar.rules:
+    for altId, altBody in alts:
+      # Generate empty `FIRST/FOLLOW` sets - each rule+alternative pair
+      # corresponds to empty set.
+      if head notin result.first:
+        result.first[head] = {altId : makeTKindSet[Tk]()}.toTable()
+      else:
+        result.first[head][altId] = makeTKindSet[Tk]()
+      # result.follow[rule.head] = {AltId(rule.alt) : makeTKindSet[Tk]()}.toTable()
+      result.follow[head] = makeTKindSet[Tk]()
+
 
   while true:
     var updated: bool = false
-    for ruleId, body in grammar.iterrules():
-      if body.isEmpty():
-        updated = result.nullable.containsOrIncl(ruleId.head)
-      else:
-        for elem in body.elems:
-          discard
-          # case elem.kind:
-          #   of fbkNterm:
-          #     updated = result.first[ruleId].containsOrIncl(
-          #       result.first[elem.nterm]
-          #     )
+    for rule, body in grammar.iterrules():
+      block: # `FIRST` set construction
+        # Iterate over all rules in grammar
+        if body.isEmpty():
+          if rule.head notin result.nullable:
+            result.nullable[rule.head] = @[ rule.alt ] # Remember index of nullable alternative
+            updated = true
+          else:
+            updated = rule.alt notin result.nullable[rule.head]
+            result.nullable[rule.head].add rule.alt
+        else:
+          for elem in body.elems: # Iterate over all elements in `X -> Y1 Y2`
+            # Store `FIRST` sets separately for each alternative
+            case elem.kind:
+              of fbkNterm:
+                # Add elements from `FIRST[Yi]` to `FIRST[X, <alt>]`.
+                # Since `Yi` might have more than one alternative in
+                # grammar we have to merge all possible `FIRST` sets.
+                updated = result.first[rule.head][rule.alt].containsOrIncl(
+                  result.first[elem.nterm].mapPairs(rhs).union())
+              of fbkTerm:
+                # Add token to `FIRST[X]` directly
+                dechofmt "{rule.head} -> {result.first[rule.head]}"
+                updated = result.first[rule.head][rule.alt].containsOrIncl(
+                  makeTKindSet(elem.tok))
+              of fbkEmpty:
+                discard # QUESTION ERROR?
+
+
+            if elem.isNullable(result.nullable):
+              break # Found non-nullable element, finishing FIRST computation
+
+      block: # `FOLLOW` set construction
+        var tailFollow: TKindSet[Tk] = result.follow[rule.head] # `FOLLOW`
+        # for the nonterminal we are working with - need to add this
+        # as `FOLLOW` for element at the end
+        for elem in body.elems.reversed(): # Iterate over all elements
+          # in production in reverse order: `Y1 Y2 Y3 <- X`
+          case elem.kind:
+            of fbkTerm:
+              discard
+
+            of fbkNterm:
+              updated = result.follow[elem.nterm].containsOrIncl(tailFollow)
+
+            of fbkEmpty:
+              discard
+              break # QUESTION
+
+          if elem.isNullable(result.nullable):
+            # Continue snowballing `FOLLOW` tail - current element is
+            # nullable => whatever we have accumulated in tail can
+            # possibly appear in production.
+            if elem.kind != fbkEmpty: # QUESTION ERROR?
+              tailFollow.incl(result.first[elem.nterm].mapPairs(rhs).union())
+          else:
+            # Current elemen is not nullable => current tail is no
+            # longer needed anc can be replaced with whatever
+            # `FIRST[Yi]` contains.
+            case elem.kind:
+              of fbkNterm:
+                tailFollow = result.first[elem.nterm].mapPairs(rhs).union()
+              of fbkTerm:
+                tailFollow = makeTKindSet(elem.tok)
+              else:
+                discard # ERROR?
+
 
     if not updated:
       break
@@ -202,41 +275,35 @@ const pconf* = GrammarPrintConf(
 )
 
 func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
-  let firstTable = getFirst(grammar)
-  let followTable = getFollow(grammar, firstTable)
-
-  block:
-    let (first, follow, nullable) = getSets(grammar)
+  # let firstTable = getFirst(grammar)
+  # let followTable = getFollow(grammar, firstTable)
+  let (firstTable, followTable, nullable) = getSets(grammar)
 
   debugecho "\e[35mFIRST\e[39m set"
-  for rule, first in firstTable:
-    debugecho fmt("{rule.exprRepr():>20}: {first:<20} -> {grammar[rule].exprRepr(pconf)}")
+  for head, alts in firstTable:
+    for id, alt in alts:
+      debugecho fmt("{head.exprRepr():>20} -> {alt}")
 
   debugecho "\e[35mFOLLOW\e[39m set"
-  for rule, follow in followTable:
-    {.noSideEffect.}:
-      stdout.write fmt("{rule.exprRepr():>20}: {follow:<20} -> ")
-      debugecho fmt("{grammar[rule].exprRepr(pconf)}")
+  for head, alts in followTable:
+    dechofmt "{head.exprRepr():>20} -> {alts}"
 
   # if true: quit 0
-  for id, alt in grammar.iterrules():
-    if id notin firstTable:
+  for ruleId, alt in grammar.iterrules():
+    if ruleId.head notin firstTable:
       #[ IMPLEMENT REVIEW what has to be done ]#
       discard
     else:
-      for first in firstTable[id]:
-        if id.head notin result:
-          let newt = toTable({first : id})
-          result[id.head] = newt
+      for first in firstTable[ruleId.head][ruleId.alt]:
+        if ruleId.head notin result:
+          result[ruleId.head] = toTable({first : ruleId})
         else:
-          result[id.head][first] = id
+          result[ruleId.head][first] = ruleId
 
-  for rule in grammar.getNullable():
-    if rule in followTable:
-      for tok in followTable[rule]:
-        result[rule.head][tok] = rule
-    else:
-      debugecho fmt("Rule \e[32m{rule.exprRepr()}\e[39m does not have FOLLOW")
+  for nterm, nullAlts in nullable:
+    for tok in followTable[nterm]:
+      for nullAlt in nullAlts: # QUESTION ERROR?
+        result[nterm][tok] = ruleId(nterm, nullAlt)
 
   debugecho "Parse table:\n", newTermGrid(
     (0,0),
@@ -248,7 +315,6 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
     ).toTermBufGrid(),
     makeThinLineGridBorders()
   ).toTermBuf().toString()
-  quit 0
 
 #============================  Parser object  ============================#
 
@@ -301,7 +367,9 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
           stack &= parser.grammar.getProductions(rule).reversed()
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
-           "\e[39m, current token: \e[33m'", curr, "'\e[39m ")
+           "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
+           fmt("({curr.kind})")
+          )
 
       of fbkEmpty:
         echo "Empty token"

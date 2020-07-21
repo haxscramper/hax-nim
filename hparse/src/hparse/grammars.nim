@@ -197,10 +197,28 @@ func `$`*[Tk](s: TKindSet[Tk]): string =
 
 func toTkind*[Tk](s: set[Tk]): TKindSet[Tk] = (result.vals = s)
 func makeTKindSet*[Tk](): TkindSet[Tk] = discard
+func makeTKindSet*[Tk](tok: Tk): TkindSet[Tk] = result.vals.incl tok
 func makeTKindSet*[Tk](eof: EofTok): TKindSet[Tk] = (result.hasEof = true)
 iterator items*[Tk](s: TKindSet[Tk]): Tk =
   for it in s.vals:
     yield it
+
+func union*[Tk](s: seq[TKindSet[Tk]]): TKindSet[Tk] =
+  result.hasEof = s.anyOfIt(it.hasEof)
+  for it in s:
+    result.vals.incl it.vals
+
+func containsOrIncl*[Tk](s: var TKindSet[Tk], other: TKindSet[Tk]): bool =
+  if (s.hasEof == other.hasEof) and ((s.vals - other.vals).len == 0):
+    result = false
+
+  s.hasEof = s.hasEof or other.hasEof
+  s.vals.incl other.vals
+
+func hash*[Tk](s: TKindSet[Tk]): Hash =
+  var h: Hash = 0
+  h = h !& hash(s.vals) !& hash(s.hasEof)
+  result = !$h
 
 #=================================  ===  =================================#
 
