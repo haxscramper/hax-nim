@@ -363,8 +363,8 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
   var stack: seq[FlatBnf[Tk]]
   stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
   var curr: Tok = toks.next()
-  var prevPop: FlatBnf[Tk]
-  while true:
+  var done = false
+  while not done:
     var stackshots: seq[TermBuf]
     var msg: string
 
@@ -378,22 +378,20 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
 
 
     let top: FlatBnf[Tk] = stack.pop()
-    # if prevPop.kind == fbkTerm and top.kind == fbkNterm:
-    #   msg &= fmt "Processed all rules for {top.exprRepr()}\n"
+    case top.kind:
+      of fbkTerm: msg &= fmt "Expecting {top.exprRepr()}\n"
+      of fbkNterm: msg &= fmt "Started parsing {top.exprRepr()}\n"
+      else: discard
 
-    # prevPop = top
-
-    msg &= fmt "Popped {top.exprRepr()} from top\n"
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
           if toks.finished():
-            echo "token stream finished"
-            break
+            done = true
           else:
             msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
             curr = toks.next()
-            msg &= fmt "Read token {curr} ({curr.kind})"
+            msg &= fmt "Read token '{curr}' ({curr.kind})"
         else:
           # ERROR IMPLEMENT
           discard
@@ -401,12 +399,17 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
+          msg &= fmt("Current token is '{curr}' ({curr.kind})\n")
           msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
           msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
-          let stackadd = parser.grammar.getProductions(rule).reversed().filterIt(
-            it.kind != fbkEmpty)
-          msg &= fmt "Added {stackadd.mapIt(it.exprRepr()).joinw()}"
-          stack &= stackadd
+          let stackadd = parser.grammar.getProductions(rule).reversed()
+          if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
+            msg &= "Empty production\n"
+          msg &= fmt "- [ {top.exprRepr():25} ]\n"
+          for elem in stackadd.reversed():
+            msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
+
+          stack &= stackadd.filterIt(it.kind != fbkEmpty)
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
            "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
@@ -421,7 +424,7 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
 
     block:
       var stackstr: seq[string]
-      # stackstr.add fmt(" {\"Stack\":^20} ")
+      stackstr.add fmt(" {\"VV\":^20} ")
       for idx, it in stack.reversed():
         stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
 
@@ -429,3 +432,6 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
 
     echo stackshots.toTermBuf().toString()
     echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
+
+  if stack.len == 0:
+    echo "Finished parsing expressions"
