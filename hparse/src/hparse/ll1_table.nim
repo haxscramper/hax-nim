@@ -1,8 +1,10 @@
 import grammars, lexer
-import hmisc/helpers
+import hmisc/[helpers, defensive]
 import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
+
+initDefense()
 
 type
   AltId* = int
@@ -14,6 +16,8 @@ type
 func `[]`*[A, B, C](
   table: Table[A, Table[B, C]], aKey: A, bKey: B): C =
   table[aKey][bKey]
+
+func `|=`*(a: var bool, b: bool): void = a = a or b
 
 func contains*[A, B, C](table: Table[A, Table[B, C]], pair: (A, B)): bool =
   (pair[0] in table) and (pair[1] in table[pair[0]])
@@ -139,10 +143,11 @@ func isNullable[Tk](
     of fbkTerm: false
     of fbkNterm: fbnf.nterm in nulls
 
-func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
+proc getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
   first: FirstTable[Tk],
   follow: FollowTable[Tk],
   nullable: Table[BnfNterm, seq[AltId]]] =
+  echo "werwe"
 
   for head, alts in grammar.rules:
     for altId, altBody in alts:
@@ -155,40 +160,60 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
       # result.follow[rule.head] = {AltId(rule.alt) : makeTKindSet[Tk]()}.toTable()
       result.follow[head] = makeTKindSet[Tk]()
 
+  block: # Add end token to `FOLLOW`
+    var endNterms = initDeque[BnfNterm]()
+    endNterms.addLast grammar.start
+    while endNterms.len > 0:
+      let nterm = endNterms.popFirst()
+      result.follow[nterm] = makeTKindSet[Tk](eofTok)
+      for altId, alt in grammar.rules[nterm]:
+        if alt.elems.last.kind == fbkNterm:
+          endNterms.addLast alt.elems.last.nterm
 
   while true:
     var updated: bool = false
     for rule, body in grammar.iterrules():
-      block: # `FIRST` set construction
+      showLog fmt "Processing {rule.exprRepr()} {body.exprRepr()}"
+      runIndentedLog: # `FIRST` set construction
         # Iterate over all rules in grammar
         if body.isEmpty():
           if rule.head notin result.nullable:
             result.nullable[rule.head] = @[ rule.alt ] # Remember index of nullable alternative
-            updated = true
+            updated |= true
           else:
-            updated = rule.alt notin result.nullable[rule.head]
+            updated |= rule.alt notin result.nullable[rule.head]
             result.nullable[rule.head].add rule.alt
         else:
-          for elem in body.elems: # Iterate over all elements in `X -> Y1 Y2`
-            # Store `FIRST` sets separately for each alternative
-            case elem.kind:
+          for idx, elem in body.elems: # Iterate over all elements in `X ->
+            # Y1 Y2` Store `FIRST` sets separately for each
+            # alternative. Finish execution after first non-nullable
+            # element is found.
+            let first = case elem.kind:
               of fbkNterm:
                 # Add elements from `FIRST[Yi]` to `FIRST[X, <alt>]`.
                 # Since `Yi` might have more than one alternative in
                 # grammar we have to merge all possible `FIRST` sets.
-                updated = result.first[rule.head][rule.alt].containsOrIncl(
-                  result.first[elem.nterm].mapPairs(rhs).union())
+                result.first[elem.nterm].mapPairs(rhs).union()
               of fbkTerm:
                 # Add token to `FIRST[X]` directly
-                dechofmt "{rule.head} -> {result.first[rule.head]}"
-                updated = result.first[rule.head][rule.alt].containsOrIncl(
-                  makeTKindSet(elem.tok))
+                showLog fmt "Found {elem.tok} @ {body.exprRepr()}[{idx}]"
+                makeTKindSet(elem.tok)
               of fbkEmpty:
-                discard # QUESTION ERROR?
+                # QUESTION ERROR?
+                makeTKindSet[Tk]()
 
 
-            if elem.isNullable(result.nullable):
+            showLog fmt "Adding {first:>30} to FIRST of {rule.head}[{rule.alt}]"
+            updated |= result.first[rule.head][rule.alt].containsOrIncl(first)
+
+
+            if not elem.isNullable(result.nullable):
+              showInfo fmt "Found non-nullable element {elem.exprRepr()}"
               break # Found non-nullable element, finishing FIRST computation
+            else:
+              showInfo fmt "Element {elem.exprRepr()} of kind {elem.kind} is nullable"
+
+          showInfo fmt "Finished processing {body.exprRepr()}"
 
       block: # `FOLLOW` set construction
         var tailFollow: TKindSet[Tk] = result.follow[rule.head] # `FOLLOW`
@@ -201,7 +226,7 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
               discard
 
             of fbkNterm:
-              updated = result.follow[elem.nterm].containsOrIncl(tailFollow)
+              updated |= result.follow[elem.nterm].containsOrIncl(tailFollow)
 
             of fbkEmpty:
               discard
@@ -274,7 +299,7 @@ const pconf* = GrammarPrintConf(
   normalizeNterms: true
 )
 
-func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
+proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   # let firstTable = getFirst(grammar)
   # let followTable = getFollow(grammar, firstTable)
   let (firstTable, followTable, nullable) = getSets(grammar)
@@ -282,12 +307,13 @@ func makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   debugecho "\e[35mFIRST\e[39m set"
   for head, alts in firstTable:
     for id, alt in alts:
-      debugecho fmt("{head.exprRepr():>20} -> {alt}")
+      debugecho fmt("{head.exprRepr():>20}[{id}] -> {alt}")
 
   debugecho "\e[35mFOLLOW\e[39m set"
   for head, alts in followTable:
     dechofmt "{head.exprRepr():>20} -> {alts}"
 
+  # if true: quit 0
   # if true: quit 0
   for ruleId, alt in grammar.iterrules():
     if ruleId.head notin firstTable:
@@ -324,7 +350,7 @@ type
     grammar: BnfGrammar[Tk]
     parseTable: LL1Table[Tk]
 
-func newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
+proc newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   new(result)
   let bnfg = grammar.toBNF()
   debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()

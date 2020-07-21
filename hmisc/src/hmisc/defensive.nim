@@ -157,6 +157,7 @@ template saveLog*(text: string, logLevel = lvlAll): void =
     defLogLoggerMap[f].log(lvlAll, text)
 
 template getDefPrefix(iinfo: IInfo): string =
+  mixin isExplicitlyEnabled, splitFile
   block:
     let file = iinfo.filename
     let confPrefix =
