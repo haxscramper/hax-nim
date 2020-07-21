@@ -362,10 +362,17 @@ proc newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   result.start = bnfg.start
   result.grammar = bnfg
 
+type
+  TermProgress[Tk] = object
+    nterm: BnfNterm
+    expected: int
+    elems: seq[FlatBnf[Tk]]
+
 method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): ParseTree[Tok] =
   var stack: seq[FlatBnf[Tk]]
   stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
   var curr: Tok = toks.next()
+  var ntermStack: seq[TermProgress[Tk]] = @[]
   var done = false
   while not done:
     plog:
@@ -378,25 +385,36 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         for idx, it in stack.reversed():
           stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
 
+        stackstr.add ""
+        for idx, nterm in ntermStack.reversed():
+          stackstr.add fmt(
+            "@ {nterm.nterm.exprRepr():14} [{nterm.elems.len}/{nterm.expected}]")
+
         stackshots.add stackstr.toTermBuf()
 
 
     let top: FlatBnf[Tk] = stack.pop()
     plog:
       case top.kind:
-        of fbkTerm: msg &= fmt "Expecting {top.exprRepr()}\n"
-        of fbkNterm: msg &= fmt "Started parsing {top.exprRepr()}\n"
-        else: discard
+        of fbkTerm:
+          msg &= fmt "Expecting {top.exprRepr()}\n"
+
+        of fbkNterm:
+          msg &= fmt "Started parsing {top.exprRepr()}\n"
+        else:
+          discard
 
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
+          plog:
+            msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
+            ntermStack.last().elems.add top
           if toks.finished():
             done = true
           else:
-            plog: msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
             curr = toks.next()
-            plog: msg &= fmt "Read token '{curr}' ({curr.kind})"
+            # plog: msg &= fmt "Read token '{curr}' ({curr.kind})"
         else:
           # ERROR IMPLEMENT
           discard
@@ -404,18 +422,23 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          let stackadd = parser.grammar.getProductions(rule).reversed()
+          let stackadd = parser.grammar.getProductions(rule)
+
           plog:
             msg &= fmt("Current token is '{curr}' ({curr.kind})\n")
             msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
             msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
             if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
               msg &= "Empty production\n"
+              ntermStack.add TermProgress[Tk](nterm: rule.head, expected: 0)
+            else:
+              ntermStack.add TermProgress[Tk](nterm: rule.head, expected: stackadd.len)
+
             msg &= fmt "- [ {top.exprRepr():25} ]\n"
-            for elem in stackadd.reversed():
+            for elem in stackadd:
               msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
 
-          stack &= stackadd.filterIt(it.kind != fbkEmpty)
+          stack &= stackadd.reversed().filterIt(it.kind != fbkEmpty)
         else:
           raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
            "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
@@ -426,6 +449,14 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         plog: echo "Empty token"
         discard # ERROR ?
 
+    while (ntermStack.len > 0) and (ntermStack.last().elems.len == ntermStack.last().expected):
+      let finished = ntermStack.pop()
+      msg &= fmt("Finished parsing {finished.nterm} with {finished.expected} elems\n")
+      if ntermStack.len > 0:
+        ntermStack.last().elems.add FlatBnf[Tk](
+          kind: fbkNterm, nterm: finished.nterm)
+      else:
+        msg &= "Completely finished input sequence\n"
 
     plog:
       stackshots.add toTermBuf(msg.split("\n").mapIt(fmt "  {it:<47}  "))
@@ -439,6 +470,3 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
 
       echo stackshots.toTermBuf().toString()
       echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
-
-  if stack.len == 0:
-    echo "Finished parsing expressions"
