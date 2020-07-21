@@ -143,11 +143,11 @@ func isNullable[Tk](
     of fbkTerm: false
     of fbkNterm: fbnf.nterm in nulls
 
-proc getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
+func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
   first: FirstTable[Tk],
   follow: FollowTable[Tk],
   nullable: Table[BnfNterm, seq[AltId]]] =
-  echo "werwe"
+  # echo "werwe"
 
   for head, alts in grammar.rules:
     for altId, altBody in alts:
@@ -173,8 +173,9 @@ proc getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
   while true:
     var updated: bool = false
     for rule, body in grammar.iterrules():
-      showLog fmt "Processing {rule.exprRepr()} {body.exprRepr()}"
-      runIndentedLog: # `FIRST` set construction
+      # showLog fmt "Processing {rule.exprRepr()} {body.exprRepr()}"
+      # runIndentedLog:
+      block: # `FIRST` set construction
         # Iterate over all rules in grammar
         if body.isEmpty():
           if rule.head notin result.nullable:
@@ -196,24 +197,24 @@ proc getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
                 result.first[elem.nterm].mapPairs(rhs).union()
               of fbkTerm:
                 # Add token to `FIRST[X]` directly
-                showLog fmt "Found {elem.tok} @ {body.exprRepr()}[{idx}]"
+                # showLog fmt "Found {elem.tok} @ {body.exprRepr()}[{idx}]"
                 makeTKindSet(elem.tok)
               of fbkEmpty:
                 # QUESTION ERROR?
                 makeTKindSet[Tk]()
 
 
-            showLog fmt "Adding {first:>30} to FIRST of {rule.head}[{rule.alt}]"
+            # showLog fmt "Adding {first:>30} to FIRST of {rule.head}[{rule.alt}]"
             updated |= result.first[rule.head][rule.alt].containsOrIncl(first)
 
 
             if not elem.isNullable(result.nullable):
-              showInfo fmt "Found non-nullable element {elem.exprRepr()}"
+              # showInfo fmt "Found non-nullable element {elem.exprRepr()}"
               break # Found non-nullable element, finishing FIRST computation
-            else:
-              showInfo fmt "Element {elem.exprRepr()} of kind {elem.kind} is nullable"
+            # else:
+              # showInfo fmt "Element {elem.exprRepr()} of kind {elem.kind} is nullable"
 
-          showInfo fmt "Finished processing {body.exprRepr()}"
+          # showInfo fmt "Finished processing {body.exprRepr()}"
 
       block: # `FOLLOW` set construction
         var tailFollow: TKindSet[Tk] = result.follow[rule.head] # `FOLLOW`
@@ -304,17 +305,6 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   # let followTable = getFollow(grammar, firstTable)
   let (firstTable, followTable, nullable) = getSets(grammar)
 
-  debugecho "\e[35mFIRST\e[39m set"
-  for head, alts in firstTable:
-    for id, alt in alts:
-      debugecho fmt("{head.exprRepr():>20}[{id}] -> {alt}")
-
-  debugecho "\e[35mFOLLOW\e[39m set"
-  for head, alts in followTable:
-    dechofmt "{head.exprRepr():>20} -> {alts}"
-
-  # if true: quit 0
-  # if true: quit 0
   for ruleId, alt in grammar.iterrules():
     if ruleId.head notin firstTable:
       #[ IMPLEMENT REVIEW what has to be done ]#
@@ -331,16 +321,28 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
       for nullAlt in nullAlts: # QUESTION ERROR?
         result[nterm][tok] = ruleId(nterm, nullAlt)
 
-  debugecho "Parse table:\n", newTermGrid(
-    (0,0),
-    toGrid(
-      result,
-      # aConvCb = matchCurry2(BnfNterm, true, exprRepr),
-      # # bConvCb = matchCurry2(Tk, pconf, exprRepr),
-      # cConvCb = matchCurry2(RuleId, true, exprRepr)
-    ).toTermBufGrid(),
-    makeThinLineGridBorders()
-  ).toTermBuf().toString()
+
+
+  plog:
+    debugecho "\e[35mFIRST\e[39m set"
+    for head, alts in firstTable:
+      for id, alt in alts:
+        debugecho fmt("{head.exprRepr():>20}[{id}] -> {alt}")
+
+    debugecho "\e[35mFOLLOW\e[39m set"
+    for head, alts in followTable:
+      dechofmt "{head.exprRepr():>20} -> {alts}"
+
+    debugecho "Parse table:\n", newTermGrid(
+      (0,0),
+      toGrid(
+        result,
+        # aConvCb = matchCurry2(BnfNterm, true, exprRepr),
+        # # bConvCb = matchCurry2(Tk, pconf, exprRepr),
+        # cConvCb = matchCurry2(RuleId, true, exprRepr)
+      ).toTermBufGrid(),
+      makeThinLineGridBorders()
+    ).toTermBuf().toString()
 
 #============================  Parser object  ============================#
 
@@ -353,8 +355,9 @@ type
 proc newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   new(result)
   let bnfg = grammar.toBNF()
-  debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
-  debugecho "\e[41mBNF grammar\e[49m:\n", bnfg.exprRepr(true, conf = pconf), "\n"
+  plog:
+    debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
+    debugecho "\e[41mBNF grammar\e[49m:\n", bnfg.exprRepr(true, conf = pconf), "\n"
   result.parseTable = makeLL1TableParser(bnfg)
   result.start = bnfg.start
   result.grammar = bnfg
@@ -365,23 +368,25 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
   var curr: Tok = toks.next()
   var done = false
   while not done:
-    var stackshots: seq[TermBuf]
-    var msg: string
+    plog:
+      var stackshots: seq[TermBuf]
+      var msg: string
 
-    block:
-      var stackstr: seq[string]
-      stackstr.add fmt(" {\"VV\":^20} ")
-      for idx, it in stack.reversed():
-        stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
+      block:
+        var stackstr: seq[string]
+        stackstr.add fmt(" {\"VV\":^20} ")
+        for idx, it in stack.reversed():
+          stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
 
-      stackshots.add stackstr.toTermBuf()
+        stackshots.add stackstr.toTermBuf()
 
 
     let top: FlatBnf[Tk] = stack.pop()
-    case top.kind:
-      of fbkTerm: msg &= fmt "Expecting {top.exprRepr()}\n"
-      of fbkNterm: msg &= fmt "Started parsing {top.exprRepr()}\n"
-      else: discard
+    plog:
+      case top.kind:
+        of fbkTerm: msg &= fmt "Expecting {top.exprRepr()}\n"
+        of fbkNterm: msg &= fmt "Started parsing {top.exprRepr()}\n"
+        else: discard
 
     case top.kind:
       of fbkTerm:
@@ -389,25 +394,26 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
           if toks.finished():
             done = true
           else:
-            msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
+            plog: msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
             curr = toks.next()
-            msg &= fmt "Read token '{curr}' ({curr.kind})"
+            plog: msg &= fmt "Read token '{curr}' ({curr.kind})"
         else:
           # ERROR IMPLEMENT
           discard
-          echo "unexpected token ", curr
+          plog: echo "unexpected token ", curr
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          msg &= fmt("Current token is '{curr}' ({curr.kind})\n")
-          msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
-          msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
           let stackadd = parser.grammar.getProductions(rule).reversed()
-          if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
-            msg &= "Empty production\n"
-          msg &= fmt "- [ {top.exprRepr():25} ]\n"
-          for elem in stackadd.reversed():
-            msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
+          plog:
+            msg &= fmt("Current token is '{curr}' ({curr.kind})\n")
+            msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
+            msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
+            if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
+              msg &= "Empty production\n"
+            msg &= fmt "- [ {top.exprRepr():25} ]\n"
+            for elem in stackadd.reversed():
+              msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
 
           stack &= stackadd.filterIt(it.kind != fbkEmpty)
         else:
@@ -417,21 +423,22 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
           )
 
       of fbkEmpty:
-        echo "Empty token"
+        plog: echo "Empty token"
         discard # ERROR ?
 
-    stackshots.add toTermBuf(msg.split("\n").mapIt(fmt "  {it:<47}  "))
 
-    block:
-      var stackstr: seq[string]
-      stackstr.add fmt(" {\"VV\":^20} ")
-      for idx, it in stack.reversed():
-        stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
+    plog:
+      stackshots.add toTermBuf(msg.split("\n").mapIt(fmt "  {it:<47}  "))
+      block:
+        var stackstr: seq[string]
+        stackstr.add fmt(" {\"VV\":^20} ")
+        for idx, it in stack.reversed():
+          stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
 
-      stackshots.add stackstr.toTermBuf()
+        stackshots.add stackstr.toTermBuf()
 
-    echo stackshots.toTermBuf().toString()
-    echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
+      echo stackshots.toTermBuf().toString()
+      echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
 
   if stack.len == 0:
     echo "Finished parsing expressions"
