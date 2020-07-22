@@ -27,12 +27,8 @@ template makeGrammarParser(body: untyped): untyped =
 
 #======================  dummy value construction  =======================#
 
-proc pe(kind: PattKind, args: varargs[PTree]): PTree =
-  newTree(kind, toSeq(args))
-
-proc pt(tok: TokenKind): PTree =
-  newTree(Token(kind: tok))
-
+proc pe(args: varargs[PTree]): PTree = newTree(args)
+proc pt(tok: TokenKind): PTree = newTree(Token(kind: tok))
 proc pn(name: NTermSym, args: varargs[PTree]): PTree =
   newTree(name, toSeq(args))
 
@@ -49,9 +45,14 @@ proc `$`(a: PTree): string = pstring(a)
 
 proc tokensBFS(tree: PTree): seq[Token] =
   tree.mapItBFStoSeq(
-    it.subnodes,
-    if it.kind == pkTerm: some(it.tok) else: none(Token),
-    it.kind != pkTerm
+    (
+      case it.kind:
+        of ptkTerm: it.subnodes
+        of ptkList: it.elements
+        else: raiseAssert("No subnodes for token")
+    ),
+    if it.kind == ptkTerm: some(it.tok) else: none(Token),
+    it.kind != ptkTerm
   )
 
 proc parseToplevel[Tok](
@@ -100,13 +101,12 @@ suite "LL(1) parser simple":
     ].toTokSeq(), parseList)
 
     assert tree.tokensBFS() == pe(
-      pkConcat,
       pt(tkOpBrace),
-      pkConcat.pe(
+      pe(
         pn("element", pt(tkIdent)),
-        pkZeroOrMore.pe(
-          pkConcat.pe(pt(tkComma), pn("element", pt(tkIdent))),
-          pkConcat.pe(pt(tkComma), pn("element", pt(tkIdent)))
+        pe(
+          pe(pt(tkComma), pn("element", pt(tkIdent))),
+          pe(pt(tkComma), pn("element", pt(tkIdent)))
         )
       ),
       pt(tkCloseBrace)
@@ -121,11 +121,11 @@ suite "LL(1) parser simple":
       tkCloseBrace
     ].toTokSeq(), parseList)
 
-    assert tree.tokensBFS() == pkConcat.pe(
+    assert tree.tokensBFS() == pe(
       pt(tkOpBrace),
-      pkConcat.pe(
+      pe(
         pt(tkOpBrace),
-        pkConcat.pe(pt(tkIdent)),
+        pe(pt(tkIdent)),
         pt(tkCloseBrace)
       ),
       pt(tkCloseBrace)
@@ -167,7 +167,7 @@ suite "LL(1) parser simple":
             ident: string
 
     proc getSubnodes[Tok](node: ParseTree[Tok]): seq[ParseTree[Tok]] =
-      if node.kind == pkTerm:
+      if node.kind == ptkTerm:
         return @[]
       else:
         return node.subnodes
@@ -175,7 +175,7 @@ suite "LL(1) parser simple":
     let res = root.mapItDFS(
       it.getSubnodes,
       Ast,
-      (it.kind == pkTerm).tern(
+      (it.kind == ptkTerm).tern(
         (Ast(isList: false, ident: "ze")),
         (Ast(isList: true, subnodes: subt))
       )

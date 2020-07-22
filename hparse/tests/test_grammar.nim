@@ -7,7 +7,7 @@ type
     tkIdent
     tkComma
 
-  Token = object
+  Token* = object
     case kind: TokenKind
       of tkIdent:
         strVal: string

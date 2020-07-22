@@ -13,6 +13,11 @@ import hmisc/helpers
 
 
 type
+  ParseTreeKind* = enum
+    ptkTerm
+    ptkNterm
+    ptkList
+
   ParseTree*[Tok] = ref object
     ##[
 
@@ -24,49 +29,41 @@ Parse tree object
   instead stored in `tok` field
 
     ]##
-    subnodes*: seq[ParseTree[Tok]] ## Sequence of parsed subnodes
     action*: TreeAct ## Tree action to execute after construction
 
-    case kind*: PattKind
-      of pkTerm:
+    case kind*: ParseTreeKind
+      of ptkTerm:
         tok*: Tok ## Value of parsed token
-      of pkNTerm:
-        name*: NTermSym ## Name of parsed nonterminal
-      else:
-        nil
+      of ptkNTerm:
+        nterm*: NTermSym ## Name of parsed nonterminal
+        subnodes*: seq[ParseTree[Tok]] ## Sequence of parsed subnodes
+      of ptkList:
+        elements*: seq[ParseTree[Tok]]
 
 
 
 
 #============================  Constructors  =============================#
 
-proc newTree*[Tok](kind: PattKind, subtree: varargs[ParseTree[Tok]]): ParseTree[Tok] =
+proc newTree*[Tok](subtree: varargs[ParseTree[Tok]]): ParseTree[Tok] =
   ## Create new parse tree object
-  case kind:
-    of pkTerm:
-      raiseAssert("Cannot create new tree of kind `pkTerm`" &
-        "- use newTree overload")
-    of pkNTerm:
-      raiseAssert("Cannot create new tree of kind `pkNterm` without" &
-        "name - use newTree overload")
-    else:
-      case kind:
-        of pkOptional:
-          assert subtree.len < 2,
-           "Optional tree cannot have more than one subnode"
-        of pkOneOrMore:
-          assert subtree.len > 0,
-           "One or more tree cannot have zero elements"
-        else:
-          discard
+  ParseTree[Tok](kind: ptkList, elements: toSeq(subtree))
 
-      ParseTree[Tok](kind: kind, subnodes: toSeq(subtree))
+# proc newTree*[Tok](subtree: seq[ParseTree[Tok]]): ParseTree[Tok] =
+#   ## Create new parse tree object
+#   ParseTree[Tok](kind: ptkList, elements: toSeq(subtree))
 
 proc newTree*[Tok](tok: Tok): ParseTree[Tok] =
-  ParseTree[Tok](kind: pkTerm, tok: tok)
+  ParseTree[Tok](kind: ptkTerm, tok: tok)
 
-proc newTree*[Tok](name: NTermSym, subnodes: varargs[ParseTree[Tok]]): ParseTree[Tok] =
-  ParseTree[Tok](kind: pkNTerm, name: name, subnodes: toSeq(subnodes))
+proc newTree*[Tok](
+  name: NTermSym,
+  subnodes: varargs[ParseTree[Tok]]): ParseTree[Tok] =
+  ParseTree[Tok](
+    kind: ptkNTerm,
+    nterm: name,
+    subnodes: toSeq(subnodes)
+  )
 
 func tok*[Tok](tree: ParseTree[Tok]): Tok =
   assert tree.kind == pkTerm
@@ -79,7 +76,7 @@ func tok*[Tok](tree: ParseTree[Tok]): Tok =
 
 
 func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
-  assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
+  assert tree.kind != ptkTerm, "Cannot iterate over subnodes of terminal"
   tree.subnodes
 
 #========================  Accessors/predicates  =========================#
@@ -95,9 +92,9 @@ func toDotGraphPretty*[Tok](
   result.styleNode.shape = nsaRect
   var tokNodes: seq[Node]
 
-  tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
+  tree.iterateItBFS(it.subnodes, it.kind != ptkTerm):
     let itaddr = cast[int](addr it[])
-    if it.kind == pkTerm:
+    if it.kind == ptkTerm:
       result.addEdge(makeEdge(
         itaddr,
         itaddr + 1))
@@ -118,21 +115,21 @@ func toDotGraphPretty*[Tok](
     result.addNode(makeNode(
       itaddr,
       label = case it.kind:
-        of pkNTerm: it.name
-        of pkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}")
+        of ptkNTerm: it.nterm
+        of ptkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}")
         else: it.nodeKindStr()
       ,
       shape = case it.kind:
-        of pkNTerm: nsaDefault
-        of pkTerm: nsaUnderline
+        of ptkNTerm: nsaDefault
+        of ptkTerm: nsaUnderline
         else: nsaEllipse
       ,
       color = case it.kind:
-        of pkNTerm: colLightBlue
+        of ptkNTerm: colLightBlue
         else: colNoColor
       ,
       style = case it.kind:
-        of pkNTerm: nstFilled
+        of ptkNTerm: nstFilled
         else: nstDefault
     ))
     for tr in subt:
@@ -150,12 +147,12 @@ func toDotGraphPretty*[Tok](
 
 func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
   result.styleNode.shape = nsaRect
-  tree.iterateItBFS(it.subnodes, it.kind != pkTerm):
+  tree.iterateItBFS(it.subnodes, it.kind != ptkTerm):
     let itaddr = cast[int](addr it[])
     let label = case it.kind:
-      of pkNTerm: it.name
-      of pkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}\n'{it.tok}'")
-      else: it.nodeKindStr()
+      of ptkNTerm: it.nterm
+      of ptkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}\n'{it.tok}'")
+      of ptkList: it.nodeKindStr()
 
     result.addNode(makeNode(
       itaddr,
@@ -202,12 +199,8 @@ proc toPng*[Tok](
 #=========================  tree representation  =========================#
 func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
   case node.kind:
-    of pkOptional: "?"
-    of pkAlternative: "or"
-    of pkOneOrMore: "1+"
-    of pkZeroOrMore: "0+"
-    of pkConcat: "and"
-    of pkNTerm: node.name
+    of ptkList: "[ ... ]"
+    of ptkNTerm: node.nterm
     else:
       ""
 
@@ -224,11 +217,11 @@ func treeReprImpl*[Tok](
   )
 
   result = case node.kind:
-    of pkTerm:
+    of ptkTerm:
       @[ fmt("{prefStr}{node.tok.kind.tokKindStr(kindPref)} = '{node.tok}'") ]
-    of pkNTerm:
-      @[ fmt("{prefStr}{node.name}") ]
-    else:
+    of ptkNTerm:
+      @[ fmt("{prefStr}{node.nterm}") ]
+    of ptkList:
       @[ fmt("{prefStr}[ {node.nodeKindStr()} ]") ]
 
   for idx, subn in node.subnodes:
@@ -246,7 +239,7 @@ func lispReprImpl*[Tok](
   node: ParseTree[Tok],
   kindPref: string, discardEmpty: bool): seq[string] =
   case node.kind:
-    of pkTerm:
+    of ptkTerm:
       var kindStr = $node.tok.kind
       if kindStr.startsWith(kindPref):
         kindStr = kindStr[kindPref.len .. ^1]
@@ -281,12 +274,17 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
 
   var newsubn: seq[ParseTree[Tok]]
   var hadPromotions: bool = false
-  let subnodes = tree.subnodes
+  let subnodes =
+    case tree.kind:
+      of ptkNterm: tree.subnodes
+      of ptkList: tree.elements
+      else: @[]
+
   for idx in 0 ..< subnodes.len:
     let subnode = subnodes[idx]
 
     case subnode.kind:
-      of pkTerm:
+      of ptkTerm:
         case subnode.action:
           of taPromote:
             if subnodes.len > 1:

@@ -227,7 +227,7 @@ proc makeConcatBlock[TKind](
   let tokIdent = ident "Tok"
   return (parseStmts & @[
     quote do:
-      newTree[`tokIdent`](kind = pkConcat, @`valueVars`)
+      newTree[`tokIdent`](@`valueVars`)
       # ParseTree[`tokIdent`](
       #   kind: pkConcat,
       #   values: @`valueVars`
@@ -278,10 +278,7 @@ proc makeNtoMTimesBlock[TKind](
           ParseTree[`tokType`](kind: pkOptional)
     else:
       quote do:
-        newTree[`tokType`](
-          kind = `kindLiteral`,
-          `subItems`
-        )
+        newTree[`tokType`](`subItems`)
         # ParseTree[`tokType`](kind: `kindLiteral`, values: `subItems`)
 
 
@@ -369,12 +366,12 @@ proc makeRuleParser[TKind](
       # echo "Parsed body for ", `ntermNterm`, ", in tree:"
       # echo treeRepr(`tree`)
       case `res`.kind:
-        of pkTerm, pkNTerm:
+        of ptkTerm, ptkNTerm:
           `res` = newTree(
             name = `ntermNterm`,
             subnodes = @[`res`]
           )
-        else:
+        of ptkList:
           `res` = newTree(
             name = `ntermNterm`,
             subnodes = `res`.getSubnodes(),
