@@ -5,6 +5,10 @@ import hmisc/types/graphviz_ast
 import hparse/[ll1_gen, grammars, parse_primitives, lexer], macros
 include test_grammar
 
+import hparse/bnf_grammars # Unless I import this one explicitly I get
+                           # error with `hashes`.
+import hashes, sets, tables
+
 #========================  token type definition  ========================#
 
 

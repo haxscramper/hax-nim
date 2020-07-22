@@ -1,5 +1,7 @@
 ## `Parser` object definition
 
+import lexer, parse_tree
+
 type
   Parser* = ref object of RootObj
 

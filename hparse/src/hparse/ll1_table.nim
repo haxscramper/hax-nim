@@ -4,7 +4,7 @@ import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
 
-import bnf_grammars, grammars, parse_helpers, parser_base
+import bnf_grammars, grammars, parse_helpers, parser_base, parse_tree
 
 type
   AltId* = int
@@ -303,21 +303,21 @@ const pconf* = GrammarPrintConf(
 proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
   # let firstTable = getFirst(grammar)
   # let followTable = getFollow(grammar, firstTable)
+  mixin items
   let (firstTable, followTable, nullable) = getSets(grammar)
-
   for ruleId, alt in grammar.iterrules():
     if ruleId.head notin firstTable:
       #[ IMPLEMENT REVIEW what has to be done ]#
       discard
     else:
-      for first in firstTable[ruleId.head][ruleId.alt]:
+      for first in items(firstTable[ruleId.head][ruleId.alt]):
         if ruleId.head notin result:
           result[ruleId.head] = toTable({first : ruleId})
         else:
           result[ruleId.head][first] = ruleId
 
   for nterm, nullAlts in nullable:
-    for tok in followTable[nterm]:
+    for tok in items(followTable[nterm]):
       for nullAlt in nullAlts: # QUESTION ERROR?
         result[nterm][tok] = ruleId(nterm, nullAlt)
 

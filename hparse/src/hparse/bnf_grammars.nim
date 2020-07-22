@@ -112,6 +112,7 @@ func `==`*(lhs, rhs: BnfNterm): bool =
 
 func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
   ## Construction grammar from sequence of rules
+  mixin contains, hash
   for rule in rules:
     if rule.nterm notin result.rules:
       result.rules[rule.nterm] = @[rule.patt]
@@ -268,6 +269,9 @@ func toBNF*[Tk](
     block:
       let topflat = top.flatten()
       for elems in topflat:
+        mixin makeBnfNterm, patt
+        #[ IMPLEMENT expression cannot be called error ]#
+        # FIXME XXXX
         result.add rule(makeBnfNterm(rule.nterm), patt(elems))
 
     for rule in newrules:
@@ -275,12 +279,13 @@ func toBNF*[Tk](
       for idx, elems in newpatts:
         let nterm = makeBnfNterm(rule.nterm.parent, rule.nterm.idx)
         if elems.allOfIt(it.kind == fbkEmpty):
-          result.add rule(nterm, patt(elems))
+          discard
+          result.add (rule(nterm, patt(elems))) # FIXME XXXX
         else:
           let elems = elems.filterIt(it.kind != fbkEmpty)
-          result.add rule(nterm, patt(elems))
+          result.add rule(nterm, patt(elems)) # FIXME XXXX
   else:
-    result.add rule(makeBnfNterm(rule.nterm), top)
+    result.add rule(makeBnfNterm(rule.nterm), top) # FIXME XXXX
     result &= newrules
 
   if renumerate:
@@ -293,9 +298,9 @@ func toBNF*[Tk](
         result[idx] = tmp
 
 func toBNF*[Tk](grammar: Grammar[Tk]): BnfGrammar[Tk] =
+  mixin toBNF
   result = makeGrammar(
-    grammar.rules.mapIt(it.toBNF(noAltFlatten = true, renumerate = false)).concat()
-  )
+    grammar.rules.mapIt(it.toBNF(noAltFlatten = true, renumerate = false)).concat())
 
   result.start = BnfNterm(generated: false, name: grammar.start)
 
