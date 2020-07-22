@@ -69,15 +69,11 @@ func tok*[Tok](tree: ParseTree[Tok]): Tok =
   assert tree.kind == pkTerm
   return tree.tok
 
-# iterator subnodes*[Tok](tree: ParseTree[Tok]): ParseTree[Tok] =
-#   assert tree.kind != pkTerm, "Cannot iterate over subnodes of terminal"
-#   for item in tree.subnodes:
-#     yield item
-
-
 func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
-  assert tree.kind != ptkTerm, "Cannot iterate over subnodes of terminal"
-  tree.subnodes
+  case tree.kind:
+    of ptkNterm: tree.subnodes
+    of ptkList: tree.elements
+    of ptkTerm: @[]
 
 #========================  Accessors/predicates  =========================#
 
@@ -224,7 +220,7 @@ func treeReprImpl*[Tok](
     of ptkList:
       @[ fmt("{prefStr}[ {node.nodeKindStr()} ]") ]
 
-  for idx, subn in node.subnodes:
+  for idx, subn in node.getSubnodes():
     result &= subn.treeReprImpl(pref & @[
       currIdx != parentMaxIdx
     ],
@@ -309,18 +305,26 @@ func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
       of taDrop:
         discard
       of taSpliceDiscard:
-        newsubn &= subnode.subnodes
+        newsubn &= subnode.getSubnodes()
       of taSplicePromote:
         tree = subnode
-        newsubn &= subnode.subnodes
+        newsubn &= subnode.getSubnodes()
       of taPromote:
         if not hadPromotions:
           tree = subnode
-          newsubn &= subnode.subnodes
+          newsubn &= subnode.getSubnodes()
         else:
           discard #[ IMPLEMENT repeated promotions ]#
       of taSubrule:
         discard #[ IMPLEMENT ]#
 
-  tree.subnodes = newsubn
+
+  case tree.kind:
+    of ptkNterm:
+      tree.subnodes = newsubn
+    of ptkList:
+      tree.elements = newsubn
+    else:
+      discard
+
   tree.action = taDefault

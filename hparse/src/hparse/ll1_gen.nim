@@ -203,7 +203,6 @@ proc makeNTermBlock[TKind](nterm: CompPatt[TKind], conf: CodeGenConf): NimNode =
   let
     ntermIdent = ident(makeParserName(nterm.nterm))
     lexerIdent = ident(conf.toksIdent)
-    # tree = ident "res"
     ntermStr = newLit(nterm.nterm)
 
   quote do:
@@ -363,23 +362,11 @@ proc makeRuleParser[TKind](
   let impl = quote do:
     proc `procName`[Tok](`toks`: var TokStream[Tok]): ParseTree[Tok] =
       `parseBody`
-      # echo "Parsed body for ", `ntermNterm`, ", in tree:"
-      # echo treeRepr(`tree`)
       case `res`.kind:
         of ptkTerm, ptkNTerm:
-          `res` = newTree(
-            name = `ntermNterm`,
-            subnodes = @[`res`]
-          )
+          return newTree(name = `ntermNterm`, subnodes = @[`res`])
         of ptkList:
-          `res` = newTree(
-            name = `ntermNterm`,
-            subnodes = `res`.getSubnodes(),
-          )
-
-      # echo "After rewrapping"
-      # echo treeRepr(`tree`)
-      return `res`
+          return newTree(name = `ntermNterm`, subnodes = `res`.getSubnodes())
 
 
   return (decl: decl, impl: impl)

@@ -21,7 +21,7 @@ template makeGrammarParser(body: untyped): untyped =
     let compGrammar = computeGrammar(grammar)
     # pprint compGrammar
     result = makeGrammarParser(compGrammar)
-    # colorPrint result
+    colorPrint result
 
   buildGrammar()
 
@@ -170,7 +170,7 @@ suite "LL(1) parser simple":
       if node.kind == ptkTerm:
         return @[]
       else:
-        return node.subnodes
+        return node.getSubnodes()
 
     let res = root.mapItDFS(
       it.getSubnodes,
