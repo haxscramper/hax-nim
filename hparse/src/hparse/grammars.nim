@@ -13,7 +13,6 @@ type
     pkTerm ## Terminal token
     pkNterm ## Nonterminal symbol
 
-
     # 'nested' patterns
     pkAlternative ## Any of several (non)terminals. `OR` for (non)terminals
     pkConcat ## All (non)terminals in sequence `AND` for (non)terminals
@@ -21,15 +20,6 @@ type
     pkOptional ## Optional (non)terminal
     pkZeroOrMore ## Zero or more occurencies of (non)terminal
     pkOneOrMore ## One or more occurence of (non)terminal
-
-  TreeAct* = enum
-    taDefault ## No tree action specified
-
-    taDrop
-    taPromote
-    taSubrule
-    taSpliceDiscard
-    taSplicePromote
 
   Patt*[TKind] = ref object
     ## Ebnf grammar pattern. `Tok` is a type for token object.
@@ -46,13 +36,6 @@ type
         opt*: Patt[TKind] ## Single instance that will be repeated
         ## [0..1], [0..n] or [1..n] times respectively
 
-  BnfPattKind* = enum
-    bnfEmpty
-    bnfTerm
-    bnfNTerm
-    bnfConcat
-    bnfAlternative
-
   Rule*[TKind] = object
     nterm*: NTermSym
     patts*: Patt[TKind]
@@ -61,164 +44,12 @@ type
     start*: NtermSym
     rules*: seq[Rule[TKind]]
 
-  BnfNTerm* = object
-    case generated*: bool
-      of true:
-        idx*: seq[int]
-        parent*: NtermSym
-      of false:
-        name*: NtermSym
 
-  FlatBnfKind* = enum
-    fbkEmpty
-    fbkNterm
-    fbkTerm
-
-  FlatBnf*[Tk] = object
-    case kind*: FlatBnfKind
-      of fbkEmpty: nil
-      of fbkNterm:
-        nterm*: BnfNterm
-      of fbkTerm:
-        tok*: Tk
-
-
-  BnfPatt*[TKind] = ref object # REVIEW is it necessary to use `ref`?
-    action*: TreeAct
-    case flat*: bool
-      of false:
-        case kind*: BnfPattKind
-          of bnfEmpty:
-            nil
-          of bnfNterm:
-            nterm*: BnfNTerm ## Nonterminal to parse
-          of bnfTerm:
-            tok*: TKind ## Single token to match literally
-          of bnfAlternative, bnfConcat:
-            patts*: seq[BnfPatt[TKind]]
-      of true:
-        elems*: seq[FlatBnf[Tkind]]
-
-  BnfRule*[TKind] = object
-    nterm*: BnfNterm
-    patt*: BnfPatt[TKind]
-
-  RuleId* = object
-   head*: BnfNterm
-   alt*: int
-
-  BnfGrammar*[Tk] = object
-    start*: BnfNterm
-    rules*: Table[BnfNterm, seq[BnfPatt[Tk]]]
-
-func isEmpty*[Tk](patt: BnfPatt[Tk]): bool =
-  (patt.elems.len == 1) and (patt.elems[0].kind == fbkEmpty)
-
-func `[]`*[Tk](grammar: BnfGrammar[Tk], rule: RuleId): BnfPatt[Tk] =
-  grammar.rules[rule.head][rule.alt]
-
-func getProductions*[Tk](
-  grammar: BnfGrammar[Tk], id: RuleId): seq[FlatBnf[Tk]] =
-  grammar.rules[id.head][id.alt].elems
-
-func ruleId*(nterm: BnfNterm, alt: int): RuleId =
-  RuleId(head: nterm, alt: alt)
-
-func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
-  BnfNterm(generated: true, idx: idx, parent: parent)
-
-func makeBnfNterm(name: string): BnfNTerm =
-  BnfNterm(generated: false, name: name)
-
-func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
-  BnfPatt[Tk](flat: true, elems: elems)
-
-func first*[Tk](patt: BnfPatt[Tk]): FlatBnf[Tk] =
-  assert patt.flat
-  return patt.elems[0]
-
-func hash*(nterm: BnfNTerm): Hash =
-  var h: Hash = 0
-  h = h !& hash(nterm.generated)
-  case nterm.generated:
-    of true:
-      h = h !& hash(nterm.parent)
-      h = h !& hash(nterm.idx)
-    of false:
-      h = h !& hash(nterm.name)
-
-  result = !$h
-
-func hash*(id: RuleId): Hash =
-  var h: Hash = 0
-  h = h !& hash(id.head) !& hash(id.alt)
-  result = !$h
-
-func `==`*(lhs, rhs: BnfNterm): bool =
-  lhs.generated == rhs.generated and (
-    case lhs.generated:
-      of true:
-        (lhs.parent == rhs.parent) and
-        (lhs.idx == rhs.idx)
-      of false:
-        (lhs.name == rhs.name)
-  )
-
-func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
-  for rule in rules:
-    if rule.nterm notin result.rules:
-      result.rules[rule.nterm] = @[rule.patt]
-    else:
-      result.rules[rule.nterm].add rule.patt
 
 func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
   result = patt
   result.action = act
 
-#==============================  token set  ==============================#
-
-type
-  EofTok* = object
-  TkindSet*[Tk] = object
-    vals: set[Tk]
-    hasEof: bool
-
-const eofTok*: EofTok = EofTok()
-
-func contains*[Tk](s: TKindSet[Tk], tk: Tk): bool = tk in s.vals
-func contains*[Tk](s: TKindSet[Tk], tk: EofTok): bool = s.hasEof
-func incl*[Tk](s: var TKindSet[Tk], tk: Tk): void = s.vals.incl tk
-func incl*[Tk](s: var TKindSet[Tk], tk: EofTok): void = (s.hasEof = true)
-func incl*[Tk](s: var TKindSet[Tk], other: TKindSet[Tk]): void =
-  s.vals.incl other.vals
-
-func `$`*[Tk](s: TKindSet[Tk]): string =
-  (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
-
-func toTkind*[Tk](s: set[Tk]): TKindSet[Tk] = (result.vals = s)
-func makeTKindSet*[Tk](): TkindSet[Tk] = discard
-func makeTKindSet*[Tk](tok: Tk): TkindSet[Tk] = result.vals.incl tok
-func makeTKindSet*[Tk](eof: EofTok): TKindSet[Tk] = (result.hasEof = true)
-iterator items*[Tk](s: TKindSet[Tk]): Tk =
-  for it in s.vals:
-    yield it
-
-func union*[Tk](s: seq[TKindSet[Tk]]): TKindSet[Tk] =
-  result.hasEof = s.anyOfIt(it.hasEof)
-  for it in s:
-    result.vals.incl it.vals
-
-func containsOrIncl*[Tk](s: var TKindSet[Tk], other: TKindSet[Tk]): bool =
-  if (s.hasEof == other.hasEof) and ((s.vals - other.vals).len == 0):
-    result = false
-
-  s.hasEof = s.hasEof or other.hasEof
-  s.vals.incl other.vals
-
-func hash*[Tk](s: TKindSet[Tk]): Hash =
-  var h: Hash = 0
-  h = h !& hash(s.vals) !& hash(s.hasEof)
-  result = !$h
 
 #=================================  ===  =================================#
 
@@ -270,9 +101,6 @@ type
 
 func rule*[Tk](name: string, patt: Patt[Tk]): Rule[Tk] =
   Rule[Tk](nterm: name, patts: patt)
-
-func rule*[Tk](nterm: BnfNterm, patt: BnfPatt[Tk]): BnfRule[Tk] =
-  BnfRule[Tk](nterm: nterm, patt: patt)
 
 func zeroP*[TKind](patt: Patt[TKind]): Patt[TKind] =
   Patt[TKind](kind: pkZeroOrMore, opt: patt)

@@ -16,6 +16,8 @@ import lexer
 export lexer
 
 template doIt(s, action: untyped): untyped =
+  ## Execute action for each element in sequence, return original
+  ## action.
   type Item = type((s[0]))
   for it {.inject.} in s:
     action
