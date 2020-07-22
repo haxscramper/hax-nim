@@ -1,3 +1,8 @@
+import sequtils
+import hmisc/algo/[halgorithm, hseq_mapping]
+
+import sets, hashes, sugar
+
 #==============================  token set  ==============================#
 
 type
@@ -59,6 +64,7 @@ func topoSort*[Vertex](
   idgen: proc(vert: Vertex): Hash,
   revese: bool = true): seq[Vertex] =
 
+  mixin items
   runnableExamples:
     assert @[3, 2, 1] == topoSort(
       verts = @[1, 2, 3],
@@ -101,7 +107,7 @@ func topoSort*[Vertex](
     let node = noincoming.pop()
     sortednodes.add node
     # For all adjacent
-    for adj in toSeq(adjList[node]):
+    for adj in items(adjList[node]):
       # Remove edge `(adj, node)`
       adjList[node].excl adj
       # Decrease number of incoming edges for `adj`

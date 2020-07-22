@@ -1,10 +1,10 @@
 import grammars, lexer
-import hmisc/[helpers, defensive]
+import hmisc/[helpers]
 import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
 
-initDefense()
+import bnf_grammars, grammars, parse_helpers, parser_base
 
 type
   AltId* = int

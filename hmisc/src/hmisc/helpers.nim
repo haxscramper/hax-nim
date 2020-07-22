@@ -33,6 +33,14 @@ proc echoi*(message: varargs[string, `$`]): void =
   ## Echo with message joined by spaces
   echo message.join(" ")
 
+template plog*(body: untyped): untyped =
+  # Really? what the fuck is this shit
+  when defined(prettyPrintLogging):
+    {.noSideEffect.}:
+      body
+
+
+
 template subnodesEq*(lhs, rhs, field: untyped): untyped =
   ## Check if two objects `lhs` and `rhs` has identical field `field`
   ## by comparing all items in the field. Check if two object's fields

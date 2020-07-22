@@ -1,3 +1,5 @@
+import hparse/parse_tree
+
 type
   TokenKind = enum
     tkOpBrace

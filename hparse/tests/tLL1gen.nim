@@ -2,7 +2,7 @@ import unittest, sequtils, options
 import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
 import hmisc/types/graphviz_ast
-import hparse/[ll1_gen, grammars], macros
+import hparse/[ll1_gen, grammars, parse_primitives, lexer], macros
 include test_grammar
 
 #========================  token type definition  ========================#

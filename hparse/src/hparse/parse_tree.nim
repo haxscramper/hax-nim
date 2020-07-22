@@ -1,19 +1,15 @@
+import parse_primitives
+import sequtils, strformat, strutils, colors
+
+import hmisc/types/graphviz_ast
+import hmisc/algo/htree_mapping
+import hmisc/helpers
+
 #*************************************************************************#
 #**************************  Type definitions  ***************************#
 #*************************************************************************#
 
 #=============================  Primitives  ==============================#
-
-type
-  TreeAct* = enum
-    ## Types of tree actions
-    taDefault ## No tree action specified
-
-    taDrop ## Drop element from tree
-    taPromote ## Promote - make current element into topmost
-    taSubrule ## Move section into separate tree
-    taSpliceDiscard ## Lift node's children, discard node itself
-    taSplicePromote ## Splice, replace current node with spliced one
 
 
 type
@@ -87,10 +83,6 @@ func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
   tree.subnodes
 
 #========================  Accessors/predicates  =========================#
-
-func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
-  result = patt
-  result.action = act
 
 #===========================  Pretty-printing  ===========================#
 
@@ -208,6 +200,16 @@ proc toPng*[Tok](
   tree.toDotGraph(kindPref, preciseRepr, bottomTokens).topng(path)
 
 #=========================  tree representation  =========================#
+func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
+  case node.kind:
+    of pkOptional: "?"
+    of pkAlternative: "or"
+    of pkOneOrMore: "1+"
+    of pkZeroOrMore: "0+"
+    of pkConcat: "and"
+    of pkNTerm: node.name
+    else:
+      ""
 
 func treeReprImpl*[Tok](
   node: ParseTree[Tok],

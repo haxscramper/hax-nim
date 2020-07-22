@@ -6,21 +6,10 @@ import hmisc/types/[graphviz_ast, hvariant]
 import hmisc/algo/[halgorithm, htree_mapping, hseq_mapping]
 import lexer
 
+import parse_primitives
+
 
 type
-  NTermSym* = string
-  PattKind* = enum
-    pkTerm ## Terminal token
-    pkNterm ## Nonterminal symbol
-
-    # 'nested' patterns
-    pkAlternative ## Any of several (non)terminals. `OR` for (non)terminals
-    pkConcat ## All (non)terminals in sequence `AND` for (non)terminals
-
-    pkOptional ## Optional (non)terminal
-    pkZeroOrMore ## Zero or more occurencies of (non)terminal
-    pkOneOrMore ## One or more occurence of (non)terminal
-
   Patt*[TKind] = ref object
     ## Ebnf grammar pattern. `Tok` is a type for token object.
     # head*: NTermSym ## Nonterminal symbol
@@ -44,10 +33,18 @@ type
     start*: NtermSym
     rules*: seq[Rule[TKind]]
 
+#============================  Constructors  =============================#
+
 proc toGrammar*[TKind](
   table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
   result.rules = table.mapPairs(Rule[TKind](nterm: lhs, patts: rhs))
   result.start = result.rules[0].nterm
+
+#==============================  Accessors  ==============================#
+
+func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
+  result = patt
+  result.action = act
 
 #====================  generic pattern construction  =====================#
 
@@ -78,38 +75,9 @@ func nterm*[TKind](nterm: string): Patt[TKind] =
 
 import strutils
 
-proc `$`*[TKind](patt: CompPatt[TKind]): string =
-  case patt.kind:
-    of pkNterm:
-       &"<{patt.nterm}>"
-    of pkTerm:
-       &"'{patt.tok}'"
-    of pkAlternative:
-      patt.patts.mapIt($it).join(" | ")
-    of pkConcat:
-      patt.patts.mapIt($it).join(" , ")
-    of pkOptional:
-      &"({patt.opt})?"
-    of pkZeroOrMore:
-      &"({patt.opt})*"
-    of pkOneOrMore:
-      &"({patt.opt})+"
-
 #*************************************************************************#
 #***************************  pretty-printing  ***************************#
 #*************************************************************************#
-
-func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
-  case node.kind:
-    of pkOptional: "?"
-    of pkAlternative: "or"
-    of pkOneOrMore: "1+"
-    of pkZeroOrMore: "0+"
-    of pkConcat: "and"
-    of pkNTerm: node.name
-    else:
-      ""
-
 func tokKindStr*[TKind](tkind: TKind, prefStr: string): string =
   result = $tkind
   if result.startsWith(prefStr):

@@ -147,23 +147,23 @@ macro mapPairs*(
 
       when openarrPairs:
         when `inseq`[0] is tuple:
-          for (`lhsId`, `rhsId`) in `inseq`:
+          for (`lhsId`, `rhsId`) in items(`inseq`):
             res.add `op`
             inc `idxId`
 
         else:
-          for `lhsId`, `rhsId` in `inseq`:
+          for `lhsId`, `rhsId` in pairs(`inseq`):
             res.add `op`
             inc `idxId`
 
       else:
         when compiles(for k, v in pairs(`inseq`): discard):
-          for `lhsId`, `rhsId` in `inseq`:
+          for `lhsId`, `rhsId` in pairs(`inseq`):
             res.add `op`
             inc `idxId`
         else:
           var lhs {.inject.}: int = 0
-          for `rhsId` in `inseq`:
+          for `rhsId` in items(`inseq`):
             res.add `op`
             inc `lhsId`
             inc `idxId`

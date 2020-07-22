@@ -110,11 +110,6 @@ template getLogConf*(f: string): untyped =
 
   defLogConfMap[f]
 
-template plog*(body: untyped): untyped =
-  when defined(prettyPrintLogging):
-    {.noSideEffect.}:
-      body
-
 template runTempConfigLock*(
   newConf: openarray[(LoggingConf, bool)], body: untyped): untyped =
   ## Add/remove configuration from global config, run body and then

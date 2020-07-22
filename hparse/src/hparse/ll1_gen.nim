@@ -7,14 +7,9 @@ import grammars
 export helpers
 
 import hashes, tables, sets
-export tables, sets
-
-import parser_common
-export parser_common
 
 import lexer
-export lexer
-
+import parse_primitives, parser_common, parse_tree, parse_helpers
 
 ## LL1 parser generator code
 
@@ -140,7 +135,7 @@ proc computeGrammar*[TKind](g: Grammar[TKind]
 
   for rule in sortedRules:
     let compPatt = computePatt(rule.patts, sets)
-    sets.first[rule.nterm] = compPatt.first(sets)
+    sets.first[rule.nterm] = first(compPatt, sets)
     result.rules.add CompRule[TKind](nterm: rule.nterm, patts: compPatt)
 
   result.sets = sets
@@ -177,7 +172,7 @@ proc makeAltBlock[TKind](
     let resIdent = ident resName
     let parseBlock = makeParseBlock(patt, conf, sets, resName)
     result.add nnkOfBranch.newTree(
-      makeSetLiteral(patt.first(sets)),
+      makeSetLiteral(first(patt, sets)),
       quote do:
         `parseBlock`
         `resIdent`
@@ -245,7 +240,7 @@ proc makeNtoMTimesBlock[TKind](
   assert nterm.kind in {pkZeroOrMore, pkOneOrMore, pkOptional}
   let
     toksIdent = ident(conf.toksIdent)
-    laLiteral = makeSetLiteral(nterm.first(sets))
+    laLiteral = makeSetLiteral(first(nterm, sets))
     bodyParse = makeParseBlock(nterm.opt[0], conf, sets, "itemRes")
     minLit = newLit(mintimes)
     maxLit = newLit(maxtimes)
@@ -413,3 +408,20 @@ proc makeGrammarParser*[TKind](
     decls.newStmtList(),
     impls.newStmtList()
   )
+
+proc `$`*[TKind](patt: CompPatt[TKind]): string =
+  case patt.kind:
+    of pkNterm:
+       &"<{patt.nterm}>"
+    of pkTerm:
+       &"'{patt.tok}'"
+    of pkAlternative:
+      patt.patts.mapIt($it).join(" | ")
+    of pkConcat:
+      patt.patts.mapIt($it).join(" , ")
+    of pkOptional:
+      &"({patt.opt})?"
+    of pkZeroOrMore:
+      &"({patt.opt})*"
+    of pkOneOrMore:
+      &"({patt.opt})+"

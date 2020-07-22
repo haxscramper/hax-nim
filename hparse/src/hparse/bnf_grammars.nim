@@ -1,6 +1,9 @@
 ## Types/functions for BNF grammars
 
 import grammars
+import parse_primitives
+import sets, hashes, sequtils, strformat, strutils
+import hmisc/helpers
 
 #*************************************************************************#
 #**************************  Type declarations  **************************#
@@ -125,10 +128,15 @@ func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
   BnfNterm(generated: true, idx: idx, parent: parent)
 
 func makeBnfNterm(name: string): BnfNTerm =
+  BnfNterm(generated: false, name: name)
 
 func rule*[Tk](nterm: BnfNterm, patt: BnfPatt[Tk]): BnfRule[Tk] =
   ## Construct new BNF rule using `nterm` as head and `patt` as production
   BnfRule[Tk](nterm: nterm, patt: patt)
+
+func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
+  BnfPatt[Tk](flat: true, elems: elems)
+
 
 #===================  Conversion from regular grammar  ===================#
 
@@ -307,10 +315,6 @@ func getProductions*[Tk](
   grammar: BnfGrammar[Tk], id: RuleId): seq[FlatBnf[Tk]] =
   ## Get list of productions from flat bnf pattern at `id`
   grammar.rules[id.head][id.alt].elems
- BnfNterm(generated: false, name: name)
-
-func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
-  BnfPatt[Tk](flat: true, elems: elems)
 
 func first*[Tk](patt: BnfPatt[Tk]): FlatBnf[Tk] =
   assert patt.flat
