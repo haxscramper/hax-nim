@@ -15,6 +15,9 @@ export parser_common
 import lexer
 export lexer
 
+
+## LL1 parser generator code
+
 template doIt(s, action: untyped): untyped =
   ## Execute action for each element in sequence, return original
   ## action.
@@ -23,6 +26,87 @@ template doIt(s, action: untyped): untyped =
     action
 
   s
+
+type
+  FirstSet*[TKind] = set[TKind]
+  NTermSets*[TKind] = object
+    first*: Table[NTermSym, FirstSet[TKind]]
+
+  CompPatt*[TKind] = object
+    action*: TreeAct
+    first: FirstSet[TKind]
+    case kind*: PattKind
+      of pkNterm:
+        nterm*: NTermSym ## Nonterminal to parse
+      of pkTerm:
+        tok*: TKind ## Single token to match literally
+      of pkAlternative, pkConcat:
+        patts*: seq[CompPatt[TKind]]
+      of pkOptional, pkZeroOrMore, pkOneOrMore:
+        opt*: seq[CompPatt[TKind]] ## Single instance that will be repeated
+        # I could've used `Option[]` but decided to go with `seq`
+        # since I should not have a situation where `opt` field is
+        # `none` - it is just a workaround to allow recursive field
+
+
+  CompRule*[TKind] = object
+    nterm*: NTermSym
+    patts*: CompPatt[TKind]
+
+  CompGrammar*[TKind] = object
+    sets*: NTermSets[TKind]
+    rules*: seq[CompRule[TKind]]
+
+#=========================  FIRST set computat  ==========================#
+
+proc computeFirst*[TKind](
+  patt: Patt[TKind], other: NTermSets[TKind]): FirstSet[TKind] =
+  ## Generate FIRST set for `patt`
+  case patt.kind:
+    of pkTerm:
+      result.incl patt.tok
+    of pkConcat:
+      result.incl computeFirst(patt.patts[0], other)
+    of pkAlternative:
+      for p in patt.patts:
+        result.incl computeFirst(p, other)
+    of pkOptional, pkZeroOrMore, pkOneOrMore:
+      result.incl computeFirst(patt.opt, other)
+    of pkNterm:
+      result.incl other.first[patt.nterm]
+
+proc computePatt*[TKind](
+  patt: Patt[TKind], sets: NTermSets[TKind]): CompPatt[TKind] =
+  ## Generate FIRST set for pattern `patt`
+  let kind = patt.kind
+  case kind:
+    of pkTerm:
+      result = CompPatt[TKind](kind: pkTerm, tok: patt.tok)
+      result.first.incl patt.tok
+    of pkConcat:
+      result = CompPatt[TKind](
+        kind: pkConcat, patts: patt.patts.mapIt(computePatt(it, sets)))
+      result.first.incl computeFirst(patt.patts[0], sets)
+    of pkAlternative:
+      result = CompPatt[TKind](
+        kind: pkAlternative, patts: patt.patts.mapIt(computePatt(it, sets)))
+      for p in patt.patts:
+        result.first.incl computeFirst(p, sets)
+    of pkOptional, pkZeroOrMore, pkOneOrMore:
+      result = CompPatt[TKind](
+        kind: kind, opt: @[computePatt(patt.opt, sets)])
+      result.first.incl computeFirst(patt.opt, sets)
+    of pkNterm:
+      # FIRST sets for nonterminals are stored in `sets`
+      result = CompPatt[TKind](kind: pkNterm, nterm: patt.nterm)
+
+  result.action = patt.action
+
+func first*[TKind](
+  patt: CompPatt[TKind], sets: NTermSets[TKind]): FirstSet[TKind] =
+  case patt.kind:
+    of pkNTerm: sets.first[patt.nterm]
+    else: patt.first
 
 
 proc necessaryTerms[TKind](rhs: Patt[TKind]): seq[NTermSym] =
