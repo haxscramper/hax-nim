@@ -45,14 +45,8 @@ proc `$`(a: PTree): string = pstring(a)
 
 proc tokensBFS(tree: PTree): seq[Token] =
   tree.mapItBFStoSeq(
-    (
-      case it.kind:
-        of ptkTerm: it.subnodes
-        of ptkList: it.elements
-        else: raiseAssert("No subnodes for token")
-    ),
-    if it.kind == ptkTerm: some(it.tok) else: none(Token),
-    it.kind != ptkTerm
+    it.getSubnodes(),
+    if it.kind == ptkTerm: some(it.tok) else: none(Token)
   )
 
 proc parseToplevel[Tok](
@@ -140,7 +134,7 @@ suite "LL(1) parser simple":
       mapString("[[c,z,d,[e,d]],[e,d,f]]"),
       parseList
     )
-    echo tree.treeRepr("tk")
+    # echo tree.treeRepr("tk")
     # echo tree.lispRepr("tk")
 
     # ERROR `index out of bounds, the container is empty`
@@ -165,12 +159,6 @@ suite "LL(1) parser simple":
             subnodes: seq[Ast]
           else:
             ident: string
-
-    proc getSubnodes[Tok](node: ParseTree[Tok]): seq[ParseTree[Tok]] =
-      if node.kind == ptkTerm:
-        return @[]
-      else:
-        return node.getSubnodes()
 
     let res = root.mapItDFS(
       it.getSubnodes,
@@ -213,7 +201,6 @@ suite "LL(1) parser tree actions":
 
     echo "--- FINAL ---"
     echo tree.treeRepr("tk")
-
     tree.topng("/tmp/image.png", "tk", bottomTokens = true)
 
 import hparse/ll1_table

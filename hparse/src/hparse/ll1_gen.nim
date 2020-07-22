@@ -186,7 +186,6 @@ proc makeTermBlock[TKind](term: CompPatt[TKind]): NimNode =
   return quote do:
     let tok = next(`toksIdent`)
     assert tok.kind == `tokIdent`
-    # echo "Found token ", tok
     newTree(tok)
 
 proc makeNTermBlock[TKind](nterm: CompPatt[TKind]): NimNode =

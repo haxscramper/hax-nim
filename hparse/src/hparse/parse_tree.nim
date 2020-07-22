@@ -75,6 +75,12 @@ func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
     of ptkList: tree.elements
     of ptkTerm: @[]
 
+func len*[Tok](tree: ParseTree[Tok]): int =
+  case tree.kind:
+    of ptkTerm: 0
+    of ptkNterm: tree.subnodes.len
+    of ptkList: tree.elements.len
+
 #========================  Accessors/predicates  =========================#
 
 #===========================  Pretty-printing  ===========================#
@@ -88,7 +94,7 @@ func toDotGraphPretty*[Tok](
   result.styleNode.shape = nsaRect
   var tokNodes: seq[Node]
 
-  tree.iterateItBFS(it.subnodes, it.kind != ptkTerm):
+  tree.iterateItBFS(it.getSubnodes(), it.kind != ptkTerm):
     let itaddr = cast[int](addr it[])
     if it.kind == ptkTerm:
       result.addEdge(makeEdge(
@@ -224,9 +230,7 @@ func treeReprImpl*[Tok](
     result &= subn.treeReprImpl(pref & @[
       currIdx != parentMaxIdx
     ],
-    node.subnodes.len - 1,
-    idx,
-    kindPref)
+    node.len - 1, idx, kindPref)
 
 func treeRepr*[Tok](node: ParseTree[Tok], kindPref: string = ""): string =
   treeReprImpl(node, @[], 0, 0, kindPref).join("\n")
