@@ -354,6 +354,9 @@ type
     parseTable: LL1Table[Tk]
     retainGenerated: bool
 
+func getGrammar*[Tk](parser: LL1TableParser[Tk]): BnfGrammar[Tk] =
+  parser.grammar
+
 proc newLL1TableParser*[Tk](
   grammar: Grammar[Tk],
   retainGenerated: bool = false): LL1TableParser[Tk] =

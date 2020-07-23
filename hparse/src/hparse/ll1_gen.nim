@@ -401,4 +401,4 @@ func newLL1RecursiveDescent*[Tok](
 method parse*[Tok](
   parser: LL1RecursiveDescentParser[Tok],
   toks: var TokStream[Tok]): ParseTree[Tok] =
-  parser.parse(toks)
+  parser.startCb(toks)

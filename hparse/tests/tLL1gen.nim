@@ -1,4 +1,4 @@
-import unittest, sequtils, options
+import unittest, sequtils, options, random
 import typetraits
 import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
@@ -250,9 +250,43 @@ suite "Table-driven vs recursive descent":
     echo "\e[42mruntime\e[49m"
     echo grammarVal.toGrammar().exprRepr()
 
-  # NOTE changing `let` to `const` generates some very strange ___
-  # `not unused` errors in bnf_grammars, in particular for
-  # `bnf_grammars.==` and `bnf_grammars.exprRepr` (358)
   let recursiveParser = newLL1RecursiveParser[Token](grammarConst)
   let tableParser = newLL1TableParser(
     grammarVal.toGrammar(), retainGenerated = false)
+
+  let testInput = "[a,b,c,d,e]"
+
+  let recursiveTree =
+    block:
+      var stream = mapString(testInput).makeStream()
+      recursiveParser.parse(stream)
+
+  let tableTree =
+    block:
+      var stream = mapString(testInput).makeStream()
+      tableParser.parse(stream)
+
+
+  var resultGraph: Graph
+  block:
+    var tree = recursiveTree.toDotGraph()
+    tree.isCluster = true
+    tree.label = grammarVal.toGrammar().exprRepr()
+    tree.name = "recursive"
+
+    resultGraph.addSubgraph(tree)
+
+  block:
+    var tree = tableTree.toDotGraph()
+    tree.isCluster = true
+    tree.name = "table"
+    tree.topNode = some(
+      block:
+        withIt makeNode(toNodeId(rand(100000)), tableParser.getGrammar().exprRepr(true)):
+          it.width = 10
+          it.labelAlign = nlaLeft
+    )
+
+    resultGraph.addSubgraph(tree)
+
+  resultGraph.toPng("/tmp/combined.png")

@@ -21,6 +21,13 @@ relevant places.
 
 ]##
 
+template withIt*(val, body: untyped): untyped =
+  block:
+    var it {.inject.} = val
+    block:
+      body
+    it
+
 type
   NodeId* = object
     path: seq[int]
@@ -141,6 +148,13 @@ type
     nstWedged = "wedged"
     nstStriped = "filled"
 
+  NodeLabelAlign* = enum
+    nlaDefault = "\\n"
+
+    nlaLeft = "\\l"
+    nlaCenter = "\\n"
+    nlaRight = "\\r"
+
 type # Enumerations for arrows
   ArrowShape = enum
     ## https://graphviz.org/doc/info/arrows.html
@@ -228,6 +242,8 @@ type
 
     ]##
     id*: NodeId
+    width*: float
+    height*: float
     case style: NodeStyle
       # NOTE not clear what happens with 'filled' node that uses color
       # list
@@ -248,6 +264,7 @@ type
       of nsaPlaintext:
         htmlLabel*: HtmlElem
       else:
+        labelAlign*: NodeLabelAlign
         label*: Option[string] ## Node label
 
 type
@@ -281,6 +298,7 @@ type
     src*: NodeId
     to*: seq[NodeId]
     color*: Color
+    weight*: Option[float]
 
 type
   GraphNodeRank* = enum
@@ -290,13 +308,16 @@ type
   Graph* = object
     styleNode*: Node
     styleEdge*: Edge
+    topNode*: Option[Node]
 
     noderank*: GraphNodeRank
-
     isUndirected*: bool
+
+    # Cluster graph
     name*: string
     isCluster*: bool
     isWrapper*: bool
+
     label*: string
     labelOnBottom*: bool
     fontsize*: int
@@ -328,7 +349,9 @@ func makeNode*(
   label: string,
   shape: NodeShape = nsaDefault,
   color: Color = colNoColor,
-  style: NodeStyle = nstDefault): Node =
+  style: NodeStyle = nstDefault,
+  width: float = -1.0,
+  height: float = -1.0): Node =
   result = Node(shape: shape, style: style)
   result.id = id
   result.label = some(label)
@@ -367,6 +390,8 @@ func toTree(node: Node, level: int = 0): DotTree =
   var attr = newStringTable()
   result = DotTree(kind: dtkNodeDef)
   result.nodeId = node.id
+  if node.width > 0: attr["width"] = $node.width
+  if node.height > 0: attr["height"] = $node.height
 
   case node.style:
     of nstStriped, nstWedged:
@@ -390,7 +415,10 @@ func toTree(node: Node, level: int = 0): DotTree =
       attr["label"] = " <" & $node.htmlLabel & "> "
     else:
       if node.label.isSome():
-        attr["label"] = node.label.get().quote()
+        if node.labelAlign != nlaDefault:
+          attr["label"] = node.label.get().split("\n").join($node.labelAlign).quote()
+        else:
+          attr["label"] = node.label.get().quote()
 
   if node.shape != nsaDefault: attr["shape"] = $node.shape
 
@@ -404,6 +432,8 @@ func toTree(edge: Edge, level: int = 0): DotTree =
     # HACK black color is omitted unconditionally. need to IMPLEMENT
     # check whether or not this is allowed.
     attrs["color"] = ($edge.color).quote
+
+  if edge.weight.isSome(): attrs["weight"] = ($edge.weight.get())
 
   result.origin = edge.src
   result.targets = edge.to
@@ -441,6 +471,17 @@ func toTree(graph: Graph, level: int = 0): DotTree =
         key: "node",
         val: styleNode.nodeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
       )
+
+  if graph.topNode.isSome():
+    let tree = graph.topNode.get().toTree(level + 1)
+    result.elements.add tree
+    if graph.nodes.len > 0:
+      result.elements.add Edge(
+        src: graph.topNode.get().id,
+        to: @[graph.nodes[0].id],
+        weight: some(0.0)
+      ).toTree(level + 1)
+
 
   result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
   result.elements.add graph.edges.mapIt(toTree(it, level + 1))
