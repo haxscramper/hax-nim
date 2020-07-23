@@ -363,17 +363,18 @@ proc newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   result.grammar = bnfg
 
 type
-  TermProgress[Tk] = object
+  TermProgress[Tok] = object
     nterm: BnfNterm
     expected: int
-    elems: seq[FlatBnf[Tk]]
+    elems: seq[ParseTree[Tok]]
 
 method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): ParseTree[Tok] =
   var stack: seq[FlatBnf[Tk]]
   stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
   var curr: Tok = toks.next()
-  var ntermStack: seq[TermProgress[Tk]] = @[]
+  var ntermStack: seq[TermProgress[Tok]] = @[]
   var done = false
+  var parseDone: bool = false
   while not done:
     plog:
       var stackshots: seq[TermBuf]
@@ -392,8 +393,8 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
 
         stackshots.add stackstr.toTermBuf()
 
-
     let top: FlatBnf[Tk] = stack.pop()
+
     plog:
       case top.kind:
         of fbkTerm:
@@ -409,7 +410,8 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         if top.tok == curr.kind:
           plog:
             msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
-            ntermStack.last().elems.add top
+            ntermStack.last().elems.add newTree(curr)
+
           if toks.finished():
             done = true
           else:
@@ -428,15 +430,17 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
             msg &= fmt("Current token is '{curr}' ({curr.kind})\n")
             msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
             msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
-            if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
-              msg &= "Empty production\n"
-              ntermStack.add TermProgress[Tk](nterm: rule.head, expected: 0)
-            else:
-              ntermStack.add TermProgress[Tk](nterm: rule.head, expected: stackadd.len)
 
-            msg &= fmt "- [ {top.exprRepr():25} ]\n"
-            for elem in stackadd:
-              msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
+          if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
+            plog: msg &= "Empty production\n"
+            ntermStack.add TermProgress[Tok](nterm: rule.head, expected: 0)
+          else:
+            ntermStack.add TermProgress[Tok](nterm: rule.head, expected: stackadd.len)
+
+            plog:
+              msg &= fmt "- [ {top.exprRepr():25} ]\n"
+              for elem in stackadd:
+                msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
 
           stack &= stackadd.reversed().filterIt(it.kind != fbkEmpty)
         else:
@@ -450,13 +454,18 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
         discard # ERROR ?
 
     while (ntermStack.len > 0) and (ntermStack.last().elems.len == ntermStack.last().expected):
-      let finished = ntermStack.pop()
-      msg &= fmt("Finished parsing {finished.nterm} with {finished.expected} elems\n")
+      let last = ntermStack.pop()
+      plog: msg &= fmt("Finished parsing {last.nterm} with {last.expected} elems\n")
       if ntermStack.len > 0:
-        ntermStack.last().elems.add FlatBnf[Tk](
-          kind: fbkNterm, nterm: finished.nterm)
+        ntermStack.last().elems.add(
+          if last.nterm.generated:
+            newTree(last.elems)
+          else:
+            newTree(last.nterm.name, last.elems))
       else:
-        msg &= "Completely finished input sequence\n"
+        plog: msg &= "Completely finished input sequence\n"
+        result = newTree(last.nterm.name, last.elems)
+        parseDone = true
 
     plog:
       stackshots.add toTermBuf(msg.split("\n").mapIt(fmt "  {it:<47}  "))
@@ -470,3 +479,6 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
 
       echo stackshots.toTermBuf().toString()
       echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
+
+  if parseDone:
+    return result

@@ -45,9 +45,9 @@ Parse tree object
 
 #============================  Constructors  =============================#
 
-proc newTree*[Tok](subtree: varargs[ParseTree[Tok]]): ParseTree[Tok] =
+proc newTree*[Tok](subtree: seq[ParseTree[Tok]]): ParseTree[Tok] =
   ## Create new parse tree object
-  ParseTree[Tok](kind: ptkList, elements: toSeq(subtree))
+  ParseTree[Tok](kind: ptkList, elements: subtree)
 
 # proc newTree*[Tok](subtree: seq[ParseTree[Tok]]): ParseTree[Tok] =
 #   ## Create new parse tree object
@@ -57,13 +57,8 @@ proc newTree*[Tok](tok: Tok): ParseTree[Tok] =
   ParseTree[Tok](kind: ptkTerm, tok: tok)
 
 proc newTree*[Tok](
-  name: NTermSym,
-  subnodes: varargs[ParseTree[Tok]]): ParseTree[Tok] =
-  ParseTree[Tok](
-    kind: ptkNTerm,
-    nterm: name,
-    subnodes: toSeq(subnodes)
-  )
+  name: NTermSym, subnodes: seq[ParseTree[Tok]]): ParseTree[Tok] =
+  ParseTree[Tok](kind: ptkNTerm, nterm: name, subnodes: subnodes)
 
 func tok*[Tok](tree: ParseTree[Tok]): Tok =
   assert tree.kind == pkTerm

@@ -21,13 +21,13 @@ template makeGrammarParser(body: untyped): untyped =
     let compGrammar = computeGrammar(grammar)
     # pprint compGrammar
     result = makeGrammarParser(compGrammar)
-    colorPrint result
+    # colorPrint result
 
   buildGrammar()
 
 #======================  dummy value construction  =======================#
 
-proc pe(args: varargs[PTree]): PTree = newTree(args)
+proc pe(args: varargs[PTree]): PTree = newTree(toSeq(args))
 proc pt(tok: TokenKind): PTree = newTree(Token(kind: tok))
 proc pn(name: NTermSym, args: varargs[PTree]): PTree =
   newTree(name, toSeq(args))
@@ -208,7 +208,7 @@ import hparse/ll1_table
 suite "Predictive LL(1)":
   const nt = nterm[TokenKind]
   test "Simple grammar":
-    let parser = newLL1TableParser({
+    let tableParser = newLL1TableParser({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkOpBrace),
@@ -230,5 +230,6 @@ suite "Predictive LL(1)":
       )
     }.toGrammar())
 
-    var stream = mapString("[a]").makeStream()
-    let tree = parser.parse(stream)
+    var stream = mapString("[a,b,c,d,e]").makeStream()
+    let tree = tableParser.parse(stream)
+    tree.topng("/tmp/tree.png")

@@ -35,6 +35,7 @@ type
     fbkTerm ## Terminal element - token
 
   FlatBnf*[Tk] = object
+    action*: TreeAct
     case kind*: FlatBnfKind
       of fbkEmpty:
         nil
