@@ -192,6 +192,7 @@ type
     edsDotted = "dotted"
     edsDashed = "dashed"
     edsBold = "bold"
+    edsInvis = "invis"
     edsTapered = "tapered" # TODO NOTE
 
   SplineStyle = enum
@@ -244,6 +245,7 @@ type
     id*: NodeId
     width*: float
     height*: float
+    fontname*: string
     case style: NodeStyle
       # NOTE not clear what happens with 'filled' node that uses color
       # list
@@ -264,6 +266,7 @@ type
       of nsaPlaintext:
         htmlLabel*: HtmlElem
       else:
+        labelLeftPad*: string
         labelAlign*: NodeLabelAlign
         label*: Option[string] ## Node label
 
@@ -293,6 +296,7 @@ type
 
 type
   Edge* = object
+    style*: EdgeStyle
     spline*: SplineStyle
     arrowSpec*: Arrow
     src*: NodeId
@@ -392,6 +396,7 @@ func toTree(node: Node, level: int = 0): DotTree =
   result.nodeId = node.id
   if node.width > 0: attr["width"] = $node.width
   if node.height > 0: attr["height"] = $node.height
+  if node.fontname.len > 0: attr["fontname"] = node.fontname.quote()
 
   case node.style:
     of nstStriped, nstWedged:
@@ -416,9 +421,25 @@ func toTree(node: Node, level: int = 0): DotTree =
     else:
       if node.label.isSome():
         if node.labelAlign != nlaDefault:
-          attr["label"] = node.label.get().split("\n").join($node.labelAlign).quote()
+          let str = node.label.get().
+            split("\n").
+            mapIt(node.labelLeftPad & it).
+            join($node.labelAlign)
+
+          attr["label"] = quote(
+            case node.labelAlign:
+              of nlaLeft, nlaRight: str & $node.labelAlign
+              else: str
+          )
         else:
-          attr["label"] = node.label.get().quote()
+          if node.labelLeftPad.len > 0:
+            attr["label"] = node.label.get().
+              split("\n").
+              mapIt(node.labelLeftPad & it).
+              join("\n").
+              quote()
+          else:
+            attr["label"] = node.label.get().quote()
 
   if node.shape != nsaDefault: attr["shape"] = $node.shape
 
@@ -434,6 +455,7 @@ func toTree(edge: Edge, level: int = 0): DotTree =
     attrs["color"] = ($edge.color).quote
 
   if edge.weight.isSome(): attrs["weight"] = ($edge.weight.get())
+  if edge.style != edsDefault: attrs["style"] = ($edge.style)
 
   result.origin = edge.src
   result.targets = edge.to
@@ -479,7 +501,8 @@ func toTree(graph: Graph, level: int = 0): DotTree =
       result.elements.add Edge(
         src: graph.topNode.get().id,
         to: @[graph.nodes[0].id],
-        weight: some(0.0)
+        weight: some(0.0),
+        style: edsInvis
       ).toTree(level + 1)
 
 

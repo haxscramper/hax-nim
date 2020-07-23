@@ -1,4 +1,4 @@
-import unittest, sequtils, options, random
+import unittest, sequtils, options, random, strutils
 import typetraits
 import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
@@ -271,8 +271,14 @@ suite "Table-driven vs recursive descent":
   block:
     var tree = recursiveTree.toDotGraph()
     tree.isCluster = true
-    tree.label = grammarVal.toGrammar().exprRepr()
     tree.name = "recursive"
+    tree.topNode = some(
+      block:
+        withIt makeNode(toNodeId(rand(100000)), grammarVal.toGrammar().exprRepr()):
+          it.width = 10
+          it.labelAlign = nlaLeft
+          it.labelLeftPad = " ".repeat(10)
+    )
 
     resultGraph.addSubgraph(tree)
 
@@ -285,8 +291,10 @@ suite "Table-driven vs recursive descent":
         withIt makeNode(toNodeId(rand(100000)), tableParser.getGrammar().exprRepr(true)):
           it.width = 10
           it.labelAlign = nlaLeft
+          it.labelLeftPad = " ".repeat(10)
     )
 
     resultGraph.addSubgraph(tree)
 
+  resultGraph.styleNode.fontname = "Consolas"
   resultGraph.toPng("/tmp/combined.png")
