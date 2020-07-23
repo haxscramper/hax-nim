@@ -217,7 +217,7 @@ import hparse/ll1_table
 
 suite "Table-driven vs recursive descent":
   const nt = nterm[TokenKind]
-  const grammar = {
+  const grammarConst = {
     # list ::= '[' <elements> ']'
     "list" : andP(
       tok(tkOpBrace),
@@ -239,10 +239,20 @@ suite "Table-driven vs recursive descent":
     )
   }
 
-  static:
-    echo grammar.toGrammar().exprRepr()
-  echo grammar.toGrammar().exprRepr()
+  let grammarVal = grammarConst
 
+
+  block:
+    static:
+      echo "\e[42mcompiletime\e[49m"
+      echo grammarConst.toGrammar().exprRepr()
+
+    echo "\e[42mruntime\e[49m"
+    echo grammarVal.toGrammar().exprRepr()
+
+  # NOTE changing `let` to `const` generates some very strange ___
+  # `not unused` errors in bnf_grammars, in particular for
+  # `bnf_grammars.==` and `bnf_grammars.exprRepr` (358)
+  let recursiveParser = newLL1RecursiveParser[Token](grammarConst)
   let tableParser = newLL1TableParser(
-    grammar.toGrammar(), retainGenerated = false)
-  # let recursiveParser =
+    grammarVal.toGrammar(), retainGenerated = false)

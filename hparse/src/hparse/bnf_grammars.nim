@@ -101,11 +101,11 @@ func hash*(id: RuleId): Hash =
 
 func `==`*(lhs, rhs: BnfNterm): bool =
   lhs.generated == rhs.generated and (
-    case lhs.generated:
-      of true:
+    block:
+      if lhs.generated:
         (lhs.parent == rhs.parent) and
         (lhs.idx == rhs.idx)
-      of false:
+      else:
         (lhs.name == rhs.name)
   )
 
@@ -355,21 +355,20 @@ func exprRepr*[Tk](
 func exprRepr*[TKind](
   bnf: BnfPatt[TKind],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
-  case bnf.flat:
-    of true:
-      bnf.elems.mapIt(exprRepr(it, conf)).join(conf.concatSep)
-    of false:
-      case bnf.kind:
-        of bnfEmpty:
-          conf.emptyProd
-        of bnfTerm:
-          ($bnf.tok).wrap(conf.termWrap)
-        of bnfNTerm:
-          (bnf.nterm.exprRepr()).wrap(conf.ntermWrap)
-        of bnfAlternative, bnfConcat:
-          bnf.patts.mapIt(exprRepr(it, conf)).join(
-            (bnf.kind == bnfConcat).tern(conf.concatSep, conf.alternSep)
-          ).wrap("{  }")
+  if bnf.flat:
+    bnf.elems.mapIt(exprRepr(it, conf)).join(conf.concatSep)
+  else:
+    case bnf.kind:
+      of bnfEmpty:
+        conf.emptyProd
+      of bnfTerm:
+        ($bnf.tok).wrap(conf.termWrap)
+      of bnfNTerm:
+        (bnf.nterm.exprRepr()).wrap(conf.ntermWrap)
+      of bnfAlternative, bnfConcat:
+        bnf.patts.mapIt(exprRepr(it, conf)).join(
+          (bnf.kind == bnfConcat).tern(conf.concatSep, conf.alternSep)
+        ).wrap("{  }")
 
 
 func exprRepr*[TKind](
