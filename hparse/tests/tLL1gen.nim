@@ -15,22 +15,28 @@ import hashes, sets, tables
 
 #======================  grammar parser generation  ======================#
 
-template makeGrammarParser(body: typed): untyped =
-  type Patt = typeof body[0][1]
-  type Tok = genericParams(Patt)
-  static:
-    echo typeof Tok
-    quit 0
+dumpAstGen:
+  let cb = cn[Tok]
+
+template makeGrammarParser[Tok](body: typed): untyped =
   # Trillion IQ hack
   macro buildParser(): untyped =
     let grammar = toGrammar(body)
     let compGrammar = computeGrammar(grammar)
-    let cbName = ident grammar.start.makeParserName()
+    let cbName = grammar.start.makeParserName()
     result = newStmtList(
       makeGrammarParser(compGrammar),
-      # quote:
-      #   let cb = `cbName`[]
-      newCall("newLL1RecursiveDescent", cbName)
+      nnkLetSection.newTree(
+        nnkIdentDefs.newTree(
+          newIdentNode("cb"),
+          newEmptyNode(),
+          nnkBracketExpr.newTree(
+            newIdentNode(cbName),
+            newIdentNode($(typeof Tok))
+          )
+        )
+      ),
+      newCall("newLL1RecursiveDescent", ident "cb")
     )
 
     colorPrint(result)
@@ -73,7 +79,7 @@ proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
 
 suite "LL(1) parser simple":
   const nt = nterm[TokenKind]
-  makeGrammarParser({
+  let parser = makeGrammarParser[Token]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkOpBrace),
@@ -183,7 +189,7 @@ suite "LL(1) parser simple":
 
 suite "LL(1) parser tree actions":
   const nt = nterm[TokenKind]
-  makeGrammarParser({
+  let parser = makeGrammarParser[Token]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkOpBrace).addAction(taDrop),
