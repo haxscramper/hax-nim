@@ -351,8 +351,11 @@ type
     start: BnfNterm
     grammar: BnfGrammar[Tk]
     parseTable: LL1Table[Tk]
+    retainGenerated: bool
 
-proc newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
+proc newLL1TableParser*[Tk](
+  grammar: Grammar[Tk],
+  retainGenerated: bool = false): LL1TableParser[Tk] =
   new(result)
   let bnfg = grammar.toBNF()
   plog:
@@ -361,6 +364,7 @@ proc newLL1TableParser*[Tk](grammar: Grammar[Tk]): LL1TableParser[Tk] =
   result.parseTable = makeLL1TableParser(bnfg)
   result.start = bnfg.start
   result.grammar = bnfg
+  result.retainGenerated = retainGenerated
 
 type
   TermProgress[Tok] = object
@@ -368,7 +372,9 @@ type
     expected: int
     elems: seq[ParseTree[Tok]]
 
-method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): ParseTree[Tok] =
+method parse*[Tok, Tk](
+  parser: LL1TableParser[Tk],
+  toks: var TokStream[Tok]): ParseTree[Tok] =
   var stack: seq[FlatBnf[Tk]]
   stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
   var curr: Tok = toks.next()
@@ -459,9 +465,13 @@ method parse*[Tok, Tk](parser: LL1TableParser[Tk], toks: var TokStream[Tok]): Pa
       if ntermStack.len > 0:
         ntermStack.last().elems.add(
           if last.nterm.generated:
-            newTree(last.elems)
+            if parser.retainGenerated:
+              newTree(last.nterm.exprRepr(), last.elems)
+            else:
+              newTree(last.elems)
           else:
-            newTree(last.nterm.name, last.elems))
+            newTree(last.nterm.name, last.elems)
+        )
       else:
         plog: msg &= "Completely finished input sequence\n"
         result = newTree(last.nterm.name, last.elems)

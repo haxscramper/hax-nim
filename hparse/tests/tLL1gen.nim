@@ -1,4 +1,5 @@
 import unittest, sequtils, options
+import typetraits
 import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
 import hmisc/types/graphviz_ast
@@ -14,16 +15,27 @@ import hashes, sets, tables
 
 #======================  grammar parser generation  ======================#
 
-template makeGrammarParser(body: untyped): untyped =
+template makeGrammarParser(body: typed): untyped =
+  type Patt = typeof body[0][1]
+  type Tok = genericParams(Patt)
+  static:
+    echo typeof Tok
+    quit 0
   # Trillion IQ hack
-  macro buildGrammar(): untyped =
+  macro buildParser(): untyped =
     let grammar = toGrammar(body)
     let compGrammar = computeGrammar(grammar)
-    # pprint compGrammar
-    result = makeGrammarParser(compGrammar)
-    # colorPrint result
+    let cbName = ident grammar.start.makeParserName()
+    result = newStmtList(
+      makeGrammarParser(compGrammar),
+      # quote:
+      #   let cb = `cbName`[]
+      newCall("newLL1RecursiveDescent", cbName)
+    )
 
-  buildGrammar()
+    colorPrint(result)
+
+  buildParser()
 
 #======================  dummy value construction  =======================#
 
@@ -228,7 +240,8 @@ suite "Predictive LL(1)":
         tok(tkIdent),
         nt("list")
       )
-    }.toGrammar())
+    }.toGrammar(),
+    retainGenerated = false)
 
     var stream = mapString("[a,b,c,d,e]").makeStream()
     let tree = tableParser.parse(stream)
