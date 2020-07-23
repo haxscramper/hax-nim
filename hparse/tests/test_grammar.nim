@@ -33,3 +33,12 @@ func `==`(lhs, rhs: Token): bool =
       else:
         true
   )
+
+func mapString(s: string): seq[Token] =
+  s.mapIt(
+    case it:
+      of '[': Token(kind: tkOpBrace)
+      of ']': Token(kind: tkCloseBrace)
+      of ',': Token(kind: tkComma)
+      else: Token(kind: tkIdent, strVal: $it)
+  )

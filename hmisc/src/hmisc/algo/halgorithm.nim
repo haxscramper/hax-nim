@@ -127,17 +127,6 @@ proc matchWith*[K, V](
 
 #=======================  single item operations  ========================#
 
-
-proc nthType1*[T1, T2](a: (T1, T2)): T1 =
-  ## Helper proc to get first type from tuple. Used as workaround for
-  ## `pairs` iterator
-  discard
-
-proc nthType2*[T1, T2](a: (T1, T2)): T2 =
-  ## Helper proc to get second type from tuple. Used as workaround for
-  ## `pairs` iterator
-  discard
-
 #=========================  string operations  ===========================#
 
 func posString*(node: NimNode): string =

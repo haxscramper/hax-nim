@@ -194,6 +194,7 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
                 # Add elements from `FIRST[Yi]` to `FIRST[X, <alt>]`.
                 # Since `Yi` might have more than one alternative in
                 # grammar we have to merge all possible `FIRST` sets.
+                debugecho fmt("[ {elem.nterm.exprRepr()} ]")
                 result.first[elem.nterm].mapPairs(rhs).union()
               of fbkTerm:
                 # Add token to `FIRST[X]` directly

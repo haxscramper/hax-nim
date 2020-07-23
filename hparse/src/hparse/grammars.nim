@@ -10,7 +10,7 @@ import parse_primitives
 
 
 type
-  Patt*[TKind] = ref object
+  Patt*[TKind] = object
     ## Ebnf grammar pattern. `Tok` is a type for token object.
     # head*: NTermSym ## Nonterminal symbol
     action*: TreeAct
@@ -22,7 +22,7 @@ type
       of pkAlternative, pkConcat:
         patts*: seq[Patt[TKind]]
       of pkOptional, pkZeroOrMore, pkOneOrMore:
-        opt*: Patt[TKind] ## Single instance that will be repeated
+        item: seq[Patt[TKind]] ## Single instance that will be repeated
         ## [0..1], [0..n] or [1..n] times respectively
 
   Rule*[TKind] = object
@@ -33,32 +33,19 @@ type
     start*: NtermSym
     rules*: seq[Rule[TKind]]
 
-#============================  Constructors  =============================#
-
-proc toGrammar*[TKind](
-  table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
-  result.rules = table.mapPairs(Rule[TKind](nterm: lhs, patts: rhs))
-  result.start = result.rules[0].nterm
-
-#==============================  Accessors  ==============================#
-
-func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
-  result = patt
-  result.action = act
-
 #====================  generic pattern construction  =====================#
 
 func rule*[Tk](name: string, patt: Patt[Tk]): Rule[Tk] =
   Rule[Tk](nterm: name, patts: patt)
 
 func zeroP*[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkZeroOrMore, opt: patt)
+  Patt[TKind](kind: pkZeroOrMore, item: @[ patt ])
 
 func oneP*[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkOneOrMore, opt: patt)
+  Patt[TKind](kind: pkOneOrMore, item: @[ patt ])
 
 func optP*[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkOptional, opt: patt)
+  Patt[TKind](kind: pkOptional, item: @[ patt ])
 
 func andP*[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
   Patt[TKind](kind: pkConcat, patts: toSeq(patts))
@@ -71,6 +58,21 @@ func tok*[TKind](tok: TKind): Patt[TKind] =
 
 func nterm*[TKind](nterm: string): Patt[TKind] =
   Patt[TKind](kind: pkNTerm, nterm: nterm)
+
+#============================  Constructors  =============================#
+
+func toGrammar*[TKind](
+  table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
+  result.rules = table.mapPairs(rule(lhs, rhs))
+  result.start = result.rules[0].nterm
+
+#==============================  Accessors  ==============================#
+
+func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
+  result = patt
+  result.action = act
+
+func `opt`*[Tk](patt: Patt[Tk]): Patt[Tk] = patt.item[0]
 
 
 import strutils

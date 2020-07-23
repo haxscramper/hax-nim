@@ -50,15 +50,6 @@ proc pt(tok: TokenKind): PTree = newTree(Token(kind: tok))
 proc pn(name: NTermSym, args: varargs[PTree]): PTree =
   newTree(name, toSeq(args))
 
-func mapString(s: string): seq[Token] =
-  s.mapIt(
-    case it:
-      of '[': Token(kind: tkOpBrace)
-      of ']': Token(kind: tkCloseBrace)
-      of ',': Token(kind: tkComma)
-      else: Token(kind: tkIdent, strVal: $it)
-  )
-
 proc `$`(a: PTree): string = pstring(a)
 
 proc tokensBFS(tree: PTree): seq[Token] =
@@ -223,32 +214,27 @@ suite "LL(1) parser tree actions":
 
 import hparse/ll1_table
 
-suite "Predictive LL(1)":
-  const nt = nterm[TokenKind]
-  test "Simple grammar":
-    let tableParser = newLL1TableParser({
-      # list ::= '[' <elements> ']'
-      "list" : andP(
-        tok(tkOpBrace),
-        nt("elements"),
-        tok(tkCloseBrace)
-      ),
-      # elements ::= <element> (',' <element>)*
-      "elements" : andP(
-        nt("element"),
-        zeroP(andP(
-          tok(tkComma),
-          nt("element")
-        ))
-      ),
-      # element ::= 'ident' | <list>
-      "element" : orP(
-        tok(tkIdent),
-        nt("list")
-      )
-    }.toGrammar(),
-    retainGenerated = false)
 
-    var stream = mapString("[a,b,c,d,e]").makeStream()
-    let tree = tableParser.parse(stream)
-    tree.topng("/tmp/tree.png")
+suite "Table-driven vs recursive descent":
+  const nt = nterm[TokenKind]
+  const grammar = {
+    # list ::= '[' <elements> ']'
+    "list" : andP(
+      tok(tkOpBrace),
+      nt("elements"),
+      tok(tkCloseBrace)
+    ),
+    # elements ::= <element> (',' <element>)*
+    "elements" : andP(
+      nt("element"),
+      zeroP(andP(
+        tok(tkComma),
+        nt("element")
+      ))
+    ),
+    # element ::= 'ident' | <list>
+    "element" : orP(
+      tok(tkIdent),
+      nt("list")
+    )
+  }
