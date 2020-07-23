@@ -18,7 +18,7 @@ import hashes, sets, tables
 dumpAstGen:
   let cb = cn[Tok]
 
-template makeGrammarParser[Tok](body: typed): untyped =
+template newLL1RecursiveParser[Tok](body: typed): untyped =
   # Trillion IQ hack
   macro buildParser(): untyped =
     let grammar = toGrammar(body)
@@ -70,7 +70,7 @@ proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
 
 suite "LL(1) parser simple":
   const nt = nterm[TokenKind]
-  let parser = makeGrammarParser[Token]({
+  let parser = newLL1RecursiveParser[Token]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkOpBrace),
@@ -180,7 +180,7 @@ suite "LL(1) parser simple":
 
 suite "LL(1) parser tree actions":
   const nt = nterm[TokenKind]
-  let parser = makeGrammarParser[Token]({
+  let parser = newLL1RecursiveParser[Token]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkOpBrace).addAction(taDrop),
@@ -238,3 +238,11 @@ suite "Table-driven vs recursive descent":
       nt("list")
     )
   }
+
+  static:
+    echo grammar.toGrammar().exprRepr()
+  echo grammar.toGrammar().exprRepr()
+
+  let tableParser = newLL1TableParser(
+    grammar.toGrammar(), retainGenerated = false)
+  # let recursiveParser =

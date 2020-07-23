@@ -1,25 +1,18 @@
 type
-  U = object
-    case a: bool
-    of true: str: string
-    of false: discard
+  P = object
+    name: string
+    subn: seq[P]
 
-  PU = ref object
+proc conv(a: varargs[(string, P)]): P =
+  for (name, subn) in a:
+    result.subn.add P(name: name, subn: @[subn])
 
-proc u(): U =
-  echo "U"
-  result = U(a: true, str: "Hello world")
-  echo result
+const p = {
+  "ae" : P(),
+  "AE" : P()
+}
 
-proc pu(): PU = echo "PU"
+static:
+  echo p.conv()
 
-const uAlias = u
-const puAlias = pu
-
-echo "runtime"
-let val = uAlias() # Executed at compile-time
-echo val
-
-discard u()
-discard pu()
-discard puAlias()
+echo p.conv()
