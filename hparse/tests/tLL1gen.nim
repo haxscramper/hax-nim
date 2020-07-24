@@ -272,13 +272,16 @@ suite "Table-driven vs recursive descent":
     var tree = recursiveTree.toDotGraph()
     tree.isCluster = true
     tree.name = "recursive"
-    tree.topNode = some(
-      block:
-        withIt makeNode(toNodeId(rand(100000)), grammarVal.toGrammar().exprRepr()):
-          it.width = 10
-          it.labelAlign = nlaLeft
-          it.labelLeftPad = " ".repeat(10)
-    )
+    tree.topNodes.add:
+      withIt makeNode(toNodeId(rand(100000)), grammarVal.toGrammar().exprRepr()):
+        it.width = 10
+        it.labelAlign = nlaLeft
+        it.labelLeftPad = " ".repeat(10)
+
+    tree.topNodes.add:
+      withIt makeNode(toNodeId(rand(100000)), "Input string: " & testInput):
+        it.width = 10
+        it.shape = nsaNone
 
     resultGraph.addSubgraph(tree)
 
@@ -286,13 +289,17 @@ suite "Table-driven vs recursive descent":
     var tree = tableTree.toDotGraph()
     tree.isCluster = true
     tree.name = "table"
-    tree.topNode = some(
-      block:
-        withIt makeNode(toNodeId(rand(100000)), tableParser.getGrammar().exprRepr(true)):
-          it.width = 10
-          it.labelAlign = nlaLeft
-          it.labelLeftPad = " ".repeat(10)
-    )
+    tree.topNodes.add:
+      withIt makeNode(toNodeId(rand(100000)), tableParser.getGrammar().exprRepr(true)):
+        it.width = 10
+        it.labelAlign = nlaLeft
+        it.labelLeftPad = " ".repeat(10)
+
+
+    tree.topNodes.add:
+      withIt makeNode(toNodeId(rand(100000)), "Input string: " & testInput):
+        it.width = 10
+        it.shape = nsaNone
 
     resultGraph.addSubgraph(tree)
 

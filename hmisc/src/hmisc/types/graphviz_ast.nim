@@ -303,6 +303,7 @@ type
     to*: seq[NodeId]
     color*: Color
     weight*: Option[float]
+    minlen*: Option[float]
 
 type
   GraphNodeRank* = enum
@@ -312,7 +313,7 @@ type
   Graph* = object
     styleNode*: Node
     styleEdge*: Edge
-    topNode*: Option[Node]
+    topNodes*: seq[Node]
 
     noderank*: GraphNodeRank
     isUndirected*: bool
@@ -342,6 +343,19 @@ func addNode*(graph: var Graph, node: Node): void =
 
 func makeEdge*(idFrom, idTo: NodeId): Edge =
   Edge(src: idFrom, to: @[idTo])
+
+func makeAuxEdge*(idFrom, idTo: NodeId): Edge =
+  Edge(src: idFrom, to: @[idTo], weight: some(0.0), style: edsInvis)
+
+
+func makeConstraintEdge*(idFrom, idTo: NodeId): Edge =
+  Edge(
+    src: idFrom,
+    to: @[idTo],
+    weight: some(1000.0),
+    style: edsInvis
+    # minlen: some(0.0)
+  )
 
 func addSubgraph*(graph: var Graph, subg: Graph): void =
   graph.subgraphs.add subg
@@ -445,6 +459,12 @@ func toTree(node: Node, level: int = 0): DotTree =
 
   result.nodeAttributes = attr
 
+func setSome[T](
+  table: StringTableRef,
+  name: string, val: Option[T]): void =
+  if val.isSome():
+    table[name] = $val.get
+
 func toTree(edge: Edge, level: int = 0): DotTree =
   result = DotTree(kind: dtkEdgeDef)
   var attrs = newStringTable()
@@ -454,6 +474,7 @@ func toTree(edge: Edge, level: int = 0): DotTree =
     # check whether or not this is allowed.
     attrs["color"] = ($edge.color).quote
 
+  attrs.setSome("minlen", edge.minlen)
   if edge.weight.isSome(): attrs["weight"] = ($edge.weight.get())
   if edge.style != edsDefault: attrs["style"] = ($edge.style)
 
@@ -494,16 +515,30 @@ func toTree(graph: Graph, level: int = 0): DotTree =
         val: styleNode.nodeAttributes.mapPairs(&"{lhs}={rhs}").join(", ")
       )
 
-  if graph.topNode.isSome():
-    let tree = graph.topNode.get().toTree(level + 1)
-    result.elements.add tree
+  if graph.topNodes.len > 0:
+    var nodeIds: seq[NodeId]
+    for node in graph.topNodes:
+      let tree = node.toTree(level + 1)
+      result.elements.add tree
+      nodeIds.add node.id
+
+    block:
+      var prevId: NodeId = nodeIds[0]
+      for nodeId in nodeIds[1..^1]:
+        result.elements.add makeConstraintEdge(
+          prevId, nodeId).toTree(level + 1)
+        prevId = nodeId
+
     if graph.nodes.len > 0:
-      result.elements.add Edge(
-        src: graph.topNode.get().id,
-        to: @[graph.nodes[0].id],
-        weight: some(0.0),
-        style: edsInvis
-      ).toTree(level + 1)
+      result.elements.add:
+        makeAuxEdge(nodeIds[^1], graph.nodes[0].id).toTree(level + 1)
+
+    # Edge(
+    #     src: nodeIds[^1].id,
+    #     to: @[graph.nodes[0].id],
+    #     weight: some(0.0),
+    #     style: edsInvis
+    #   ).toTree(level + 1)
 
 
   result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
