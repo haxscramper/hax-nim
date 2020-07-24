@@ -147,10 +147,17 @@ NOTE: values are not checked for primitivenes recursively. Instead
         (tree.fldPairs.len < 5) and
         tree.fldPairs.allOfIt(it.value.isPrimitive)
 
+type
+  IdCounter = object
+    now: int
+
+func next(cnt: var IdCounter): int =
+  result = cnt.now
+  inc cnt.now
 
 proc toSimpleTree*[Obj](
   entry: Obj,
-  idCounter: var iterator(): int,
+  idCounter: var IdCounter,
   conf: PPrintConf = PPrintConf(),
   path: seq[int] = @[0]): ValObjTree =
   ## Top-level dispatch for pretty-printing
@@ -178,7 +185,7 @@ proc toSimpleTree*[Obj](
       keyType: $typeof((pairs(entry).nthType1)),
       valType: $typeof((pairs(entry).nthType2)),
       path: path,
-      objId: idCounter()
+      objId: idCounter.next()
     )
 
     for key, val in pairs(entry):
@@ -197,7 +204,7 @@ proc toSimpleTree*[Obj](
       itemType: $typeof(items(unref entry)),
       objId: (entry is ref).tern(
         cast[int](unsafeAddr entry),
-        idCounter()
+        idCounter.next()
       )
     )
 
@@ -216,7 +223,7 @@ proc toSimpleTree*[Obj](
       when entry is ref:
         cast[int](unsafeAddr entry)
       else:
-        idCounter()
+        idCounter.next()
     when (entry is object) or (entry is ref object):
       result = ValObjTree(
         kind: okComposed,
@@ -298,7 +305,7 @@ proc toSimpleTree*[Obj](
       constType: $typeof(Obj),
       strLit: val,
       path: path,
-      objId: idCounter()
+      objId: idCounter.next()
     )
 
 
@@ -677,15 +684,7 @@ func getSubnodes*(it: ObjTree): seq[ObjTree] =
           "IMPLEMENT Sectioned objects are not supported RN")
 
 
-func makeCounter*(): iterator(): int {.closure.} =
-   result = iterator(): int {.closure.} =
-              var cnt: int = 0
-              while true:
-                yield cnt
-                inc cnt
-
-
-
+func makeCounter*(): IdCounter = IdCounter()
 proc pstring*[Obj](obj: Obj, ident: int = 0, maxWidth: int = 80): string =
   var counter = makeCounter()
   var conf = objectPPrintConf

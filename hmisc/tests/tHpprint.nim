@@ -44,29 +44,29 @@ suite "Block grid":
 
 
 suite "Block labeling":
-  template test(
+  template testtmp(
     labels: untyped, chunkLines: seq[string] = @["[|||]"]): untyped =
     relativePosition(
       chunk = makeChunk(chunkLines), labels)
 
   test "Chunk label on left":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpTopLeftLeft : (text: "<>", offset: 0) })), "<>[|||]"
 
   test "Chunk label on top left":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpTopLeftAbove : (text: "<-->", offset: 2) })), "<-->\n  [|||]"
 
   test "Chunk label on bottom right":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpBottomRight : (text: "<>", offset: 2) })), "[|||]<>"
 
   test "Chunk label on bottom left":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpBottomLeft : (text: "<>", offset: 2) })), "  [|||]\n<>"
 
   test "Top-above & bottom left":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpTopLeftAbove : (text: "{{{", offset: 2),
          rpBottomLeft : (text: "}}}", offset: 2)})),
          """
@@ -75,7 +75,7 @@ suite "Block labeling":
          }}}""".dedent
 
   test "Multiline block compact":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpBottomRight: (text: "}}", offset: 2),
          rpTopLeftLeft: (text: "{{", offset: 2)
          # Top left left offset should be ignored
@@ -87,7 +87,7 @@ suite "Block labeling":
            [||||]}}""".dedent
 
   test "Multiline block expanded":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpBottomLeft: (text: "}}", offset: 2),
          rpTopLeftAbove: (text: "{{", offset: 2)
          # Top left left offset should be ignored
@@ -101,7 +101,7 @@ suite "Block labeling":
          }}""".dedent
 
   test "Multiline block expanded with prefix":
-    assertEq $(test(
+    assertEq $(testtmp(
       @{ rpBottomLeft: (text: "}}", offset: 2),
          rpTopLeftAbove: (text: "{{", offset: 2),
          rpPrefix: (text: "- ", offset: 2)
@@ -117,7 +117,7 @@ suite "Block labeling":
 
   test "Invalid prefix assertion":
     try:
-      discard test(@{
+      discard testtmp(@{
         rpTopLeftLeft: (text: "==", offset: 2),
         rpPrefix: (text: "--", offset: 2)
       })
@@ -464,13 +464,7 @@ var conf = PPrintConf(
 )
 
 template pstr(arg: untyped, ident: int = 0): untyped =
-  var counter =
-    iterator(): int {.closure.} =
-      var cnt: int = 0
-      while true:
-        yield cnt
-        inc cnt
-
+  var counter = makeCounter()
   toSimpleTree(arg, counter).prettyString(conf, ident)
 
 suite "Simple configuration":
@@ -599,13 +593,7 @@ var jsonConf = PPrintConf(
 )
 
 template pjson(arg: untyped): untyped =
-  var counter =
-    iterator(): int {.closure.} =
-      var cnt: int = 0
-      while true:
-        yield cnt
-        inc cnt
-
+  var counter = makeCounter()
   toSimpleTree(arg, counter).prettyString(jsonConf)
 
 suite "Json pretty printing":
@@ -666,13 +654,7 @@ var treeConf = PPrintConf(
 )
 
 template treeStr(arg: untyped): untyped =
-  var counter =
-    iterator(): int {.closure.} =
-      var cnt: int = 0
-      while true:
-        yield cnt
-        inc cnt
-
+  var counter = makeCounter()
   toSimpleTree(arg, counter).prettyString(treeConf)
 
 suite "Large object printout":
