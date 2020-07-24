@@ -33,6 +33,19 @@ type
     start*: NtermSym
     rules*: seq[Rule[TKind]]
 
+#=============================  Predicates  ==============================#
+
+func `==`*[Tk](lhs, rhs: Patt[Tk]): bool =
+  lhs.kind == rhs.kind and (
+    case lhs.kind:
+      of pkNterm: lhs.nterm == rhs.nterm
+      of pkTerm: lhs.tok == rhs.tok
+      of pkAlternative, pkConcat:
+        subnodesEq(lhs, rhs, patts)
+      of pkOptional, pkZeroOrMore, pkOneOrMore:
+        lhs.item[0] == rhs.item[0]
+  )
+
 #====================  generic pattern construction  =====================#
 
 func rule*[Tk](name: string, patt: Patt[Tk]): Rule[Tk] =
