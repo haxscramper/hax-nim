@@ -96,6 +96,7 @@ type
     ntermWrap*: (string, string)
     termWrap*: (string, string)
     normalizeNterms*: bool
+    enumerateAlts*: bool
 
 const defaultGrammarPrintConf*: GrammarPrintConf = GrammarPrintConf(
   emptyProd: "ε",
@@ -103,7 +104,8 @@ const defaultGrammarPrintConf*: GrammarPrintConf = GrammarPrintConf(
   concatSep: " & ",
   alternSep: " | ",
   ntermWrap: ("<", ">"),
-  termWrap: ("'", "'")
+  termWrap: ("'", "'"),
+  enumerateAlts: true
 )
 
 func exprRepr*[TKind](

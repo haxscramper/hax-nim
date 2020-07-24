@@ -4,6 +4,7 @@ import grammars
 import parse_primitives
 import sets, hashes, sequtils, strformat, strutils
 import hmisc/helpers
+import hmisc/algo/clformat
 
 #*************************************************************************#
 #**************************  Type declarations  **************************#
@@ -386,17 +387,22 @@ func exprRepr*[Tk](
   grammar: BnfGrammar[Tk],
   nojoin: bool = false,
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
+  mixin toRomanNumeral
   var buf: seq[string]
   if nojoin:
     for head, patts in grammar.rules:
       for idx, alt in patts:
         let head =
           if conf.normalizeNterms:
-            fmt("{head.exprRepr(true)}")
+            fmt("{head.exprRepr(true):<12}")
           else:
-            fmt("{head.exprRepr()}.{idx}")
+            if conf.enumerateAlts:
+              let idx = toRomanNumeral(idx + 1)
+              fmt("{head.exprRepr():<10} ({idx})")
+            else:
+              fmt("{head.exprRepr():<10}")
 
-        buf.add fmt("{head:<12} {conf.prodArrow} {alt.exprRepr(conf)}")
+        buf.add fmt("{head:<16} {conf.prodArrow} {alt.exprRepr(conf)}")
 
   else:
     for head, patts in grammar.rules:

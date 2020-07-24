@@ -254,7 +254,7 @@ suite "Table-driven vs recursive descent":
   let tableParser = newLL1TableParser(
     grammarVal.toGrammar(), retainGenerated = false)
 
-  let testInput = "[a,b,c,d,e]"
+  let testInput = "[a,b,e,e,z,e]"
 
   let recursiveTree =
     block:
