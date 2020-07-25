@@ -14,7 +14,12 @@ import parse_primitives, parser_common, parse_tree, parse_helpers, token
 
 ## LL1 parser generator code
 
-
+func makeIds[C, L](): tuple[cId, lId, iId: NimNode] =
+  (
+    cId: ident($(typeof C)),
+    lId: ident($(typeof L)),
+    iId: ident("I")
+  )
 
 template doIt(s, action: untyped): untyped =
   ## Execute action for each element in sequence, return original
@@ -80,7 +85,9 @@ proc computePatt*[C, L](
   case kind:
     of pkTerm:
       result = CompPatt[C, L](
-        kind: pkTerm, tok: patt.tok, first: makeTokSet[C, L]())
+        kind: pkTerm,
+        tok: patt.tok,
+        first: makeTokSet[C, L]())
       result.first.incl patt.tok
     of pkConcat:
       result = CompPatt[C, L](
@@ -199,12 +206,14 @@ proc makeParserName*(nterm: NTermSym): string =
 
 proc makeTermBlock[C, L](term: CompPatt[C, L]): NimNode =
   assert term.kind == pkTerm
-  let tokIdent = ident($term.tok)
-  let tokType = ident "Tok"
-  let toksIdent = ident "toks"
+  let
+    tokIdent = newLit(term.tok)
+    tokType = ident "Tok"
+    toksIdent = ident "toks"
   return quote do:
+    let expected = `tokIdent`
     let tok = next(`toksIdent`)
-    assert tok.kind == `tokIdent`
+    assert matches(expected, tok)
     newTree(tok)
 
 proc makeNTermBlock[C, L](nterm: CompPatt[C, L]): NimNode =
@@ -227,10 +236,13 @@ proc makeConcatBlock[C, L](nterm: CompPatt[C, L], sets: NTermSets[C, L]): NimNod
       .mapIt(ident &"patt{it[0]}res")
   )
 
-  let tokIdent = ident "Tok"
+  # let tokIdent = ident "Tok"
+  let
+    cId = ident($(typeof C))
+    lId = ident($(typeof L))
   return (parseStmts & @[
     quote do:
-      newTree[`tokIdent`](@`valueVars`)
+      newTree[`cId`, `lId`](@`valueVars`)
       # ParseTree[`tokIdent`](
       #   kind: pkConcat,
       #   values: @`valueVars`
@@ -273,24 +285,25 @@ proc makeNtoMTimesBlock[C, L](
     else:
       newEmptyNode()
 
+  let (c, l, i) = makeIds[C, L]()
   let finalValue =
     if nterm.kind == pkOptional:
       quote do:
         if subItems.len == 1:
-          ParseTree[`tokType`](kind: pkOptional, optValue: some(`subItems`[0]))
+          ParseTree[`c`, `l`, `i`](kind: pkOptional, optValue: some(`subItems`[0]))
         else:
-          ParseTree[`tokType`](kind: pkOptional)
+          ParseTree[`c`, `l`, `i`](kind: pkOptional)
     else:
       quote do:
-        newTree[`tokType`](`subItems`)
-        # ParseTree[`tokType`](kind: `kindLiteral`, values: `subItems`)
+        newTree[`c`, `l`, `i`](`subItems`)
+        # ParseTree[`c`, `l`, `i`](kind: `kindLiteral`, values: `subItems`)
 
 
   return quote do:
     # TEST WARNING possible variable shadowing if parsing rule
     # contains nested `{N,M}` rules.
     var `cnt` = 0
-    var `subItems`: seq[ParseTree[`tokType`]]
+    var `subItems`: seq[ParseTree[`c`, `l`, `i`]]
     while `countConstraints` and `toksIdent`.peek().kind in `laLiteral`:
       `bodyParse`
       inc `cnt`
@@ -325,6 +338,10 @@ proc makeParseBlock[C, L](
   let
     resIdent = ident resName
     toksIdent = ident "toks"
+    cId = ident($(typeof C))
+    lId = ident($(typeof L))
+    iId = ident("I")
+
 
   let actAssgn =
     if patt.action != taDefault:
@@ -337,21 +354,19 @@ proc makeParseBlock[C, L](
   return newStmtList(
     newCommentStmtNode($patt & " " & $patt.kind),
     quote do:
-      var `resIdent` = block:
+      var `resIdent`: ParseTree[`cId`, `lId`, `iId`] = block:
         `result`
 
       runTreeActions(`resIdent`)
       `actAssgn`
     )
 
-func makeParseProcDef(name: string): NimNode =
+func makeParseProcDef[C, L](name: string): NimNode =
   nnkProcDef.newTree(
     newIdentNode(name),
     newEmptyNode(),
     nnkGenericParams.newTree(
       nnkIdentDefs.newTree(
-        newIdentNode("C"),
-        newIdentNode("L"),
         newIdentNode("I"),
         newEmptyNode(),
         newEmptyNode()
@@ -360,18 +375,21 @@ func makeParseProcDef(name: string): NimNode =
     nnkFormalParams.newTree(
       nnkBracketExpr.newTree(
         newIdentNode("ParseTree"),
-        newIdentNode("C"),
-        newIdentNode("L"),
+        newIdentNode($(typeof C)),
+        newIdentNode($(typeof L)),
         newIdentNode("I")
       ),
       nnkIdentDefs.newTree(
-        newIdentNode("toksIdent"),
+        newIdentNode("toks"),
         nnkVarTy.newTree(
           nnkBracketExpr.newTree(
             newIdentNode("TokStream"),
-            newIdentNode("C"),
-            newIdentNode("L"),
-            newIdentNode("I")
+            nnkBracketExpr.newTree(
+              newIdentNode("Token"),
+              newIdentNode($(typeof C)),
+              newIdentNode($(typeof L)),
+              newIdentNode("I")
+            )
           )
         ),
         newEmptyNode()
@@ -390,13 +408,12 @@ proc makeRuleParser[C, L](
   ## Generate implementation for proc to parse rule
   let
     procName = ident(rule.nterm.makeParserName())
-    toksIdent = ident "toks"
     resIdent = ident "res"
     ntermNterm = newLit(rule.nterm)
     parseBody = rule.patts.makeParseBlock(sets)
 
-  let decl = makeParseProcDef(rule.nterm.makeParserName())
-  var impl = makeParseProcDef(rule.nterm.makeParserName())
+  let decl = makeParseProcDef[C, L](rule.nterm.makeParserName())
+  var impl = makeParseProcDef[C, L](rule.nterm.makeParserName())
   impl[6] = quote do:
     `parseBody`
     case `resIdent`.kind:

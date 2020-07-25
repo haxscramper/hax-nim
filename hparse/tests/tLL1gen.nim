@@ -17,7 +17,7 @@ template withResIt*(val, body: untyped): untyped =
 
 #======================  grammar parser generation  ======================#
 
-template newLL1RecursiveParser[Tok](body: typed): untyped =
+template newLL1RecursiveParser[C, L, I](body: typed): untyped =
   # Trillion IQ hack
   macro buildParser(): untyped =
     let grammar = toGrammar(body)
@@ -31,7 +31,7 @@ template newLL1RecursiveParser[Tok](body: typed): untyped =
           newEmptyNode(),
           nnkBracketExpr.newTree(
             newIdentNode(cbName),
-            newIdentNode($(typeof Tok))
+            newIdentNode($(typeof I))
           )
         )
       ),
@@ -70,7 +70,7 @@ template newLL1RecursiveParser[Tok](body: typed): untyped =
 suite "LL(1) parser simple":
   const nt = nterm[TokenKind, string]
   proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
-  let parser = newLL1RecursiveParser[Token, string]({
+  let parser = newLL1RecursiveParser[Token, string, void]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkPunct, "["),

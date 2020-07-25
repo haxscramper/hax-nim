@@ -45,6 +45,11 @@ func makeExpToken*[C, L](category: C, lexeme: L): ExpectedToken[C, L] =
 func makeExpToken*[C, L](category: C): ExpectedToken[C, L] =
   ExpectedToken[C, L](cat: category, hasLex: false)
 
+func matches*[C, L, I](exp: ExpectedToken[C, L], tok: Token[C, L, I]): bool =
+  ## Return true if token `tok` matches with expected token `exp`
+  # TODO IMPLEMENT
+  discard
+
 
 #*************************************************************************#
 #******************************  Token set  ******************************#

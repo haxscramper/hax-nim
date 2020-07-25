@@ -15,8 +15,8 @@ type
         ## starting position in `pos` and `ok = false`.
       of false:
         patt: Regex
-        classify: proc(match: string, ruleId: int): Tok ## Classify
-        ## matched token and convert it to string.
+        # classify: proc(match: string, ruleId: int): Token[C, ] ## Classify
+        # ## matched token and convert it to string.
 
 
   Lexer[Tok] = object
@@ -86,6 +86,7 @@ iterator items*[Tok](ts: var TokStream[Tok]): Tok =
 proc reset*[Tok](ts: var TokStream[Tok]): Tok =
   ## Reset token stream internal state - clear buffer, set position to
   ## 0 etc.
+  # REVIEW why return anything?
   ts.buffer = @[]
   ts.atEnd = false
   ts.curPos = 0

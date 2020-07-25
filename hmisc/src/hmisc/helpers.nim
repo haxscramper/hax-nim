@@ -14,7 +14,8 @@ proc colorPrint*(
   # TODO convert nim ast into adequately readable form without using
   # `pygmentize`. Maybe even color macros/templates/procs differently.
   tmpfile.writeFile($node.toStrLit())
-  discard staticExec("nimpretty " & tmpfile)
+  discard staticExec("sed -Ei 's/`gensym[0-9]+//g' " & tmpfile)
+  discard staticExec("nimpretty --maxLineLen:75 " & tmpfile)
   if doPrint:
     echo staticExec("pygmentize -f terminal " & tmpfile)
 
