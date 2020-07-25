@@ -15,10 +15,6 @@ template withResIt*(val, body: untyped): untyped =
     var it {.inject.} = val
     body
 
-
-#========================  token type definition  ========================#
-
-
 #======================  grammar parser generation  ======================#
 
 template newLL1RecursiveParser[Tok](body: typed): untyped =
@@ -46,28 +42,28 @@ template newLL1RecursiveParser[Tok](body: typed): untyped =
 
 #======================  dummy value construction  =======================#
 
-proc pe(args: varargs[PTree]): PTree = newTree(toSeq(args))
-proc pt(tok: TokenKind): PTree = newTree(Token(kind: tok))
-proc pn(name: NTermSym, args: varargs[PTree]): PTree =
-  newTree(name, toSeq(args))
+# proc pe(args: varargs[PTree]): PTree = newTree(toSeq(args))
+# proc pt(tok: TokenKind): PTree = newTree(Token(kind: tok))
+# proc pn(name: NTermSym, args: varargs[PTree]): PTree =
+#   newTree(name, toSeq(args))
 
-proc `$`(a: PTree): string = pstring(a)
+# proc `$`(a: PTree): string = pstring(a)
 
-proc tokensBFS(tree: PTree): seq[Token] =
-  tree.mapItBFStoSeq(
-    it.getSubnodes(),
-    if it.kind == ptkTerm: some(it.tok) else: none(Token)
-  )
+# proc tokensBFS(tree: PTree): seq[Token] =
+#   tree.mapItBFStoSeq(
+#     it.getSubnodes(),
+#     if it.kind == ptkTerm: some(it.tok) else: none(Token)
+#   )
 
-proc parseToplevel[Tok](
-  toks: seq[Tok],
-  parseCb: proc(
-    toks: var TokStream[Tok]): ParseTree[Tok]): ParseTree[Tok] =
-  var stream = makeStream(toks)
-  return parseCb(stream)
+# proc parseToplevel[Tok](
+#   toks: seq[Tok],
+#   parseCb: proc(
+#     toks: var TokStream[Tok]): ParseTree[Tok]): ParseTree[Tok] =
+#   var stream = makeStream(toks)
+#   return parseCb(stream)
 
-proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
-  inseq.mapIt(Token(kind: it))
+# proc toTokSeq(inseq: seq[TokenKind]): seq[Token] =
+#   inseq.mapIt(Token(kind: it))
 
 suite "LL(1) parser simple":
   const nt = nterm[TokenKind]
@@ -92,92 +88,6 @@ suite "LL(1) parser simple":
         nt("list")
       )
     })
-
-  test "Parse simple list":
-    let tree = parseTopLevel(@[
-      tkOpBrace,
-      tkIdent,
-      tkComma,
-      tkIdent,
-      tkComma,
-      tkIdent,
-      tkCloseBrace
-    ].toTokSeq(), parseList)
-
-    assert tree.tokensBFS() == pe(
-      pt(tkOpBrace),
-      pe(
-        pn("element", pt(tkIdent)),
-        pe(
-          pe(pt(tkComma), pn("element", pt(tkIdent))),
-          pe(pt(tkComma), pn("element", pt(tkIdent)))
-        )
-      ),
-      pt(tkCloseBrace)
-    ).tokensBFS()
-
-  test "Parse nested list":
-    let tree = parseTopLevel(@[
-      tkOpBrace,
-        tkOpBrace,
-          tkIdent,
-        tkCloseBrace,
-      tkCloseBrace
-    ].toTokSeq(), parseList)
-
-    assert tree.tokensBFS() == pe(
-      pt(tkOpBrace),
-      pe(
-        pt(tkOpBrace),
-        pe(pt(tkIdent)),
-        pt(tkCloseBrace)
-      ),
-      pt(tkCloseBrace)
-    ).tokensBFS()
-
-  test "Deeply nested list with idents":
-    # TODO unit test error for unfinished input
-    # TODO test erorr for incorrect token expected
-
-
-    let tree = parseTopLevel(
-      mapString("[[c,z,d,[e,d]],[e,d,f]]"),
-      parseList
-    )
-    # echo tree.treeRepr("tk")
-    # echo tree.lispRepr("tk")
-
-    # ERROR `index out of bounds, the container is empty`
-    let graph = tree.toDotGraph("tk", false)
-    graph.topng("/tmp/image.png")
-
-  test "Map parse tree to ast":
-    let root = parseTopLevel(@[
-      tkOpBrace,
-      tkIdent,
-      tkComma,
-      tkIdent,
-      tkComma,
-      tkIdent,
-      tkCloseBrace
-    ].toTokSeq(), parseList)
-
-    type
-      Ast = object
-        case isList: bool
-          of true:
-            subnodes: seq[Ast]
-          else:
-            ident: string
-
-    let res = root.mapItDFS(
-      it.getSubnodes,
-      Ast,
-      (it.kind == ptkTerm).tern(
-        (Ast(isList: false, ident: "ze")),
-        (Ast(isList: true, subnodes: subt))
-      )
-    )
 
 suite "LL(1) parser tree actions":
   const nt = nterm[TokenKind]
