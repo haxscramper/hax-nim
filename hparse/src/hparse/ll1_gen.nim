@@ -9,7 +9,7 @@ export helpers
 import hashes, tables, sets
 
 import lexer
-import parse_primitives, parser_common, parse_tree, parse_helpers
+import parse_primitives, parser_common, parse_tree, parse_helpers, token
 
 
 ## LL1 parser generator code
@@ -26,39 +26,39 @@ template doIt(s, action: untyped): untyped =
   s
 
 type
-  FirstSet*[TKind] = set[TKind]
-  NTermSets*[TKind] = object
-    first*: Table[NTermSym, FirstSet[TKind]]
+  FirstSet*[C, L, I] = TKindSet[C, L, I]
+  NTermSets*[C, L, I] = object
+    first*: Table[NTermSym, FirstSet[C, L, I]]
 
-  CompPatt*[TKind] = object
+  CompPatt*[C, L, I] = object
     action*: TreeAct
-    first: FirstSet[TKind]
+    first: FirstSet[C, L, I]
     case kind*: PattKind
       of pkNterm:
         nterm*: NTermSym ## Nonterminal to parse
       of pkTerm:
-        tok*: TKind ## Single token to match literally
+        tok*: Token[C, L, I] ## Single token to match literally
       of pkAlternative, pkConcat:
-        patts*: seq[CompPatt[TKind]]
+        patts*: seq[CompPatt[C, L, I]]
       of pkOptional, pkZeroOrMore, pkOneOrMore:
-        opt*: seq[CompPatt[TKind]] ## Single instance that will be repeated
+        opt*: seq[CompPatt[C, L, I]] ## Single instance that will be repeated
         # I could've used `Option[]` but decided to go with `seq`
         # since I should not have a situation where `opt` field is
         # `none` - it is just a workaround to allow recursive field
 
 
-  CompRule*[TKind] = object
+  CompRule*[C, L, I] = object
     nterm*: NTermSym
-    patts*: CompPatt[TKind]
+    patts*: CompPatt[C, L, I]
 
-  CompGrammar*[TKind] = object
-    sets*: NTermSets[TKind]
-    rules*: seq[CompRule[TKind]]
+  CompGrammar*[C, L, I] = object
+    sets*: NTermSets[C, L, I]
+    rules*: seq[CompRule[C, L, I]]
 
 #=========================  FIRST set computat  ==========================#
 
-proc computeFirst*[TKind](
-  patt: Patt[TKind], other: NTermSets[TKind]): FirstSet[TKind] =
+proc computeFirst*[C, L, I](
+  patt: Patt[C, L, I], other: NTermSets[C, L, I]): FirstSet[C, L, I] =
   ## Generate FIRST set for `patt`
   case patt.kind:
     of pkTerm:
@@ -73,41 +73,41 @@ proc computeFirst*[TKind](
     of pkNterm:
       result.incl other.first[patt.nterm]
 
-proc computePatt*[TKind](
-  patt: Patt[TKind], sets: NTermSets[TKind]): CompPatt[TKind] =
+proc computePatt*[C, L, I](
+  patt: Patt[C, L, I], sets: NTermSets[C, L, I]): CompPatt[C, L, I] =
   ## Generate FIRST set for pattern `patt`
   let kind = patt.kind
   case kind:
     of pkTerm:
-      result = CompPatt[TKind](kind: pkTerm, tok: patt.tok)
+      result = CompPatt[C, L, I](kind: pkTerm, tok: patt.tok)
       result.first.incl patt.tok
     of pkConcat:
-      result = CompPatt[TKind](
+      result = CompPatt[C, L, I](
         kind: pkConcat, patts: patt.patts.mapIt(computePatt(it, sets)))
       result.first.incl computeFirst(patt.patts[0], sets)
     of pkAlternative:
-      result = CompPatt[TKind](
+      result = CompPatt[C, L, I](
         kind: pkAlternative, patts: patt.patts.mapIt(computePatt(it, sets)))
       for p in patt.patts:
         result.first.incl computeFirst(p, sets)
     of pkOptional, pkZeroOrMore, pkOneOrMore:
-      result = CompPatt[TKind](
+      result = CompPatt[C, L, I](
         kind: kind, opt: @[computePatt(patt.opt, sets)])
       result.first.incl computeFirst(patt.opt, sets)
     of pkNterm:
       # FIRST sets for nonterminals are stored in `sets`
-      result = CompPatt[TKind](kind: pkNterm, nterm: patt.nterm)
+      result = CompPatt[C, L, I](kind: pkNterm, nterm: patt.nterm)
 
   result.action = patt.action
 
-func first*[TKind](
-  patt: CompPatt[TKind], sets: NTermSets[TKind]): FirstSet[TKind] =
+func first*[C, L, I](
+  patt: CompPatt[C, L, I], sets: NTermSets[C, L, I]): FirstSet[C, L, I] =
   case patt.kind:
     of pkNTerm: sets.first[patt.nterm]
     else: patt.first
 
 
-proc necessaryTerms[TKind](rhs: Patt[TKind]): seq[NTermSym] =
+proc necessaryTerms[C, L, I](rhs: Patt[C, L, I]): seq[NTermSym] =
   ## Generate list of nonterminals that might appear at rhs of production
   case rhs.kind:
     of pkAlternative:
@@ -119,11 +119,11 @@ proc necessaryTerms[TKind](rhs: Patt[TKind]): seq[NTermSym] =
     else:
       return @[]
 
-proc computeGrammar*[TKind](g: Grammar[TKind]
-  ): CompGrammar[TKind] =
+proc computeGrammar*[C, L, I](g: Grammar[C, L, I]
+  ): CompGrammar[C, L, I] =
   ## Generate first/follow sets for all rules in grammar. Rules in
   ## resulting grammar are ordered based on topological sorting.
-  var sets: NTermSets[TKind]
+  var sets: NTermSets[C, L, I]
   # Just because I can sqeeze it into <= 4 lines does not mean that it
   # is a good idea. But code above performs topological sort of the
   # whole grammar based on which terms depend on which. If there is a
@@ -139,7 +139,7 @@ proc computeGrammar*[TKind](g: Grammar[TKind]
   for rule in sortedRules:
     let compPatt = computePatt(rule.patts, sets)
     sets.first[rule.nterm] = first(compPatt, sets)
-    result.rules.add CompRule[TKind](nterm: rule.nterm, patts: compPatt)
+    result.rules.add CompRule[C, L, I](nterm: rule.nterm, patts: compPatt)
 
   result.sets = sets
 
@@ -149,12 +149,12 @@ proc makeSetLiteral[T](s: set[T]): NimNode =
   for elem in s:
     result.add ident($elem)
 
-proc makeParseBlock[TKind](
-  patt: CompPatt[TKind],
-  sets: NTermSets[TKind],
+proc makeParseBlock[C, L, I](
+  patt: CompPatt[C, L, I],
+  sets: NTermSets[C, L, I],
   resName: string = "res"): NimNode
 
-proc makeAltBlock[TKind](alt: CompPatt[TKind], sets: NTermSets[TKind]): NimNode =
+proc makeAltBlock[C, L, I](alt: CompPatt[C, L, I], sets: NTermSets[C, L, I]): NimNode =
   ## Create code block for parsing alternative pattern
   assert alt.kind == pkAlternative
   let toksIdent = ident "toks"
@@ -180,7 +180,7 @@ proc makeParserName*(nterm: NTermSym): string =
   ## Converter nonterminal name into parsing proc name
   "parse" & nterm.capitalizeAscii()
 
-proc makeTermBlock[TKind](term: CompPatt[TKind]): NimNode =
+proc makeTermBlock[C, L, I](term: CompPatt[C, L, I]): NimNode =
   assert term.kind == pkTerm
   let tokIdent = ident($term.tok)
   let tokType = ident "Tok"
@@ -190,7 +190,7 @@ proc makeTermBlock[TKind](term: CompPatt[TKind]): NimNode =
     assert tok.kind == `tokIdent`
     newTree(tok)
 
-proc makeNTermBlock[TKind](nterm: CompPatt[TKind]): NimNode =
+proc makeNTermBlock[C, L, I](nterm: CompPatt[C, L, I]): NimNode =
   assert nterm.kind == pkNTerm
   let
     ntermIdent = ident(makeParserName(nterm.nterm))
@@ -198,7 +198,7 @@ proc makeNTermBlock[TKind](nterm: CompPatt[TKind]): NimNode =
   quote do:
     `ntermIdent`(`toksIdent`)
 
-proc makeConcatBlock[TKind](nterm: CompPatt[TKind], sets: NTermSets[TKind]): NimNode =
+proc makeConcatBlock[C, L, I](nterm: CompPatt[C, L, I], sets: NTermSets[C, L, I]): NimNode =
   assert nterm.kind == pkConcat
   let parseStmts = collect(newSeq):
     for idx, patt in nterm.patts:
@@ -220,8 +220,8 @@ proc makeConcatBlock[TKind](nterm: CompPatt[TKind], sets: NTermSets[TKind]): Nim
       # )
   ]).newStmtList()
 
-proc makeNtoMTimesBlock[TKind](
-  nterm: CompPatt[TKind], sets: NtermSets[TKind],
+proc makeNtoMTimesBlock[C, L, I](
+  nterm: CompPatt[C, L, I], sets: NtermSets[C, L, I],
   mintimes, maxtimes: int): NimNode =
   assert nterm.kind in {pkZeroOrMore, pkOneOrMore, pkOptional}
   let
@@ -284,9 +284,9 @@ proc makeNtoMTimesBlock[TKind](
 
 
 
-proc makeParseBlock[TKind](
-  patt: CompPatt[TKind],
-  sets: NTermSets[TKind],
+proc makeParseBlock[C, L, I](
+  patt: CompPatt[C, L, I],
+  sets: NTermSets[C, L, I],
   resName: string = "res"): NimNode =
   ## Generate code block to parse pattern `patt`.
   result = case patt.kind:
@@ -327,9 +327,9 @@ proc makeParseBlock[TKind](
       `actAssgn`
     )
 
-proc makeRuleParser[TKind](
-  rule: CompRule[TKind],
-  sets: NTermSets[TKind]): tuple[decl, impl: NimNode] =
+proc makeRuleParser[C, L, I](
+  rule: CompRule[C, L, I],
+  sets: NTermSets[C, L, I]): tuple[decl, impl: NimNode] =
   ## Generate implementation for proc to parse rule
   let
     procName = ident(rule.nterm.makeParserName())
@@ -355,7 +355,7 @@ proc makeRuleParser[TKind](
   return (decl: decl, impl: impl)
 
 
-proc makeGrammarParser*[TKind](gram: CompGrammar[TKind]): NimNode =
+proc makeGrammarParser*[C, L, I](gram: CompGrammar[C, L, I]): NimNode =
   ## Generate code for parsing grammar `gram`
   var decls: seq[NimNode]
   var impls: seq[NimNode]
@@ -369,7 +369,7 @@ proc makeGrammarParser*[TKind](gram: CompGrammar[TKind]): NimNode =
     impls.newStmtList()
   )
 
-proc `$`*[TKind](patt: CompPatt[TKind]): string =
+proc `$`*[C, L, I](patt: CompPatt[C, L, I]): string =
   case patt.kind:
     of pkNterm:
        &"<{patt.nterm}>"
@@ -390,14 +390,14 @@ proc `$`*[TKind](patt: CompPatt[TKind]): string =
 #=======================  Parser type definition  ========================#
 
 type
-  LL1RecursiveDescentParser*[Tok] = object
-    startCb: proc(toks: var TokStream[Tok]): ParseTree[Tok]
+  LL1RecursiveDescentParser*[C, L, I] = object
+    startCb: proc(toks: var TokStream[Token[C, L, I]]): ParseTree[C, L, I]
 
-func newLL1RecursiveDescent*[Tok](
-  cb: proc(toks: var TokStream[Tok]): ParseTree[Tok]): LL1RecursiveDescentParser[Tok] =
+func newLL1RecursiveDescent*[C, L, I](
+  cb: proc(toks: var TokStream[Token[C, L, I]]): ParseTree[C, L, I]): LL1RecursiveDescentParser[C, L, I] =
   result.startCb = cb
 
-proc parse*[Tok](
-  parser: LL1RecursiveDescentParser[Tok],
-  toks: var TokStream[Tok]): ParseTree[Tok] =
+proc parse*[C, L, I](
+  parser: LL1RecursiveDescentParser[C, L, I],
+  toks: var TokStream[Token[C, L, I]]): ParseTree[C, L, I] =
   parser.startCb(toks)

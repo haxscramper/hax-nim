@@ -1,4 +1,4 @@
-import parse_primitives
+import parse_primitives, token
 import sequtils, strformat, strutils, colors
 
 import hmisc/types/graphviz_ast
@@ -18,7 +18,7 @@ type
     ptkNterm
     ptkList
 
-  ParseTree*[Tok] = ref object
+  ParseTree*[C, L, I] = ref object
     ##[
 
 Parse tree object
@@ -33,44 +33,44 @@ Parse tree object
 
     case kind*: ParseTreeKind
       of ptkTerm:
-        tok*: Tok ## Value of parsed token
+        tok*: Token[C, L, I] ## Value of parsed token
       of ptkNTerm:
         nterm*: NTermSym ## Name of parsed nonterminal
-        subnodes*: seq[ParseTree[Tok]] ## Sequence of parsed subnodes
+        subnodes*: seq[ParseTree[C, L, I]] ## Sequence of parsed subnodes
       of ptkList:
-        elements*: seq[ParseTree[Tok]]
+        elements*: seq[ParseTree[C, L, I]]
 
 
 
 
 #============================  Constructors  =============================#
 
-proc newTree*[Tok](subtree: seq[ParseTree[Tok]]): ParseTree[Tok] =
+proc newTree*[C, L, I](subtree: seq[ParseTree[C, L, I]]): ParseTree[C, L, I] =
   ## Create new parse tree object
-  ParseTree[Tok](kind: ptkList, elements: subtree)
+  ParseTree[C, L, I](kind: ptkList, elements: subtree)
 
 # proc newTree*[Tok](subtree: seq[ParseTree[Tok]]): ParseTree[Tok] =
 #   ## Create new parse tree object
 #   ParseTree[Tok](kind: ptkList, elements: toSeq(subtree))
 
-proc newTree*[Tok](tok: Tok): ParseTree[Tok] =
-  ParseTree[Tok](kind: ptkTerm, tok: tok)
+proc newTree*[C, L, I](tok: Token[C, L, I]): ParseTree[C, L, I] =
+  ParseTree[C, L, I](kind: ptkTerm, tok: tok)
 
-proc newTree*[Tok](
-  name: NTermSym, subnodes: seq[ParseTree[Tok]]): ParseTree[Tok] =
-  ParseTree[Tok](kind: ptkNTerm, nterm: name, subnodes: subnodes)
+proc newTree*[C, L, I](
+  name: NTermSym, subnodes: seq[ParseTree[C, L, I]]): ParseTree[C, L, I] =
+  ParseTree[C, L, I](kind: ptkNTerm, nterm: name, subnodes: subnodes)
 
-func tok*[Tok](tree: ParseTree[Tok]): Tok =
+func tok*[C, L, I](tree: ParseTree[C, L, I]): Token[C, L, I] =
   assert tree.kind == pkTerm
   return tree.tok
 
-func getSubnodes*[Tok](tree: ParseTree[Tok]): seq[ParseTree[Tok]] =
+func getSubnodes*[C, L, I](tree: ParseTree[C, L, I]): seq[ParseTree[C, L, I]] =
   case tree.kind:
     of ptkNterm: tree.subnodes
     of ptkList: tree.elements
     of ptkTerm: @[]
 
-func len*[Tok](tree: ParseTree[Tok]): int =
+func len*[C, L, I](tree: ParseTree[C, L, I]): int =
   case tree.kind:
     of ptkTerm: 0
     of ptkNterm: tree.subnodes.len
@@ -82,8 +82,8 @@ func len*[Tok](tree: ParseTree[Tok]): int =
 
 #==============================  graphviz  ===============================#
 
-func toDotGraphPretty*[Tok](
-  tree: ParseTree[Tok],
+func toDotGraphPretty*[C, L, I](
+  tree: ParseTree[C, L, I],
   kindPref: string,
   bottomTokens: bool): Graph =
   result.styleNode = Node(shape: nsaRect)
@@ -141,7 +141,7 @@ func toDotGraphPretty*[Tok](
       noderank: gnrSame
     ))
 
-func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
+func toDotGraphPrecise*[C, L, I](tree: ParseTree[C, L, I], kindPref: string): Graph =
   result.styleNode = Node(shape: nsaRect)
   tree.iterateItBFS(it.subnodes, it.kind != ptkTerm):
     let itaddr: int = cast[int](addr it[])
@@ -167,8 +167,8 @@ func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
         toNodeId(addr tr[])
       ))
 
-func toDotGraph*[Tok](
-  tree: ParseTree[Tok],
+func toDotGraph*[C, L, I](
+  tree: ParseTree[C, L, I],
   kindPref: string = "",
   preciseRepr: bool = false,
   bottomTokens: bool = false): Graph =
@@ -184,8 +184,8 @@ func toDotGraph*[Tok](
   else:
     toDotGraphPretty(tree, kindPref, bottomTokens)
 
-proc toPng*[Tok](
-  tree: ParseTree[Tok],
+proc toPng*[C, L, I](
+  tree: ParseTree[C, L, I],
   path: string = "/tmp/image.png",
   kindPref: string = "",
   preciseRepr: bool = false,
@@ -193,15 +193,15 @@ proc toPng*[Tok](
   tree.toDotGraph(kindPref, preciseRepr, bottomTokens).topng(path)
 
 #=========================  tree representation  =========================#
-func nodeKindStr*[Tok](node: ParseTree[Tok]): string =
+func nodeKindStr*[C, L, I](node: ParseTree[C, L, I]): string =
   case node.kind:
     of ptkList: "[ ... ]"
     of ptkNTerm: node.nterm
     else:
       ""
 
-func treeReprImpl*[Tok](
-  node: ParseTree[Tok],
+func treeReprImpl*[C, L, I](
+  node: ParseTree[C, L, I],
   pref: seq[bool],
   parentMaxIdx, currIdx: int,
   kindPref: string): seq[string] =
@@ -226,11 +226,11 @@ func treeReprImpl*[Tok](
     ],
     node.len - 1, idx, kindPref)
 
-func treeRepr*[Tok](node: ParseTree[Tok], kindPref: string = ""): string =
+func treeRepr*[C, L, I](node: ParseTree[C, L, I], kindPref: string = ""): string =
   treeReprImpl(node, @[], 0, 0, kindPref).join("\n")
 
-func lispReprImpl*[Tok](
-  node: ParseTree[Tok],
+func lispReprImpl*[C, L, I](
+  node: ParseTree[C, L, I],
   kindPref: string, discardEmpty: bool): seq[string] =
   case node.kind:
     of ptkTerm:
@@ -250,8 +250,8 @@ func lispReprImpl*[Tok](
           ")" ]
 
 
-func lispRepr*[Tok](
-  node: ParseTree[Tok],
+func lispRepr*[C, L, I](
+  node: ParseTree[C, L, I],
   kindPref: string = "",
   discardEmpty: bool = true): string =
   lispReprImpl(node, kindPref, discardEmpty).join(" ")
@@ -259,14 +259,14 @@ func lispRepr*[Tok](
 
 #=====================  Tree actions implementation  =====================#
 
-func runTreeActions*[Tok](tree: var ParseTree[Tok]): void =
+func runTreeActions*[C, L, I](tree: var ParseTree[C, L, I]): void =
   case tree.action:
     of taDrop: # This tree should be dropped by it's parent
       return
     else:
       discard
 
-  var newsubn: seq[ParseTree[Tok]]
+  var newsubn: seq[ParseTree[C, L, I]]
   var hadPromotions: bool = false
   let subnodes =
     case tree.kind:

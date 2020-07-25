@@ -4,13 +4,13 @@ export tables
 import hmisc/helpers
 import hmisc/types/[graphviz_ast, hvariant]
 import hmisc/algo/[halgorithm, htree_mapping, hseq_mapping]
-import lexer
+import lexer, token
 
 import parse_primitives
 
 
 type
-  Patt*[TKind] = object
+  Patt*[C, L] = object
     ## Ebnf grammar pattern. `Tok` is a type for token object.
     # head*: NTermSym ## Nonterminal symbol
     action*: TreeAct
@@ -18,24 +18,27 @@ type
       of pkNterm:
         nterm*: NTermSym ## Nonterminal to parse
       of pkTerm:
-        tok*: TKind ## Single token to match literally
+        # NOTE might be replaced with something like 'ExpectedToken'
+        # which also contains information about comparison strategy
+        # (category, lexeme or both).
+        tok*: ExpectedToken[C, L] ## Single token to match literally
       of pkAlternative, pkConcat:
-        patts*: seq[Patt[TKind]]
+        patts*: seq[Patt[C, L]]
       of pkOptional, pkZeroOrMore, pkOneOrMore:
-        item: seq[Patt[TKind]] ## Single instance that will be repeated
+        item: seq[Patt[C, L]] ## Single instance that will be repeated
         ## [0..1], [0..n] or [1..n] times respectively
 
-  Rule*[TKind] = object
+  Rule*[C, L] = object
     nterm*: NTermSym
-    patts*: Patt[TKind]
+    patts*: Patt[C, L]
 
-  Grammar*[TKind] = object
+  Grammar*[C, L] = object
     start*: NtermSym
-    rules*: seq[Rule[TKind]]
+    rules*: seq[Rule[C, L]]
 
 #=============================  Predicates  ==============================#
 
-func `==`*[Tk](lhs, rhs: Patt[Tk]): bool =
+func `==`*[C, L](lhs, rhs: Patt[C, L]): bool =
   lhs.kind == rhs.kind and (
     case lhs.kind:
       of pkNterm: lhs.nterm == rhs.nterm
@@ -48,44 +51,44 @@ func `==`*[Tk](lhs, rhs: Patt[Tk]): bool =
 
 #====================  generic pattern construction  =====================#
 
-func rule*[Tk](name: string, patt: Patt[Tk]): Rule[Tk] =
-  Rule[Tk](nterm: name, patts: patt)
+func rule*[C, L](name: string, patt: Patt[C, L]): Rule[C, L] =
+  Rule[C, L](nterm: name, patts: patt)
 
-func zeroP*[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkZeroOrMore, item: @[ patt ])
+func zeroP*[C, L](patt: Patt[C, L]): Patt[C, L] =
+  Patt[C, L](kind: pkZeroOrMore, item: @[ patt ])
 
-func oneP*[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkOneOrMore, item: @[ patt ])
+func oneP*[C, L](patt: Patt[C, L]): Patt[C, L] =
+  Patt[C, L](kind: pkOneOrMore, item: @[ patt ])
 
-func optP*[TKind](patt: Patt[TKind]): Patt[TKind] =
-  Patt[TKind](kind: pkOptional, item: @[ patt ])
+func optP*[C, L](patt: Patt[C, L]): Patt[C, L] =
+  Patt[C, L](kind: pkOptional, item: @[ patt ])
 
-func andP*[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
-  Patt[TKind](kind: pkConcat, patts: toSeq(patts))
+func andP*[C, L](patts: varargs[Patt[C, L]]): Patt[C, L] =
+  Patt[C, L](kind: pkConcat, patts: toSeq(patts))
 
-func orP*[TKind](patts: varargs[Patt[TKind]]): Patt[TKind] =
-  Patt[TKind](kind: pkAlternative, patts: toSeq(patts))
+func orP*[C, L](patts: varargs[Patt[C, L]]): Patt[C, L] =
+  Patt[C, L](kind: pkAlternative, patts: toSeq(patts))
 
-func tok*[TKind](tok: TKind): Patt[TKind] =
-  Patt[TKind](kind: pkTerm, tok: tok)
+func tok*[C, L](tok: Token[C, L]): Patt[C, L] =
+  Patt[C, L](kind: pkTerm, tok: tok)
 
-func nterm*[TKind](nterm: string): Patt[TKind] =
-  Patt[TKind](kind: pkNTerm, nterm: nterm)
+func nterm*[C, L](nterm: string): Patt[C, L] =
+  Patt[C, L](kind: pkNTerm, nterm: nterm)
 
 #============================  Constructors  =============================#
 
-func toGrammar*[TKind](
-  table: openarray[(string, Patt[TKind])]): Grammar[TKind] =
+func toGrammar*[C, L](
+  table: openarray[(string, Patt[C, L])]): Grammar[C, L] =
   result.rules = table.mapPairs(rule(lhs, rhs))
   result.start = result.rules[0].nterm
 
 #==============================  Accessors  ==============================#
 
-func addAction*[TKind](patt: Patt[TKind], act: TreeAct): Patt[TKind] =
+func addAction*[C, L](patt: Patt[C, L], act: TreeAct): Patt[C, L] =
   result = patt
   result.action = act
 
-func `opt`*[Tk](patt: Patt[Tk]): Patt[Tk] = patt.item[0]
+func `opt`*[C, L](patt: Patt[C, L]): Patt[C, L] = patt.item[0]
 
 
 import strutils
@@ -93,8 +96,8 @@ import strutils
 #*************************************************************************#
 #***************************  pretty-printing  ***************************#
 #*************************************************************************#
-func tokKindStr*[TKind](tkind: TKind, prefStr: string): string =
-  result = $tkind
+func tokKindStr*[C](tok: C, prefStr: string): string =
+  result = $tok
   if result.startsWith(prefStr):
     result = result[prefStr.len .. ^1]
 
@@ -121,8 +124,8 @@ const defaultGrammarPrintConf*: GrammarPrintConf = GrammarPrintConf(
   enumerateAlts: true
 )
 
-func exprRepr*[TKind](
-  patt: Patt[TKind],
+func exprRepr*[C, L](
+  patt: Patt[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   case patt.kind:
     of pkTerm:
@@ -145,7 +148,7 @@ func exprRepr*[TKind](
       fmt("( {patt.opt.exprRepr(conf)} ){suff}")
 
 
-func exprRepr*[Tk](
-  grammar: Grammar[Tk],
+func exprRepr*[C, L](
+  grammar: Grammar[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   grammar.rules.mapIt(exprRepr(it, conf)).joinl()

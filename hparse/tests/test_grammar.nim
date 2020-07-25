@@ -1,30 +1,15 @@
-import hparse/parse_tree
+import hparse/[parse_tree, token]
 
 type
   TokenKind = enum
-    tkOpBrace
-    tkCloseBrace
+    tkPunct
     tkIdent
-    tkComma
 
-  Token* = object
-    case kind: TokenKind
-      of tkIdent:
-        strVal: string
-      else:
-        nil
+  LTok = Token[TokenKind, string, void]
+  TPatt = Patt[TokenKind, string, void]
+  PTree = ParseTree[TokenKind, string, void]
 
-  TPatt = Patt[TokenKind]
-  PTree = ParseTree[Token]
-
-func `$`(tok: Token): string =
-  case tok.kind:
-    of tkIdent: tok.strVal
-    of tkOpBrace: "["
-    of tkCloseBrace: "]"
-    of tkComma: ","
-
-
+func `$`(tok: LTok): string = tok.lex
 func `==`(lhs, rhs: Token): bool =
   lhs.kind == rhs.kind and (
     case lhs.kind:

@@ -1,6 +1,6 @@
 ## Types/functions for BNF grammars
 
-import grammars
+import grammars, token
 import parse_primitives
 import sets, hashes, sequtils, strformat, strutils
 import hmisc/helpers
@@ -35,7 +35,7 @@ type
     fbkNterm ## Nonterminal element
     fbkTerm ## Terminal element - token
 
-  FlatBnf*[Tk] = object
+  FlatBnf*[C, L] = object
     action*: TreeAct
     case kind*: FlatBnfKind
       of fbkEmpty:
@@ -43,12 +43,12 @@ type
       of fbkNterm:
         nterm*: BnfNterm
       of fbkTerm:
-        tok*: Tk ## Token kind
+        tok*: ExpectedToken[C, L] ## Token kind
 
 #=====================  Grammar & grammar elements  ======================#
 
 type
-  BnfPatt*[TKind] = ref object # REVIEW is it necessary to use `ref`?
+  BnfPatt*[C, L] = ref object # REVIEW is it necessary to use `ref`?
     ## Recursive of flat bnf pattern
     action*: TreeAct
     case flat*: bool
@@ -59,25 +59,25 @@ type
           of bnfNterm:
             nterm*: BnfNTerm ## Nonterminal to parse
           of bnfTerm:
-            tok*: TKind ## Single token to match literally
+            tok*: ExpectedToken[C, L] ## Single token to match literally
           of bnfAlternative, bnfConcat:
-            patts*: seq[BnfPatt[TKind]] ## Concatenation/list of alternatives
+            patts*: seq[BnfPatt[C, L]] ## Concatenation/list of alternatives
       of true:
-        elems*: seq[FlatBnf[Tkind]] ## Flat bnf - concatenation of (non)terminals
+        elems*: seq[FlatBnf[C, L]] ## Flat bnf - concatenation of (non)terminals
 
-  BnfRule*[TKind] = object
+  BnfRule*[C, L] = object
     ## Single rule with one production
     nterm*: BnfNterm ## Nonterminal name
-    patt*: BnfPatt[TKind] ## Elements
+    patt*: BnfPatt[C, L] ## Elements
 
   RuleId* = object
     ## Nonterminal head and alternative index
     head*: BnfNterm
     alt*: int ## Index of alternative in `rules` field in grammar
 
-  BnfGrammar*[Tk] = object
+  BnfGrammar*[C, L] = object
     start*: BnfNterm ## Start element in grammar
-    rules*: Table[BnfNterm, seq[BnfPatt[Tk]]] ## Bnf rule and sequence
+    rules*: Table[BnfNterm, seq[BnfPatt[C, L]]] ## Bnf rule and sequence
     ## of alternatives. Each item in sequence is expected to be
     ## `BnfPatt.flat == true`.
 
@@ -112,7 +112,7 @@ func `==`*(lhs, rhs: BnfNterm): bool =
 
 #============================  Constructors  =============================#
 
-func makeGrammar*[Tk](rules: seq[BnfRule[Tk]]): BnfGrammar[Tk] =
+func makeGrammar*[C, L](rules: seq[BnfRule[C, L]]): BnfGrammar[C, L] =
   ## Construction grammar from sequence of rules
   mixin contains, hash
   for rule in rules:
@@ -133,18 +133,18 @@ func makeBnfNterm(parent: string, idx: seq[int]): BnfNTerm =
 func makeBnfNterm(name: string): BnfNTerm =
   BnfNterm(generated: false, name: name)
 
-func rule*[Tk](nterm: BnfNterm, patt: BnfPatt[Tk]): BnfRule[Tk] =
+func rule*[C, L](nterm: BnfNterm, patt: BnfPatt[C, L]): BnfRule[C, L] =
   ## Construct new BNF rule using `nterm` as head and `patt` as production
-  BnfRule[Tk](nterm: nterm, patt: patt)
+  BnfRule[C, L](nterm: nterm, patt: patt)
 
-func patt*[Tk](elems: seq[FlatBnf[Tk]]): BnfPatt[Tk] =
-  BnfPatt[Tk](flat: true, elems: elems)
+func patt*[C, L](elems: seq[FlatBnf[C, L]]): BnfPatt[C, L] =
+  BnfPatt[C, L](flat: true, elems: elems)
 
 
 #===================  Conversion from regular grammar  ===================#
 
 
-func subrules*[Tk](patt: Patt[Tk]): seq[Patt[Tk]] =
+func subrules*[C, L](patt: Patt[C, L]): seq[Patt[C, L]] =
   case patt.kind:
     of pkOptional, pkZeroOrMore, pkOneOrMore:
       @[patt.opt]
@@ -153,27 +153,27 @@ func subrules*[Tk](patt: Patt[Tk]): seq[Patt[Tk]] =
     else:
       raiseAssert(msgjoin("Invalid patt: {patt.kind} does not have subrules"))
 
-func isNested*[Tk](patt: Patt[Tk]): bool =
+func isNested*[C, L](patt: Patt[C, L]): bool =
   patt.kind in {pkAlternative .. pkOneOrMore}
 
-func toBNF*[Tk](
-  patt: Patt[Tk],
+func toBNF*[C, L](
+  patt: Patt[C, L],
   parent: string,
   idx: seq[int] = @[]): tuple[
-    toprule: BnfPatt[Tk],
-    newrules: seq[BnfRule[Tk]]] =
+    toprule: BnfPatt[C, L],
+    newrules: seq[BnfRule[C, L]]] =
 
   case patt.kind:
     of pkTerm:
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfTerm, tok: patt.tok)
+      result.toprule = BnfPatt[C, L](flat: false, kind: bnfTerm, tok: patt.tok)
     of pkNterm:
-      result.toprule = BnfPatt[Tk](
+      result.toprule = BnfPatt[C, L](
         flat: false,
         kind: bnfNTerm,
         nterm: makeBnfNterm(patt.nterm)
       )
     of pkAlternative, pkConcat:
-      var newsubp: seq[BnfPatt[Tk]]
+      var newsubp: seq[BnfPatt[C, L]]
 
       for pos, subp in patt.patts:
         let (bnfPatt, bnfRules) = subp.toBNF(parent, idx = idx & @[pos])
@@ -181,24 +181,24 @@ func toBNF*[Tk](
         result.newrules &= bnfRules
 
       if patt.kind == pkAlternative:
-        result.toprule = BnfPatt[Tk](flat: false, kind: bnfAlternative, patts: newsubp)
+        result.toprule = BnfPatt[C, L](flat: false, kind: bnfAlternative, patts: newsubp)
       else:
-        result.toprule = BnfPatt[Tk](flat: false, kind: bnfConcat, patts: newsubp)
+        result.toprule = BnfPatt[C, L](flat: false, kind: bnfConcat, patts: newsubp)
     of pkZeroOrMore:
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
+      result.toprule = BnfPatt[C, L](flat: false, kind: bnfNterm, nterm: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
-        BnfRule[Tk](
+        BnfRule[C, L](
           nterm: newsym,
-          patt: BnfPatt[Tk](
+          patt: BnfPatt[C, L](
             flat: false,
             kind: bnfAlternative,
             patts: @[
-              BnfPatt[Tk](flat: false, kind: bnfEmpty),
-              BnfPatt[Tk](flat: false, kind: bnfConcat, patts: @[
+              BnfPatt[C, L](flat: false, kind: bnfEmpty),
+              BnfPatt[C, L](flat: false, kind: bnfConcat, patts: @[
                 body,
-                BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
+                BnfPatt[C, L](flat: false, kind: bnfNterm, nterm: newsym)
         ])]))
       ] & subnewrules
     of pkOneOrMore:
@@ -206,49 +206,49 @@ func toBNF*[Tk](
       # NOTE I'm not 100% sure if this is correct way to convert
       # one-or-more to bnf
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
+      result.toprule = BnfPatt[C, L](flat: false, kind: bnfNterm, nterm: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
-        BnfRule[Tk](
+        BnfRule[C, L](
           nterm: newsym,
-          patt: BnfPatt[Tk](
+          patt: BnfPatt[C, L](
             flat: false,
             kind: bnfConcat,
             patts: @[
               body,
-              BnfPatt[Tk](flat: false, kind: bnfAlternative, patts: @[
-                BnfPatt[Tk](flat: false, kind: bnfEmpty),
-                BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
+              BnfPatt[C, L](flat: false, kind: bnfAlternative, patts: @[
+                BnfPatt[C, L](flat: false, kind: bnfEmpty),
+                BnfPatt[C, L](flat: false, kind: bnfNterm, nterm: newsym)
         ])]))
       ] & subnewrules
     of pkOptional:
       let newsym = makeBnfNterm(parent, idx)
-      result.toprule = BnfPatt[Tk](flat: false, kind: bnfNterm, nterm: newsym)
+      result.toprule = BnfPatt[C, L](flat: false, kind: bnfNterm, nterm: newsym)
       let (body, subnewrules) = toBNF(patt.opt, parent, idx & @[0])
       result.newrules = @[
-        BnfRule[Tk](
+        BnfRule[C, L](
           nterm: newsym,
-          patt: BnfPatt[Tk](
+          patt: BnfPatt[C, L](
             flat: false,
             kind: bnfAlternative,
-            patts: @[BnfPatt[Tk](flat: false, kind: bnfEmpty), body]))
+            patts: @[BnfPatt[C, L](flat: false, kind: bnfEmpty), body]))
       ] & subnewrules
 
 
-func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
+func flatten[C, L](patt: BnfPatt[C, L]): seq[seq[FlatBnf[C, L]]] =
  if patt.flat:
    return @[ patt.elems ]
  else:
    case patt.kind:
      of bnfEmpty:
-       return @[ @[ FlatBnf[Tk](kind: fbkEmpty) ] ]
+       return @[ @[ FlatBnf[C, L](kind: fbkEmpty) ] ]
      of bnfTerm:
-       return @[ @[ FlatBnf[Tk](kind: fbkTerm, tok: patt.tok) ] ]
+       return @[ @[ FlatBnf[C, L](kind: fbkTerm, tok: patt.tok) ] ]
      of bnfNterm:
-       return @[ @[ FlatBnf[Tk](kind: fbkNterm, nterm: patt.nterm) ] ]
+       return @[ @[ FlatBnf[C, L](kind: fbkNterm, nterm: patt.nterm) ] ]
      of bnfConcat:
        for idx, sub in patt.patts:
-         var newpatts: seq[seq[FlatBnf[Tk]]]
+         var newpatts: seq[seq[FlatBnf[C, L]]]
          for patt in sub.flatten():
            if result.len == 0:
              newpatts.add patt
@@ -262,10 +262,10 @@ func flatten[Tk](patt: BnfPatt[Tk]): seq[seq[FlatBnf[Tk]]] =
          result &= alt.flatten()
 
 
-func toBNF*[Tk](
-  rule: Rule[Tk],
+func toBNF*[C, L](
+  rule: Rule[C, L],
   noAltFlatten: bool = false,
-  renumerate: bool = true): seq[BnfRule[Tk]] =
+  renumerate: bool = true): seq[BnfRule[C, L]] =
   let (top, newrules) = rule.patts.toBnf(rule.nterm)
   if noAltFlatten:
     block:
@@ -299,7 +299,7 @@ func toBNF*[Tk](
         tmp.nterm.idx = @[idx]
         result[idx] = tmp
 
-func toBNF*[Tk](grammar: Grammar[Tk]): BnfGrammar[Tk] =
+func toBNF*[C, L](grammar: Grammar[C, L]): BnfGrammar[C, L] =
   mixin toBNF
   result = makeGrammar(
     grammar.rules.mapIt(it.toBNF(noAltFlatten = true, renumerate = false)).concat())
@@ -310,20 +310,20 @@ func toBNF*[Tk](grammar: Grammar[Tk]): BnfGrammar[Tk] =
 
 #========================  Predicates/accessors  =========================#
 
-func isEmpty*[Tk](patt: BnfPatt[Tk]): bool =
+func isEmpty*[C, L](patt: BnfPatt[C, L]): bool =
   ## Check if pattern describes empty production
   (patt.elems.len == 1) and (patt.elems[0].kind == fbkEmpty)
 
-func `[]`*[Tk](grammar: BnfGrammar[Tk], rule: RuleId): BnfPatt[Tk] =
+func `[]`*[C, L](grammar: BnfGrammar[C, L], rule: RuleId): BnfPatt[C, L] =
   ## Get BNF pattern for rule
   grammar.rules[rule.head][rule.alt]
 
-func getProductions*[Tk](
-  grammar: BnfGrammar[Tk], id: RuleId): seq[FlatBnf[Tk]] =
+func getProductions*[C, L](
+  grammar: BnfGrammar[C, L], id: RuleId): seq[FlatBnf[C, L]] =
   ## Get list of productions from flat bnf pattern at `id`
   grammar.rules[id.head][id.alt].elems
 
-func first*[Tk](patt: BnfPatt[Tk]): FlatBnf[Tk] =
+func first*[C, L](patt: BnfPatt[C, L]): FlatBnf[C, L] =
   assert patt.flat
   return patt.elems[0]
 
@@ -342,8 +342,8 @@ func exprRepr*(nterm: BnfNTerm, normalize: bool = false): string =
     else:
       nterm.name
 
-func exprRepr*[Tk](
-  fbnf: FlatBnf[Tk],
+func exprRepr*[C, L](
+  fbnf: FlatBnf[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   case fbnf.kind:
     of fbkNterm:
@@ -378,13 +378,13 @@ func exprRepr*[TKind](
   let head = rule.nterm.exprRepr(conf.normalizeNterms)
   return fmt("{head:<12} {conf.prodArrow} {rule.patt.exprRepr(conf)}")
 
-func exprRepr*[Tk](
-  rule: Rule[Tk],
+func exprRepr*[C, L](
+  rule: Rule[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   return fmt("{rule.nterm:<12} {conf.prodArrow} {rule.patts.exprRepr(conf)}")
 
-func exprRepr*[Tk](
-  grammar: BnfGrammar[Tk],
+func exprRepr*[C, L](
+  grammar: BnfGrammar[C, L],
   nojoin: bool = false,
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   mixin toRomanNumeral
