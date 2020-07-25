@@ -1,6 +1,12 @@
 import sets, sequtils, hashes
 import hmisc/helpers
 
+## Parse tree contains actual token /values/ - concrete lexemes and
+## additional information (whatever you deem necessary adding).
+## `Token` represents lexical unit found in *input data*.
+## `ExpectedToken` describes required token category and OPTIONAL
+## lexeme value.
+
 type
   Token*[Category, Lexeme, Info] = object
     ## Actual value of input token
@@ -30,63 +36,63 @@ type
 
 type
   EofTok* = object
-  TkindSet*[C, L, I] = object
-    ## Set of tokens + EOF token (end of inptu sequence)
+  TkindSet*[C, L] = object
+    ## Set of expected tokens + EOF token (end of inptu sequence)
     categories: HashSet[C]
     lexemes: Hashset[L]
     hasEof: bool
 
 const eofTok*: EofTok = EofTok()
 
-func contains*[C, L, I](s: TKindSet[C, L, I], tk: Token[C, L, I]): bool =
+func contains*[C, L, I](s: TKindSet[C, L], tk: Token[C, L, I]): bool =
   tk in s.vals
 
-func contains*[C, L, I](s: TKindSet[C, L, I], tk: EofTok): bool =
+func contains*[C, L](s: TKindSet[C, L], tk: EofTok): bool =
   s.hasEof
 
-func incl*[C, L, I](s: var TKindSet[C, L, I], tk: Token[C, L, I]): void =
+func incl*[C, L, I](s: var TKindSet[C, L], tk: Token[C, L, I]): void =
   s.vals.incl tk
 
-func incl*[C, L, I](s: var TKindSet[C, L, I], tk: EofTok): void =
+func incl*[C, L](s: var TKindSet[C, L], tk: EofTok): void =
   (s.hasEof = true)
 
-func incl*[C, L, I](
-  s: var TKindSet[C, L, I], other: TKindSet[C, L, I]): void =
+func incl*[C, L](
+  s: var TKindSet[C, L], other: TKindSet[C, L]): void =
   s.vals.incl other.vals
 
-func `$`*[C, L, I](s: TKindSet[C, L, I]): string =
+func `$`*[C, L](s: TKindSet[C, L]): string =
   (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
 
-func toTkind*[C, L, I](s: set[C]): TKindSet[C, L, I] =
+func toTkind*[C, L](s: set[C]): TKindSet[C, L] =
   (result.vals = s)
 
-func makeTKindSet*[C, L, I](): TkindSet[C, L, I] =
+func makeTKindSet*[C, L](): TkindSet[C, L] =
   discard
 
-func makeTKindSet*[C, L, I](tok: Token[C, L, I]): TkindSet[C, L, I] =
+func makeTKindSet*[C, L, I](tok: Token[C, L, I]): TkindSet[C, L] =
   result.vals.incl tok
 
-func makeTKindSet*[C, L, I](eof: EofTok): TKindSet[C, L, I] =
+func makeTKindSet*[C, L](eof: EofTok): TKindSet[C, L] =
   (result.hasEof = true)
 
-iterator items*[C, L, I](s: TKindSet[C, L, I]): Token[C, L, I] =
+iterator items*[C, L](s: TKindSet[C, L]): ExpectedToken[C, L] =
   for it in s.vals:
     yield it
 
-func union*[C, L, I](s: seq[TKindSet[C, L, I]]): TKindSet[C, L, I] =
+func union*[C, L](s: seq[TKindSet[C, L]]): TKindSet[C, L] =
   result.hasEof = s.anyOfIt(it.hasEof)
   for it in s:
     result.vals.incl it.vals
 
-func containsOrIncl*[C, L, I](
-  s: var TKindSet[C, L, I], other: TKindSet[C, L, I]): bool =
+func containsOrIncl*[C, L](
+  s: var TKindSet[C, L], other: TKindSet[C, L]): bool =
   if (s.hasEof == other.hasEof) and ((s.vals - other.vals).len == 0):
     result = false
 
   s.hasEof = s.hasEof or other.hasEof
   s.vals.incl other.vals
 
-func hash*[C, L, I](s: TKindSet[C, L, I]): Hash =
+func hash*[C, L](s: TKindSet[C, L]): Hash =
   var h: Hash = 0
   h = h !& hash(s.vals) !& hash(s.hasEof)
   result = !$h

@@ -6,7 +6,7 @@ type
     tkIdent
 
   LTok = Token[TokenKind, string, void]
-  TPatt = Patt[TokenKind, string, void]
+  TPatt = Patt[TokenKind, string]
   PTree = ParseTree[TokenKind, string, void]
 
 func `$`(tok: LTok): string = tok.lex

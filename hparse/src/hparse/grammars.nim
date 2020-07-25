@@ -69,7 +69,7 @@ func andP*[C, L](patts: varargs[Patt[C, L]]): Patt[C, L] =
 func orP*[C, L](patts: varargs[Patt[C, L]]): Patt[C, L] =
   Patt[C, L](kind: pkAlternative, patts: toSeq(patts))
 
-func tok*[C, L](tok: Token[C, L]): Patt[C, L] =
+func tok*[C, L](tok: ExpectedToken[C, L]): Patt[C, L] =
   Patt[C, L](kind: pkTerm, tok: tok)
 
 func nterm*[C, L](nterm: string): Patt[C, L] =

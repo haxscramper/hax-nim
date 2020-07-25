@@ -353,8 +353,8 @@ func exprRepr*[C, L](
     of fbkEmpty:
       conf.emptyProd
 
-func exprRepr*[TKind](
-  bnf: BnfPatt[TKind],
+func exprRepr*[C, L](
+  bnf: BnfPatt[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   if bnf.flat:
     bnf.elems.mapIt(exprRepr(it, conf)).join(conf.concatSep)
@@ -372,8 +372,8 @@ func exprRepr*[TKind](
         ).wrap("{  }")
 
 
-func exprRepr*[TKind](
-  rule: BnfRule[TKind],
+func exprRepr*[C, L](
+  rule: BnfRule[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   let head = rule.nterm.exprRepr(conf.normalizeNterms)
   return fmt("{head:<12} {conf.prodArrow} {rule.patt.exprRepr(conf)}")
