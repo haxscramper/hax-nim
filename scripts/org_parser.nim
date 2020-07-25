@@ -60,7 +60,6 @@ type
 
   # OrgEntity = ref object of OrgNode
 
-
   OrgExampleBlock = ref object of OrgNode
     ## Element
     labelFmt: string

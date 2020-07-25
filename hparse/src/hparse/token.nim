@@ -80,6 +80,9 @@ func incl*[L](s: var LexSet[L], other: LexSet[L]): void =
   s.hasAll = s.hasAll or other.hasAll
   s.lexemes.incl(other.lexemes)
 
+func makeLexSet*[L](): LexSet[L] =
+  LexSet[L](lexemes: initHashSet[L](2))
+
 #==============================  Token set  ==============================#
 
 const eofTok*: EofTok = EofTok()
@@ -116,16 +119,19 @@ func incl*[C, L](
 func `$`*[C, L](s: TokSet[C, L]): string =
   (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
 
+func makeTokSet*[C, L](): TokSet[C, L] =
+  TokSet[C, L](tokens: initTable[C, L](2))
+
 func toTkind*[C, L](s: set[C]): TokSet[C, L] =
+  result = makeTokSet[C, L]()
   (result.vals = s)
 
-func makeTokSet*[C, L](): TokSet[C, L] =
-  discard
-
 func makeTokSet*[C, L, I](tok: Token[C, L, I]): TokSet[C, L] =
+  result = makeTokSet[C, L]()
   result.vals.incl tok
 
 func makeTokSet*[C, L](eof: EofTok): TokSet[C, L] =
+  result = makeTokSet[C, L]()
   (result.hasEof = true)
 
 iterator items*[C, L](s: TokSet[C, L]): ExpectedToken[C, L] =
@@ -149,3 +155,30 @@ func hash*[C, L](s: TokSet[C, L]): Hash =
   var h: Hash = 0
   h = h !& hash(s.vals) !& hash(s.hasEof)
   result = !$h
+
+
+#*************************************************************************#
+#****************************  Token lookup  *****************************#
+#*************************************************************************#
+#===========================  Type definition  ===========================#
+
+type
+  TokLookup[C, L] = object
+    nil
+
+#=============================  Contructors  =============================#
+
+func makeTokLookup*[C, L](altSets: seq[TokSet[C, L]]): TokLookup =
+  ## Create token lookup from sequence of alternatives
+  # TODO detect ambiguity
+  # TODO IMPLEMENT
+  discard
+
+#==============================  Accessors  ==============================#
+
+func getAlt*[C, L, I](
+  lookup: TokLookup[C, L], token: Token[C, L, I]): int =
+  ## Get select alternative set based on token category and lexeme values.
+  # TODO raise exception if token is not found
+  # TODO IMPLEMENT
+  discard

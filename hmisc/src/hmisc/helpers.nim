@@ -8,12 +8,15 @@ include hdebug_misc
 import strformat
 
 proc colorPrint*(
-  node: NimNode, tmpfile: string = "/tmp/nimast.tmp.nim"): void =
+  node: NimNode,
+  tmpfile: string = "/tmp/nimast.tmp.nim",
+  doPrint: bool = true): void =
   # TODO convert nim ast into adequately readable form without using
   # `pygmentize`. Maybe even color macros/templates/procs differently.
   tmpfile.writeFile($node.toStrLit())
   discard staticExec("nimpretty " & tmpfile)
-  echo staticExec("pygmentize -f terminal " & tmpfile)
+  if doPrint:
+    echo staticExec("pygmentize -f terminal " & tmpfile)
 
 template expectType*(op, t: untyped): untyped =
   static: assert op is t

@@ -38,6 +38,8 @@ template newLL1RecursiveParser[Tok](body: typed): untyped =
       newCall("newLL1RecursiveDescent", ident "cb")
     )
 
+    colorPrint(result, doPrint = false)
+
   buildParser()
 
 #======================  dummy value construction  =======================#

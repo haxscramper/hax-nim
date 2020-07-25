@@ -149,6 +149,9 @@ proc makeSetLiteral[T](s: set[T]): NimNode =
   for elem in s:
     result.add ident($elem)
 
+proc makeSetLiteral*[C, L](s: TokSet[C, L]): NimNode =
+  newLit(s)
+
 proc makeParseBlock[C, L](
   patt: CompPatt[C, L],
   sets: NTermSets[C, L],
@@ -327,6 +330,46 @@ proc makeParseBlock[C, L](
       `actAssgn`
     )
 
+func makeParseProcDef(name: string): NimNode =
+  nnkProcDef.newTree(
+    newIdentNode(name),
+    newEmptyNode(),
+    nnkGenericParams.newTree(
+      nnkIdentDefs.newTree(
+        newIdentNode("C"),
+        newIdentNode("L"),
+        newIdentNode("I"),
+        newEmptyNode(),
+        newEmptyNode()
+      )
+    ),
+    nnkFormalParams.newTree(
+      nnkBracketExpr.newTree(
+        newIdentNode("ParseTree"),
+        newIdentNode("C"),
+        newIdentNode("L"),
+        newIdentNode("I")
+      ),
+      nnkIdentDefs.newTree(
+        newIdentNode("toksIdent"),
+        nnkVarTy.newTree(
+          nnkBracketExpr.newTree(
+            newIdentNode("TokStream"),
+            newIdentNode("C"),
+            newIdentNode("L"),
+            newIdentNode("I")
+          )
+        ),
+        newEmptyNode()
+      )
+    ),
+    newEmptyNode(),
+    newEmptyNode(),
+    newEmptyNode()
+  )
+
+
+
 proc makeRuleParser[C, L](
   rule: CompRule[C, L],
   sets: NTermSets[C, L]): tuple[decl, impl: NimNode] =
@@ -335,30 +378,27 @@ proc makeRuleParser[C, L](
     procName = ident(rule.nterm.makeParserName())
     toksIdent = ident "toks"
     resIdent = ident "res"
+    ntermNterm = newLit(rule.nterm)
+    parseBody = rule.patts.makeParseBlock(sets)
 
-  let decl = quote do:
-    # Declare procedure to parse `rule`. `toks` is instance of token
-    # stream used to get lookahead.
-    proc `procName`[Tok](`toksIdent`: var TokStream[Tok]): ParseTree[Tok]
-
-  let ntermNterm = newLit(rule.nterm)
-  let parseBody = rule.patts.makeParseBlock(sets)
-  let impl = quote do:
-    proc `procName`[Tok](`toksIdent`: var TokStream[Tok]): ParseTree[Tok] =
-      `parseBody`
-      case `resIdent`.kind:
-        of ptkTerm, ptkNTerm:
-          return newTree(name = `ntermNterm`, subnodes = @[`resIdent`])
-        of ptkList:
-          return newTree(name = `ntermNterm`, subnodes = `resIdent`.getSubnodes())
+  let decl = makeParseProcDef(rule.nterm.makeParserName())
+  var impl = makeParseProcDef(rule.nterm.makeParserName())
+  impl[6] = quote do:
+    `parseBody`
+    case `resIdent`.kind:
+      of ptkTerm, ptkNTerm:
+        return newTree(name = `ntermNterm`, subnodes = @[`resIdent`])
+      of ptkList:
+        return newTree(name = `ntermNterm`, subnodes = `resIdent`.getSubnodes())
 
   return (decl: decl, impl: impl)
 
 
 proc makeGrammarParser*[C, L](gram: CompGrammar[C, L]): NimNode =
   ## Generate code for parsing grammar `gram`
-  var decls: seq[NimNode]
-  var impls: seq[NimNode]
+  var
+    decls: seq[NimNode]
+    impls: seq[NimNode]
   for rule in gram.rules:
     let (decl, impl) = makeRuleParser(rule, gram.sets)
     decls.add decl
