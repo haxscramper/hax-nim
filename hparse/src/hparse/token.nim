@@ -50,11 +50,19 @@ func makeExpToken*[C, L](category: C): ExpectedToken[C, L] =
 #******************************  Token set  ******************************#
 #*************************************************************************#
 
+#===========================  Type definition  ===========================#
+
 type
   EofTok* = object
+
+  LexSet*[L] = object
+    ## Set of lexemes
+    hasAll: bool ## Whether or not all lexeme values are in set
+    lexemes: HashSet[L]
+
   TokSet*[C, L] = object
     ## Set of expected tokens + EOF token (end of inptu sequence)
-    tokens: Table[C, tuple[hasEmpty: bool, lex: HashSet[L]]] ## Map from
+    tokens: Table[C, LexSet[L]] ## Map from
     ## token category to list of expected lexemes + whether or not
     ## token can be accepted if lexeme does not match.
     # `kwd."if"` matches _if_ `kwd -> (lex: {"if"})` - token with
@@ -63,6 +71,16 @@ type
     # checking lexeme.
 
     hasEof: bool
+
+#=============================  Lexeme set  ==============================#
+
+func incl*[L](s: var LexSet[L], lex: L): void = s.lexemes.incl(lex)
+
+func incl*[L](s: var LexSet[L], other: LexSet[L]): void =
+  s.hasAll = s.hasAll or other.hasAll
+  s.lexemes.incl(other.lexemes)
+
+#==============================  Token set  ==============================#
 
 const eofTok*: EofTok = EofTok()
 
@@ -75,14 +93,25 @@ func contains*[C, L](s: TokSet[C, L], tk: EofTok): bool =
 func incl*[C, L, I](s: var TokSet[C, L], tk: Token[C, L, I]): void =
   s.vals.incl tk
 
-# func incl*[C, L](s: var T)
+func incl*[C, L](s: var TokSet[C, L], etk: ExpectedToken[C, L]): void =
+  if etk.cat notin s.tokens:
+    s.tokens[etk.cat] = LexSet[L]()
+
+  if etk.hasLex:
+    s.tokens[etk.cat].incl etk.lex
+  else:
+    s.tokens[etk.cat].hasAll = true
 
 func incl*[C, L](s: var TokSet[C, L], tk: EofTok): void =
   (s.hasEof = true)
 
 func incl*[C, L](
   s: var TokSet[C, L], other: TokSet[C, L]): void =
-  s.vals.incl other.vals
+  for cat, lex in other.tokens:
+    if cat notin s.tokens:
+      s.tokens[cat] = lex
+    else:
+      s.tokens[cat].incl lex
 
 func `$`*[C, L](s: TokSet[C, L]): string =
   (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
