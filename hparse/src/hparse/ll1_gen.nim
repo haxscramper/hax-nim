@@ -181,24 +181,42 @@ proc makeParseBlock[C, L](
 proc makeAltBlock[C, L](alt: CompPatt[C, L], sets: NTermSets[C, L]): NimNode =
   ## Create code block for parsing alternative pattern
   assert alt.kind == pkAlternative
-  let toksIdent = ident "toks"
-  result = nnkCaseStmt.newTree(quote do: `toksIdent`.peek().kind)
+  let (sets, branches) = unzip: collect(newSeq):
+    for idx, patt in alt.patts:
+      let
+        resName = &"patt{idx}res"
+        resIdent = ident resName
+        parseBlock = makeParseBlock(patt, sets, resName)
 
-  for idx, patt in alt.patts:
-    let resName = &"patt{idx}res"
-    let resIdent = ident resName
-    let parseBlock = makeParseBlock(patt, sets, resName)
-    result.add nnkOfBranch.newTree(
-      makeSetLiteral(first(patt, sets)),
+      (
+        first(patt, sets),
+        nnkOfBranch.newTree(
+          newLit(idx),
+          quote do:
+            `parseBlock`
+            `resIdent`
+        )
+      )
+
+  let
+    selector: TokLookup[C, L] = makeTokLookup(sets)
+    selectorLit = newLit(selector)
+    toksIdent = ident "toks"
+    altId = ident "altId"
+    elseBody = nnkElse.newTree(
       quote do:
-        `parseBlock`
-        `resIdent`
+        # TODO IMPLEMENT generated more informative error messages
+        raise CodeError(msg: "Unexpected token")
     )
 
-  let elseBody = quote do:
-    raise CodeError(msg: "Unexpected token")
 
-  result.add nnkElse.newTree(elsebody)
+  result = quote do:
+    let selector = `selectorLit`
+    let `altId` = selector.getAlt(`toksIdent`.peek())
+
+  result.add: withIt(nnkCaseStmt.newTree(altId)):
+    for branch in branches & @[elseBody]:
+      it.add branch
 
 proc makeParserName*(nterm: NTermSym): string =
   ## Converter nonterminal name into parsing proc name

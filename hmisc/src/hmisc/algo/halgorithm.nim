@@ -32,6 +32,12 @@ template orElse*(
 template setIf*(lhs: untyped, predicate: bool, value: untyped): untyped =
   if predicate: lhs = value
 
+template withIt*(val, body: untyped): untyped =
+  block:
+    var it {.inject.} = val
+    block:
+      body
+    it
 
 template anyOfIt*(sequence: typed, predicate: untyped): bool =
   ## Return `true` if for any of the items in sequence `predicate`

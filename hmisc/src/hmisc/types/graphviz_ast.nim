@@ -21,12 +21,6 @@ relevant places.
 
 ]##
 
-template withIt*(val, body: untyped): untyped =
-  block:
-    var it {.inject.} = val
-    block:
-      body
-    it
 
 type
   NodeId* = object

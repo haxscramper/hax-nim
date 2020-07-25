@@ -285,13 +285,23 @@ func runTreeActions*[C, L, I](tree: var ParseTree[C, L, I]): void =
               raiseAssert(msgjoin(
                 "Cannot promote terminal node in tree with",
                 subnodes.len, "elements",
-                ($subnode.tok.kind), " in tree ", tree.lispRepr()))
+                # IMPLEMENT generate adequate error messages incuding
+                # current token values
+
+                # TODO do not print whole tree, only dump two upper
+                # layers, everything else should be represented as
+                # `...`
+
+                # ($subnode.tok.kind), " in tree ", tree.lispRepr()
+              ))
           of taSpliceDiscard, taSplicePromote:
             raiseAssert(msgjoin(
               "Cannot splice terminal node (it cannot have child",
               "elements): attempted splice",
-              subnode.action, "of", ($subnode.tok.kind),
-              " in tree ", tree.lispRepr()))
+              # IMPLEMENT
+              # subnode.action, "of", ($subnode.tok.kind),
+              # " in tree ", tree.lispRepr()
+            ))
           else:
             discard
       else:

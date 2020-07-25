@@ -168,12 +168,12 @@ func hash*[C, L](s: TokSet[C, L]): Hash =
 #===========================  Type definition  ===========================#
 
 type
-  TokLookup[C, L] = object
-    nil
+  TokLookup*[C, L] = object
+    f1*: int
 
 #=============================  Contructors  =============================#
 
-func makeTokLookup*[C, L](altSets: seq[TokSet[C, L]]): TokLookup =
+func makeTokLookup*[C, L](altSets: seq[TokSet[C, L]]): TokLookup[C, L] =
   ## Create token lookup from sequence of alternatives
   # TODO detect ambiguity
   # TODO IMPLEMENT
