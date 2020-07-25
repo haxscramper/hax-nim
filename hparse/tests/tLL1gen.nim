@@ -66,19 +66,20 @@ template newLL1RecursiveParser[Tok](body: typed): untyped =
 #   inseq.mapIt(Token(kind: it))
 
 suite "LL(1) parser simple":
-  const nt = nterm[TokenKind]
-  let parser = newLL1RecursiveParser[Token]({
+  const nt = nterm[TokenKind, string]
+  proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
+  let parser = newLL1RecursiveParser[Token, string]({
       # list ::= '[' <elements> ']'
       "list" : andP(
-        tok(tkOpBrace),
+        tok(tkPunct, "["),
         nt("elements"),
-        tok(tkCloseBrace)
+        tok(tkPunct, "]")
       ),
       # elements ::= <element> (',' <element>)*
       "elements" : andP(
         nt("element"),
         zeroP(andP(
-          tok(tkComma),
+          tok(tkPunct, "["),
           nt("element")
         ))
       ),

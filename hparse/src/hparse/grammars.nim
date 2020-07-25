@@ -72,6 +72,12 @@ func orP*[C, L](patts: varargs[Patt[C, L]]): Patt[C, L] =
 func tok*[C, L](tok: ExpectedToken[C, L]): Patt[C, L] =
   Patt[C, L](kind: pkTerm, tok: tok)
 
+func tok*[C, L](cat: C, lex: L): Patt[C, L] =
+  Patt[C, L](kind: pkTerm, tok: makeExpToken(cat, lex))
+
+func tok*[C, L](cat: C): Patt[C, L] =
+  Patt[C, L](kind: pkTerm, tok: makeExpToken[C, L](cat))
+
 func nterm*[C, L](nterm: string): Patt[C, L] =
   Patt[C, L](kind: pkNTerm, nterm: nterm)
 

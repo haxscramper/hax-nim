@@ -7,6 +7,12 @@ import hmisc/helpers
 ## `ExpectedToken` describes required token category and OPTIONAL
 ## lexeme value.
 
+#*************************************************************************#
+#********************************  Token  ********************************#
+#*************************************************************************#
+
+#===========================  Type definition  ===========================#
+
 type
   Token*[Category, Lexeme, Info] = object
     ## Actual value of input token
@@ -25,14 +31,24 @@ type
     # NOTE token comparison is done using simple equality - more
     # complex relations are not supported - they should be encoded in
     cat*: C ## Expected token category
-    case hasLex: bool ## Whether or not lexeme value should be considered
+    case hasLex*: bool ## Whether or not lexeme value should be considered
       of true:
         lex*: L ## Expected lexeme value
       of false:
         nil
 
+#============================  Constructors  =============================#
 
-#==============================  token set  ==============================#
+func makeExpToken*[C, L](category: C, lexeme: L): ExpectedToken[C, L] =
+  ExpectedToken[C, L](cat: category, lex: lexeme, hasLex: true)
+
+func makeExpToken*[C, L](category: C): ExpectedToken[C, L] =
+  ExpectedToken[C, L](cat: category, hasLex: false)
+
+
+#*************************************************************************#
+#******************************  Token set  ******************************#
+#*************************************************************************#
 
 type
   EofTok* = object
