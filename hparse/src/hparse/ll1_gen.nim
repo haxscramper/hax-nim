@@ -79,24 +79,38 @@ proc computePatt*[C, L](
   let kind = patt.kind
   case kind:
     of pkTerm:
-      result = CompPatt[C, L](kind: pkTerm, tok: patt.tok)
+      result = CompPatt[C, L](
+        kind: pkTerm, tok: patt.tok, first: makeTokSet[C, L]())
       result.first.incl patt.tok
     of pkConcat:
       result = CompPatt[C, L](
-        kind: pkConcat, patts: patt.patts.mapIt(computePatt(it, sets)))
+        kind: pkConcat,
+        patts: patt.patts.mapIt(computePatt(it, sets)),
+        first: makeTokSet[C, L]()
+      )
       result.first.incl computeFirst(patt.patts[0], sets)
     of pkAlternative:
       result = CompPatt[C, L](
-        kind: pkAlternative, patts: patt.patts.mapIt(computePatt(it, sets)))
+        kind: pkAlternative,
+        patts: patt.patts.mapIt(computePatt(it, sets)),
+        first: makeTokSet[C, L]()
+      )
       for p in patt.patts:
         result.first.incl computeFirst(p, sets)
     of pkOptional, pkZeroOrMore, pkOneOrMore:
       result = CompPatt[C, L](
-        kind: kind, opt: @[computePatt(patt.opt, sets)])
+        kind: kind,
+        opt: @[computePatt(patt.opt, sets)],
+        first: makeTokSet[C, L]()
+      )
       result.first.incl computeFirst(patt.opt, sets)
     of pkNterm:
       # FIRST sets for nonterminals are stored in `sets`
-      result = CompPatt[C, L](kind: pkNterm, nterm: patt.nterm)
+      result = CompPatt[C, L](
+        kind: pkNterm,
+        nterm: patt.nterm,
+        first: makeTokSet[C, L]()
+      )
 
   result.action = patt.action
 

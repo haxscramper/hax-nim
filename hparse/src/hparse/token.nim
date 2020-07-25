@@ -98,7 +98,7 @@ func incl*[C, L, I](s: var TokSet[C, L], tk: Token[C, L, I]): void =
 
 func incl*[C, L](s: var TokSet[C, L], etk: ExpectedToken[C, L]): void =
   if etk.cat notin s.tokens:
-    s.tokens[etk.cat] = LexSet[L]()
+    s.tokens[etk.cat] = makeLexSet[L]()
 
   if etk.hasLex:
     s.tokens[etk.cat].incl etk.lex
@@ -120,7 +120,7 @@ func `$`*[C, L](s: TokSet[C, L]): string =
   (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
 
 func makeTokSet*[C, L](): TokSet[C, L] =
-  TokSet[C, L](tokens: initTable[C, L](2))
+  TokSet[C, L](tokens: initTable[C, LexSet[L]](2))
 
 func toTkind*[C, L](s: set[C]): TokSet[C, L] =
   result = makeTokSet[C, L]()
