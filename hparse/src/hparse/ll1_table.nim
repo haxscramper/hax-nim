@@ -8,8 +8,8 @@ import bnf_grammars, grammars, parse_helpers, parse_tree
 
 type
   AltId* = int
-  FirstTable*[Tk] = Table[BnfNterm, Table[AltId, TkindSet[Tk]]]
-  FollowTable*[Tk] = Table[BnfNterm, TKindSet[Tk]]
+  FirstTable*[Tk] = Table[BnfNterm, Table[AltId, TokSet[Tk]]]
+  FollowTable*[Tk] = Table[BnfNterm, TokSet[Tk]]
   LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
     # [Current term + Current token] -> Rule to use
 
@@ -53,18 +53,18 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
       # Generate empty `FIRST/FOLLOW` sets - each rule+alternative pair
       # corresponds to empty set.
       if head notin result.first:
-        result.first[head] = {altId : makeTKindSet[Tk]()}.toTable()
+        result.first[head] = {altId : makeTokSet[Tk]()}.toTable()
       else:
-        result.first[head][altId] = makeTKindSet[Tk]()
-      # result.follow[rule.head] = {AltId(rule.alt) : makeTKindSet[Tk]()}.toTable()
-      result.follow[head] = makeTKindSet[Tk]()
+        result.first[head][altId] = makeTokSet[Tk]()
+      # result.follow[rule.head] = {AltId(rule.alt) : makeTokSet[Tk]()}.toTable()
+      result.follow[head] = makeTokSet[Tk]()
 
   block: # Add end token to `FOLLOW`
     var endNterms = initDeque[BnfNterm]()
     endNterms.addLast grammar.start
     while endNterms.len > 0:
       let nterm = endNterms.popFirst()
-      result.follow[nterm] = makeTKindSet[Tk](eofTok)
+      result.follow[nterm] = makeTokSet[Tk](eofTok)
       for altId, alt in grammar.rules[nterm]:
         if alt.elems.last.kind == fbkNterm:
           endNterms.addLast alt.elems.last.nterm
@@ -97,10 +97,10 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
               of fbkTerm:
                 # Add token to `FIRST[X]` directly
                 # showLog fmt "Found {elem.tok} @ {body.exprRepr()}[{idx}]"
-                makeTKindSet(elem.tok)
+                makeTokSet(elem.tok)
               of fbkEmpty:
                 # QUESTION ERROR?
-                makeTKindSet[Tk]()
+                makeTokSet[Tk]()
 
 
             # showLog fmt "Adding {first:>30} to FIRST of {rule.head}[{rule.alt}]"
@@ -116,7 +116,7 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
           # showInfo fmt "Finished processing {body.exprRepr()}"
 
       block: # `FOLLOW` set construction
-        var tailFollow: TKindSet[Tk] = result.follow[rule.head] # `FOLLOW`
+        var tailFollow: TokSet[Tk] = result.follow[rule.head] # `FOLLOW`
         # for the nonterminal we are working with - need to add this
         # as `FOLLOW` for element at the end
         for elem in body.elems.reversed(): # Iterate over all elements
@@ -146,7 +146,7 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
               of fbkNterm:
                 tailFollow = result.first[elem.nterm].mapPairs(rhs).union()
               of fbkTerm:
-                tailFollow = makeTKindSet(elem.tok)
+                tailFollow = makeTokSet(elem.tok)
               else:
                 discard # ERROR?
 

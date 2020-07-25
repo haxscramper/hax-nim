@@ -26,7 +26,7 @@ template doIt(s, action: untyped): untyped =
   s
 
 type
-  FirstSet*[C, L] = TKindSet[C, L]
+  FirstSet*[C, L] = TokSet[C, L]
   NTermSets*[C, L] = object
     first*: Table[NTermSym, FirstSet[C, L]]
 
