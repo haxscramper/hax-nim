@@ -259,7 +259,7 @@ proc toSimpleTree*[Obj](
           kind: okConstant,
           constType: $(typeof(Obj)),
           strLit: "nil",
-          objId: idCounter()
+          objId: idCounter.next()
         )
       else:
         var idx: int = 0

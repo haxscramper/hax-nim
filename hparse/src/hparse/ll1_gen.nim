@@ -9,7 +9,7 @@ export helpers
 import hashes, tables, sets
 
 import lexer
-import parse_primitives, parser_common, parse_tree, parse_helpers, parser_base
+import parse_primitives, parser_common, parse_tree, parse_helpers
 
 
 ## LL1 parser generator code
@@ -390,15 +390,14 @@ proc `$`*[TKind](patt: CompPatt[TKind]): string =
 #=======================  Parser type definition  ========================#
 
 type
-  LL1RecursiveDescentParser*[Tok] = ref object of Parser
+  LL1RecursiveDescentParser*[Tok] = object
     startCb: proc(toks: var TokStream[Tok]): ParseTree[Tok]
 
 func newLL1RecursiveDescent*[Tok](
   cb: proc(toks: var TokStream[Tok]): ParseTree[Tok]): LL1RecursiveDescentParser[Tok] =
-  new(result)
   result.startCb = cb
 
-method parse*[Tok](
+proc parse*[Tok](
   parser: LL1RecursiveDescentParser[Tok],
   toks: var TokStream[Tok]): ParseTree[Tok] =
   parser.startCb(toks)

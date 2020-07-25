@@ -4,7 +4,7 @@ import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
 
-import bnf_grammars, grammars, parse_helpers, parser_base, parse_tree
+import bnf_grammars, grammars, parse_helpers, parse_tree
 
 type
   AltId* = int
@@ -47,7 +47,6 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
   first: FirstTable[Tk],
   follow: FollowTable[Tk],
   nullable: Table[BnfNterm, seq[AltId]]] =
-  # echo "werwe"
 
   for head, alts in grammar.rules:
     for altId, altBody in alts:
@@ -94,7 +93,6 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
                 # Add elements from `FIRST[Yi]` to `FIRST[X, <alt>]`.
                 # Since `Yi` might have more than one alternative in
                 # grammar we have to merge all possible `FIRST` sets.
-                debugecho fmt("[ {elem.nterm.exprRepr()} ]")
                 result.first[elem.nterm].mapPairs(rhs).union()
               of fbkTerm:
                 # Add token to `FIRST[X]` directly
@@ -216,7 +214,6 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
           result[ruleId.head] = toTable({first : ruleId})
         else:
           result[ruleId.head][first] = ruleId
-
   for nterm, nullAlts in nullable:
     for tok in items(followTable[nterm]):
       for nullAlt in nullAlts: # QUESTION ERROR?
@@ -242,13 +239,13 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
         # # bConvCb = matchCurry2(Tk, pconf, exprRepr),
         # cConvCb = matchCurry2(RuleId, true, exprRepr)
       ).toTermBufGrid(),
-      makeThinLineGridBorders()
+      makeAsciiGridBorders()
     ).toTermBuf().toString()
 
 #============================  Parser object  ============================#
 
 type
-  LL1TableParser*[Tk] = ref object of Parser
+  LL1TableParser*[Tk] = object
     start: BnfNterm
     grammar: BnfGrammar[Tk]
     parseTable: LL1Table[Tk]
@@ -260,7 +257,6 @@ func getGrammar*[Tk](parser: LL1TableParser[Tk]): BnfGrammar[Tk] =
 proc newLL1TableParser*[Tk](
   grammar: Grammar[Tk],
   retainGenerated: bool = false): LL1TableParser[Tk] =
-  new(result)
   let bnfg = grammar.toBNF()
   plog:
     debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
@@ -276,7 +272,7 @@ type
     expected: int
     elems: seq[ParseTree[Tok]]
 
-method parse*[Tok, Tk](
+proc parse*[Tok, Tk](
   parser: LL1TableParser[Tk],
   toks: var TokStream[Tok]): ParseTree[Tok] =
   var stack: seq[FlatBnf[Tk]]
@@ -318,9 +314,8 @@ method parse*[Tok, Tk](
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
-          plog:
-            msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
-            ntermStack.last().elems.add newTree(curr)
+          plog: msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
+          ntermStack.last().elems.add newTree(curr)
 
           if toks.finished():
             done = true

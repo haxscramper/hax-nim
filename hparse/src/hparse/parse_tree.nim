@@ -86,7 +86,7 @@ func toDotGraphPretty*[Tok](
   tree: ParseTree[Tok],
   kindPref: string,
   bottomTokens: bool): Graph =
-  result.styleNode.shape = nsaRect
+  result.styleNode = Node(shape: nsaRect)
   var tokNodes: seq[Node]
 
   tree.iterateItBFS(it.getSubnodes(), it.kind != ptkTerm):
@@ -142,7 +142,7 @@ func toDotGraphPretty*[Tok](
     ))
 
 func toDotGraphPrecise*[Tok](tree: ParseTree[Tok], kindPref: string): Graph =
-  result.styleNode.shape = nsaRect
+  result.styleNode = Node(shape: nsaRect)
   tree.iterateItBFS(it.subnodes, it.kind != ptkTerm):
     let itaddr: int = cast[int](addr it[])
     let label = case it.kind:

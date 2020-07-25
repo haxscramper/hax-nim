@@ -10,13 +10,16 @@ import hparse/bnf_grammars # Unless I import this one explicitly I get
                            # error with `hashes`.
 import hashes, sets, tables
 
+template withResIt*(val, body: untyped): untyped =
+  block:
+    var it {.inject.} = val
+    body
+
+
 #========================  token type definition  ========================#
 
 
 #======================  grammar parser generation  ======================#
-
-dumpAstGen:
-  let cb = cn[Tok]
 
 template newLL1RecursiveParser[Tok](body: typed): untyped =
   # Trillion IQ hack
@@ -38,8 +41,6 @@ template newLL1RecursiveParser[Tok](body: typed): untyped =
       ),
       newCall("newLL1RecursiveDescent", ident "cb")
     )
-
-    colorPrint(result)
 
   buildParser()
 
@@ -216,92 +217,90 @@ import hparse/ll1_table
 
 
 suite "Table-driven vs recursive descent":
-  const nt = nterm[TokenKind]
-  const grammarConst = {
-    # list ::= '[' <elements> ']'
-    "list" : andP(
-      tok(tkOpBrace),
-      nt("elements"),
-      tok(tkCloseBrace)
-    ),
-    # elements ::= <element> (',' <element>)*
-    "elements" : andP(
-      nt("element"),
-      zeroP(andP(
-        tok(tkComma),
-        nt("element")
-      ))
-    ),
-    # element ::= 'ident' | <list>
-    "element" : orP(
-      tok(tkIdent),
-      nt("list")
-    )
-  }
+  test "Image generation":
+    const nt = nterm[TokenKind]
+    const grammarConst = {
+      # list ::= '[' <elements> ']'
+      "list" : andP(
+        tok(tkOpBrace),
+        nt("elements"),
+        tok(tkCloseBrace)
+      ),
+      # elements ::= <element> (',' <element>)*
+      "elements" : andP(
+        nt("element"),
+        zeroP(andP(
+          tok(tkComma),
+          nt("element")
+        ))
+      ),
+      # element ::= 'ident' | <list>
+      "element" : orP(
+        tok(tkIdent),
+        nt("list")
+      )
+    }
 
-  let grammarVal = grammarConst
+    let
+      grammarVal = grammarConst
+      recursiveParser = newLL1RecursiveParser[Token](grammarConst)
+      tableParser = newLL1TableParser(
+        grammarVal.toGrammar(), retainGenerated = false)
+      testInput = "[a,b,e,e,z,e]"
+
+    let recursiveTree = mapString(testInput).makeStream().withResIt:
+      recursiveParser.parse(it)
+
+    let tableTree = mapString(testInput).makeStream().withResIt:
+      tableParser.parse(it)
 
 
-  block:
-    static:
-      echo "\e[42mcompiletime\e[49m"
-      echo grammarConst.toGrammar().exprRepr()
-
-    echo "\e[42mruntime\e[49m"
-    echo grammarVal.toGrammar().exprRepr()
-
-  let recursiveParser = newLL1RecursiveParser[Token](grammarConst)
-  let tableParser = newLL1TableParser(
-    grammarVal.toGrammar(), retainGenerated = false)
-
-  let testInput = "[a,b,e,e,z,e]"
-
-  let recursiveTree =
+    var resultGraph: Graph
     block:
-      var stream = mapString(testInput).makeStream()
-      recursiveParser.parse(stream)
+      var tree = recursiveTree.toDotGraph()
+      tree.isCluster = true
+      tree.name = "recursive"
+      tree.topNodes.add:
+        withIt makeNode(
+          toNodeId(rand(100000)), grammarVal.toGrammar().exprRepr()):
+          it.width = 10
+          it.labelAlign = nlaLeft
+          it.labelLeftPad = " ".repeat(10)
 
-  let tableTree =
+      tree.topNodes.add:
+        withIt makeNode(
+          toNodeId(rand(100000)),
+          "Input string: " & testInput,
+          shape = nsaNone
+        ):
+          it.width = 10
+
+      resultGraph.addSubgraph(tree)
+
     block:
-      var stream = mapString(testInput).makeStream()
-      tableParser.parse(stream)
+      var tree = tableTree.toDotGraph()
+      tree.isCluster = true
+      tree.name = "table"
+      tree.topNodes.add:
+        withIt makeNode(
+          toNodeId(rand(100000)),
+          tableParser.getGrammar().exprRepr(true)
+        ):
+          it.width = 10
+          it.labelAlign = nlaLeft
+          it.labelLeftPad = " ".repeat(10)
 
 
-  var resultGraph: Graph
-  block:
-    var tree = recursiveTree.toDotGraph()
-    tree.isCluster = true
-    tree.name = "recursive"
-    tree.topNodes.add:
-      withIt makeNode(toNodeId(rand(100000)), grammarVal.toGrammar().exprRepr()):
-        it.width = 10
-        it.labelAlign = nlaLeft
-        it.labelLeftPad = " ".repeat(10)
+      tree.topNodes.add:
+        withIt makeNode(
+          toNodeId(rand(100000)),
+          "Input string: " & testInput,
+          shape = nsaNone
+        ):
+          it.width = 10
+          # it.shape = nsaNone
 
-    tree.topNodes.add:
-      withIt makeNode(toNodeId(rand(100000)), "Input string: " & testInput):
-        it.width = 10
-        it.shape = nsaNone
+      resultGraph.addSubgraph(tree)
 
-    resultGraph.addSubgraph(tree)
-
-  block:
-    var tree = tableTree.toDotGraph()
-    tree.isCluster = true
-    tree.name = "table"
-    tree.topNodes.add:
-      withIt makeNode(toNodeId(rand(100000)), tableParser.getGrammar().exprRepr(true)):
-        it.width = 10
-        it.labelAlign = nlaLeft
-        it.labelLeftPad = " ".repeat(10)
-
-
-    tree.topNodes.add:
-      withIt makeNode(toNodeId(rand(100000)), "Input string: " & testInput):
-        it.width = 10
-        it.shape = nsaNone
-
-    resultGraph.addSubgraph(tree)
-
-  resultGraph.styleNode.fontname = "Consolas"
-  resultGraph.toPng("/tmp/combined.png")
+    resultGraph.styleNode.fontname = "Consolas"
+    resultGraph.toPng("/tmp/combined.png")

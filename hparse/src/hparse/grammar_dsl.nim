@@ -173,15 +173,18 @@ suite "Grammar primitives":
     # makeGrammar(A ::= "$" & *(Z))
     # makeGrammar(A ::= (A | B) & C)
     block:
-      const grammar = makeGrammar:
+      let grammar = makeGrammar:
         A ::= B
         C ::= D
 
-      let rtimeGrammar = grammar
+      assertEq {"A" : nt("B"), "C" : nt("D")}, grammar
 
-      assertEq {"A" : nt("B"), "C" : nt("D")}, rtimeGrammar
+    block:
+      let grammar = makeGrammar:
+        List ::= "[" & Elements & "]"
+        Elements ::= Element & *("," & Element)
+        Element ::= ident | List
 
-    # makeGrammar:
-    #   List ::= '[' & Elements & ']'
-    #   Elements ::= Element & *(',' & Element)
-    #   Element ::= ident | List
+      # assertEq {
+      #   "List" :
+      # }
