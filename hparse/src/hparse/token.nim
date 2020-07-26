@@ -110,6 +110,10 @@ func initLexSet*[L](hasAll: bool, lexemes: HashSet[L]): LexSet[L] =
 func getHasAll*[L](lset: LexSet[L]): bool = lset.hasAll
 func getLexemes*[L](lset: LexSet[L]): HashSet[L] = lset.lexemes
 
+iterator items*[L](lset: LexSet[L]): L =
+  for lex in lset.lexemes:
+    yield lex
+
 #==============================  Token set  ==============================#
 
 func initTokSet*[C, L](
@@ -158,6 +162,10 @@ func incl*[C, L](
 
 func `$`*[C, L](s: TokSet[C, L]): string =
   (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
+
+iterator pairs*[C, L](s: TokSet[C, L]): (C, LexSet[L]) =
+  for cat, lset in s.tokens:
+    yield (cat, lset)
 
 func makeTokSet*[C, L](): TokSet[C, L] =
   TokSet[C, L](tokens: initTable[C, LexSet[L]](2))
@@ -212,12 +220,29 @@ type
 
 #=============================  Contructors  =============================#
 
+func `[]`*[C, L](tl: var TokLookup[C, L], cat: C): var LexLookup[L] =
+  tl.table[cat]
+
+func `[]`*[L](tl: var LexLookup, lex: L): var seq[int] =
+  tl.table[lex]
+
+func `[]`*[C, L](tl: TokLookup[C, L], cat: C): LexLookup[L] =
+  tl.table[cat]
+
+func `[]`*[L](tl: LexLookup, lex: L): seq[int] =
+  tl.table[lex]
+
+func contains*[C, L](tl: TokLookup[C, L], cat: C): bool = cat in tl.table
+func contains*[L](ll: LexLookup[L], lex: L): bool = lex in ll.table
+
+#===================  Predicates/accessors/iterators  ====================#
+
 func initTokLookup*[C, L](table: Table[C, LexLookup[L]]): TokLookup[C, L] =
   TokLookup[C, L](table: table)
 
 func initLexLookup*[L](
   table: Table[L, seq[int]], hasAll: seq[int]): LexLookup[L] =
-  LexLookup(table: table, hasAll: hasAll)
+  LexLookup[L](table: table, hasAll: hasAll)
 
 func makeInitCalls*[C, L](lookup: TokLookup[C, L]): NimNode =
   mixin makeInitCalls
@@ -233,13 +258,40 @@ func makeInitCalls*[L](lookup: LexLookup[L]): NimNode =
     nnkExprEqExpr.newTree(ident "hasAll", lookup.hasAll.makeInitCalls())
   )
 
+func makeTokLookup*[C, L](): TokLookup[C, L] =
+  TokLookup[C, L](table: initTable[C, LexLookup[L]](2))
+
+func makeLexLookup*[L](): LexLookup[L] =
+  LexLookup[L](table: initTable[L, seq[int]](2))
 
 func makeTokLookup*[C, L](
   altSets: seq[TokSet[C, L]], canConflict: bool = false): TokLookup[C, L] =
   ## Create token lookup from sequence of alternatives
   # TODO detect ambiguity
   # TODO IMPLEMENT
-  discard
+  result = makeTokLookup[C, L]()
+  for idx, alt in altSets:
+    for cat, lset in pairs(alt):
+      if cat notin result.table:
+        result.table[cat] = makeLexLookup[L]()
+
+      if lset.hasAll:
+        if canConflict and result[cat].hasAll.len > 0:
+          raiseAssert("Conflict") # TODO better error msg
+        else:
+          result[cat].hasAll.add idx
+
+      for lex in items(lset):
+        if lex notin result.table[cat].table:
+          result[cat].table[lex] = @[]
+
+        if canConflict and result[cat][lex].len > 0:
+          raiseAssert("Conflict") # TODO better error msg
+        else:
+          result[cat][lex].add idx
+
+
+
 
 #==============================  Accessors  ==============================#
 
@@ -248,7 +300,23 @@ func getAlt*[C, L, I](
   ## Get select alternative set based on token category and lexeme values.
   # TODO raise exception if token is not found
   # TODO IMPLEMENT
-  discard
+  if token.cat in lookup:
+    if token.lex in lookup[token.cat]:
+      let alts = lookup[token.cat][token.lex]
+      if alts.len > 1:
+        raiseAssert("#[ IMPLEMENT more than one alternative ]#")
+      else:
+        return alts[0]
+    elif lookup[token.cat].hasAll.len > 0:
+      let alts = lookup[token.cat].hasAll
+      if alts.len > 1:
+        raiseAssert("#[ IMPLEMENT more than one alternative ]#")
+      else:
+        return alts[0]
+    else:
+      raiseAssert("#[ IMPLEMENT token lexeme not found ]#")
+  else:
+    raiseAssert("#[ IMPLEMENT token category not found ]#")
 
 #*************************************************************************#
 #*********************  Unexpected token exceptions  *********************#
