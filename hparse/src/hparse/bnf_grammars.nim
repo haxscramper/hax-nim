@@ -444,7 +444,6 @@ func getRule*[C, L, I](rlookup: RuleLookup[C, L],
   ## Get single rule from lookup table. Raise exception on rule
   ## conflict.
   raiseAssert("#[ IMPLEMENT ]#")
-  discard
 
 func addRule*[C, L](rlookup: var RuleLookup[C, L],
                     first: TokSet[C, L],

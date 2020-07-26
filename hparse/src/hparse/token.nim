@@ -64,33 +64,25 @@ func makeToken*[C, L, I](cat: C, lex: L): Token[C, L, I] =
 func makeTokenNoInfo*[C, L](cat: C, lex: L): Token[C, L, void] =
   Token[C, L, void](cat: cat, lex: lex)
 
-#*************************************************************************#
-#******************************  Token set  ******************************#
-#*************************************************************************#
 
+
+
+#*************************************************************************#
+#*****************************  Lexeme set  ******************************#
+#*************************************************************************#
 #===========================  Type definition  ===========================#
-
 type
-  EofTok* = object
-
   LexSet*[L] = object
     ## Set of lexemes
     hasAll: bool ## Whether or not all lexeme values are in set
     lexemes: HashSet[L]
 
-  TokSet*[C, L] = object
-    ## Set of expected tokens + EOF token (end of inptu sequence)
-    tokens: Table[C, LexSet[L]] ## Map from
-    ## token category to list of expected lexemes + whether or not
-    ## token can be accepted if lexeme does not match.
-    # `kwd."if"` matches _if_ `kwd -> (lex: {"if"})` - token with
-    # category `kwd` is paired with lexeme "if" _or_ `kwd ->
-    # (hasEmpty: true)` - token of kind `kwd` is accepted without
-    # checking lexeme.
 
-    hasEof: bool
+#=============================  Predicates  ==============================#
+func contains*[L](lset: LexSet[L], lex: L): bool =
+  lex in lset.lexemes
 
-#=============================  Lexeme set  ==============================#
+#==============================  Accessors  ==============================#
 
 func incl*[L](s: var LexSet[L], lex: L): void = s.lexemes.incl(lex)
 
@@ -98,21 +90,12 @@ func incl*[L](s: var LexSet[L], other: LexSet[L]): void =
   s.hasAll = s.hasAll or other.hasAll
   s.lexemes.incl(other.lexemes)
 
-func contains*[L](lset: LexSet[L], lex: L): bool =
-  lex in lset.lexemes
-
-func makeLexSet*[L](): LexSet[L] =
-  LexSet[L](lexemes: initHashSet[L](2))
-
-func initLexSet*[L](hasAll: bool, lexemes: HashSet[L]): LexSet[L] =
-  LexSet[L](hasAll: hasAll, lexemes: lexemes)
-
-func getHasAll*[L](lset: LexSet[L]): bool = lset.hasAll
-func getLexemes*[L](lset: LexSet[L]): HashSet[L] = lset.lexemes
-
 iterator items*[L](lset: LexSet[L]): L =
   for lex in lset.lexemes:
     yield lex
+
+func getHasAll*[L](lset: LexSet[L]): bool = lset.hasAll
+func getLexemes*[L](lset: LexSet[L]): HashSet[L] = lset.lexemes
 
 func containsOrIncl*[A](hs: var HashSet[A], other: HashSet[A]): bool =
   for elem in other:
@@ -128,20 +111,41 @@ func containsOrIncl*[L](ls: var LexSet[L], other: LexSet[L]): bool =
   if not containsOrIncl(ls.lexemes, other.lexemes):
     result = false
 
-#==============================  Token set  ==============================#
+#============================  Constructors  =============================#
+func makeLexSet*[L](): LexSet[L] =
+  LexSet[L](lexemes: initHashSet[L](2))
 
-func initTokSet*[C, L](
-  tokens: Table[C, LexSet[L]], hasEof: bool): TokSet[C, L] =
-  TokSet[C, L](tokens: tokens, hasEof: hasEof)
+func initLexSet*[L](hasAll: bool, lexemes: HashSet[L]): LexSet[L] =
+  LexSet[L](hasAll: hasAll, lexemes: lexemes)
 
-func getTokens*[C, L](tset: TokSet[C, L]): Table[C, LexSet[L]] =
-  tset.tokens
+#===========================  Pretty-printing  ===========================#
+func exprRepr*[L](lset: LexSet[L]): string =
+  (
+    lset.lexemes.mapIt(($it).wrap("''")) &
+      lset.hasAll.tern(@["_"], @[])
+  ).join(", ").wrap("{}")
 
-func getHasEof*[C, L](tset: TokSet[C, L]): bool =
-  tset.hasEof
 
-const eofTok*: EofTok = EofTok()
+#*************************************************************************#
+#******************************  Token set  ******************************#
+#*************************************************************************#
+#===========================  Type definition  ===========================#
+type
+  EofTok* = object
+  TokSet*[C, L] = object
+    ## Set of expected tokens + EOF token (end of inptu sequence)
+    tokens: Table[C, LexSet[L]] ## Map from
+    ## token category to list of expected lexemes + whether or not
+    ## token can be accepted if lexeme does not match.
+    # `kwd."if"` matches _if_ `kwd -> (lex: {"if"})` - token with
+    # category `kwd` is paired with lexeme "if" _or_ `kwd ->
+    # (hasEmpty: true)` - token of kind `kwd` is accepted without
+    # checking lexeme.
 
+    hasEof: bool
+
+
+#=============================  Predicates  ==============================#
 func contains*[C, L, I](s: TokSet[C, L], tk: Token[C, L, I]): bool =
   if tk.cat in s.tokens:
     (s.tokens[tk.cat].hasAll) or (tk.lex in s.tokens[tk.cat])
@@ -151,6 +155,26 @@ func contains*[C, L, I](s: TokSet[C, L], tk: Token[C, L, I]): bool =
 func contains*[C, L](s: TokSet[C, L], tk: EofTok): bool =
   s.hasEof
 
+
+#===============================  Getters  ===============================#
+func getTokens*[C, L](tset: TokSet[C, L]): Table[C, LexSet[L]] =
+  tset.tokens
+
+func getHasEof*[C, L](tset: TokSet[C, L]): bool =
+  tset.hasEof
+
+const eofTok*: EofTok = EofTok()
+
+iterator items*[C, L](s: TokSet[C, L]): ExpectedToken[C, L] =
+  for it in s.vals:
+    yield it
+
+iterator pairs*[C, L](s: TokSet[C, L]): (C, LexSet[L]) =
+  for cat, lset in s.tokens:
+    yield (cat, lset)
+
+
+#===============================  Setters  ===============================#
 func incl*[C, L, I](s: var TokSet[C, L], tk: Token[C, L, I]): void =
   s.vals.incl tk
 
@@ -174,52 +198,6 @@ func incl*[C, L](
     else:
       s.tokens[cat].incl lex
 
-func exprRepr*[L](lset: LexSet[L]): string =
-  (
-    lset.lexemes.mapIt(($it).wrap("''")) &
-      lset.hasAll.tern(@["_"], @[])
-  ).join(", ").wrap("{}")
-
-func exprRepr*[C, L](s: TokSet[C, L]): string =
-  s.tokens.mapPairs(fmt("{lhs} -> {rhs.exprRepr()}")
-  ).join(", ").wrap("{}")
-
-iterator pairs*[C, L](s: TokSet[C, L]): (C, LexSet[L]) =
-  for cat, lset in s.tokens:
-    yield (cat, lset)
-
-func makeTokSet*[C, L](): TokSet[C, L] =
-  TokSet[C, L](tokens: initTable[C, LexSet[L]](2))
-
-func toTkind*[C, L](s: set[C]): TokSet[C, L] =
-  result = makeTokSet[C, L]()
-  (result.vals = s)
-
-# func makeTokSet*[C, L, I](tok: Token[C, L, I]): TokSet[C, L] =
-#   result = makeTokSet[C, L]()
-#   result.vals.incl tok
-
-func makeTokSet*[C, L](tok: ExpectedToken[C, L]): TokSet[C, L] =
-  result = makeTokSet[C, L]()
-  result.incl tok
-
-func makeTokSet*[C, L](eof: EofTok): TokSet[C, L] =
-  result = makeTokSet[C, L]()
-  (result.hasEof = true)
-
-iterator items*[C, L](s: TokSet[C, L]): ExpectedToken[C, L] =
-  for it in s.vals:
-    yield it
-
-func union*[C, L](s: seq[TokSet[C, L]]): TokSet[C, L] =
-  result.hasEof = s.anyOfIt(it.hasEof)
-  for it in s:
-    for cat, lset in pairs(it):
-      if cat notin result.tokens:
-        result.tokens[cat] = lset
-      else:
-        result.tokens[cat].incl lset
-
 func containsOrIncl*[C, L](
   s: var TokSet[C, L], other: TokSet[C, L]): bool =
   if other.hasEof and (not s.hasEof):
@@ -234,56 +212,104 @@ func containsOrIncl*[C, L](
       if not containsOrIncl(s.tokens[cat], lset):
         result = false
 
+
+#============================  Constructors  =============================#
+func makeTokSet*[C, L](): TokSet[C, L] =
+  TokSet[C, L](tokens: initTable[C, LexSet[L]](2))
+
+func initTokSet*[C, L](
+  tokens: Table[C, LexSet[L]], hasEof: bool): TokSet[C, L] =
+  TokSet[C, L](tokens: tokens, hasEof: hasEof)
+
+# func makeTokSet*[C, L, I](tok: Token[C, L, I]): TokSet[C, L] =
+#   result = makeTokSet[C, L]()
+#   result.vals.incl tok
+
+func makeTokSet*[C, L](tok: ExpectedToken[C, L]): TokSet[C, L] =
+  result = makeTokSet[C, L]()
+  result.incl tok
+
+func makeTokSet*[C, L](eof: EofTok): TokSet[C, L] =
+  result = makeTokSet[C, L]()
+  (result.hasEof = true)
+
+func union*[C, L](s: seq[TokSet[C, L]]): TokSet[C, L] =
+  result.hasEof = s.anyOfIt(it.hasEof)
+  for it in s:
+    for cat, lset in pairs(it):
+      if cat notin result.tokens:
+        result.tokens[cat] = lset
+      else:
+        result.tokens[cat].incl lset
+
+
+
+#========================  Other implementation  =========================#
 func hash*[C, L](s: TokSet[C, L]): Hash =
   var h: Hash = 0
   h = h !& hash(s.vals) !& hash(s.hasEof)
   result = !$h
 
 
+#===========================  Pretty-printing  ===========================#
+func exprRepr*[C, L](s: TokSet[C, L]): string =
+  s.tokens.mapPairs(fmt("{lhs} -> {rhs.exprRepr()}")
+  ).join(", ").wrap("{}")
+
 #*************************************************************************#
-#****************************  Token lookup  *****************************#
+#*************************  Lexeme lookup table  *************************#
 #*************************************************************************#
 #===========================  Type definition  ===========================#
 
 type
   LexLookup*[L] = object
-    table: Table[L, seq[int]]
-    hasAll: seq[int]
+    ## Lookup table from lexemes to one or more parsing alternatives
+    table: Table[L, seq[int]] ## Expected tokens with concrete lexeme
+                              ## specified
+    hasAll: seq[int] ## Expected tokens without specification for
+                     ## lexeme
 
-  TokLookup*[C, L] = object
-    table: Table[C, LexLookup[L]]
+#=============================  Predicates  ==============================#
 
-#=============================  Contructors  =============================#
+func contains*[L](ll: LexLookup[L], lex: L): bool =
+  ## Check if one of the tokens in lookup table *explicitly expects*
+  ## this lexeme - `hasAll` is ignored.
+  lex in ll.table
 
-func `[]`*[C, L](tl: var TokLookup[C, L], cat: C): var LexLookup[L] =
-  tl.table[cat]
+#==============================  Accessors  ==============================#
 
-func `[]`*[L](tl: var LexLookup, lex: L): var seq[int] =
+func `[]`*[L](tl: var LexLookup[L], lex: L): var seq[int] =
   tl.table[lex]
 
-func `[]`*[C, L](tl: TokLookup[C, L], cat: C): LexLookup[L] =
-  tl.table[cat]
-
-func `[]`*[L](tl: LexLookup, lex: L): seq[int] =
+func `[]`*[L](tl: LexLookup[L], lex: L): seq[int] =
   tl.table[lex]
 
-func contains*[C, L](tl: TokLookup[C, L], cat: C): bool = cat in tl.table
-func contains*[L](ll: LexLookup[L], lex: L): bool = lex in ll.table
+func addAlt*[L](ll: var LexLookup[L],
+                lex: L,
+                alt: int,
+                allowconflict: bool = false): void =
+  ## Add `lex` -> `alt` pair to lookup table.
+  if lex notin ll.table:
+    ll.table[lex] = @[alt]
+  else:
+    if ll.table[lex].len > 1 and (not allowconflict):
+      raiseAssert("#[ IMPLEMENT cannot add conflicting lookup pair ]#")
+    else:
+      ll.table[lex].add alt
 
-#===================  Predicates/accessors/iterators  ====================#
+func addHasAll*[L](ll: var LexLookup[L],
+                   alt: int,
+                   allowconflict: bool = false): void =
+  if ll.hasAll.len > 1 and (not allowconflict):
+    raiseAssert("#[ IMPLEMENT Cannot add conflicting has-all to lexeme lookup ]#")
+  else:
+    ll.hasAll.add alt
 
-func initTokLookup*[C, L](table: Table[C, LexLookup[L]]): TokLookup[C, L] =
-  TokLookup[C, L](table: table)
+#============================  Constructors  =============================#
 
 func initLexLookup*[L](
   table: Table[L, seq[int]], hasAll: seq[int]): LexLookup[L] =
   LexLookup[L](table: table, hasAll: hasAll)
-
-func makeInitCalls*[C, L](lookup: TokLookup[C, L]): NimNode =
-  mixin makeInitCalls
-  result = newCall(
-    "initTokLookup",
-    nnkExprEqExpr.newTree(ident "table", lookup.table.makeInitCalls()))
 
 func makeInitCalls*[L](lookup: LexLookup[L]): NimNode =
   mixin makeInitCalls
@@ -293,11 +319,44 @@ func makeInitCalls*[L](lookup: LexLookup[L]): NimNode =
     nnkExprEqExpr.newTree(ident "hasAll", lookup.hasAll.makeInitCalls())
   )
 
-func makeTokLookup*[C, L](): TokLookup[C, L] =
-  TokLookup[C, L](table: initTable[C, LexLookup[L]](2))
-
 func makeLexLookup*[L](): LexLookup[L] =
   LexLookup[L](table: initTable[L, seq[int]](2))
+
+
+#*************************************************************************#
+#****************************  Token lookup  *****************************#
+#*************************************************************************#
+#===========================  Type definition  ===========================#
+
+type
+  TokLookup*[C, L] = object
+    table: Table[C, LexLookup[L]]
+
+#=============================  Contructors  =============================#
+
+func `[]`*[C, L](tl: var TokLookup[C, L], cat: C): var LexLookup[L] =
+  tl.table[cat]
+
+func `[]`*[C, L](tl: TokLookup[C, L], cat: C): LexLookup[L] =
+  tl.table[cat]
+
+
+func contains*[C, L](tl: TokLookup[C, L], cat: C): bool = cat in tl.table
+
+#===================  Predicates/accessors/iterators  ====================#
+
+func initTokLookup*[C, L](table: Table[C, LexLookup[L]]): TokLookup[C, L] =
+  TokLookup[C, L](table: table)
+
+
+func makeInitCalls*[C, L](lookup: TokLookup[C, L]): NimNode =
+  mixin makeInitCalls
+  result = newCall(
+    "initTokLookup",
+    nnkExprEqExpr.newTree(ident "table", lookup.table.makeInitCalls()))
+
+func makeTokLookup*[C, L](): TokLookup[C, L] =
+  TokLookup[C, L](table: initTable[C, LexLookup[L]](2))
 
 func makeTokLookup*[C, L](
   altSets: seq[TokSet[C, L]], canConflict: bool = false): TokLookup[C, L] =
@@ -352,6 +411,19 @@ func getAlt*[C, L, I](
       raiseAssert("#[ IMPLEMENT token lexeme not found ]#")
   else:
     raiseAssert("#[ IMPLEMENT token category not found ]#")
+
+func addAlt*[C, L](tl: var TokLookup[C, L],
+                   tok: ExpectedToken[C, L],
+                   alt: int,
+                   alloconflict: bool = false): void =
+  if tok.cat notin tl.table:
+    tl.table[tok.cat] = initLexLookup[L]()
+
+  if tok.hasLex:
+    tl.table[tok.cat].addAlt(tok.lex, alt)
+  else:
+    tl.table[tok.cat].addHasAll(alt)
+
 
 #*************************************************************************#
 #*********************  Unexpected token exceptions  *********************#
