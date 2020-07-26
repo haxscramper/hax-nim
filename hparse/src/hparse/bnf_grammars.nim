@@ -454,7 +454,7 @@ func addRule*[C, L](rl: var RuleLookup[C, L],
   let idx = rl.rules.len
   rl.rules.add ruleId
   for tok in items(first):
-    debugecho tok.exprRepr(), " -> ", ruleId.exprRepr(), " id: ", idx
+    # debugecho tok.exprRepr(), " -> ", ruleId.exprRepr(), " id: ", idx
     rl.tokMap.addAlt(tok, idx, canconflict = canconflict)
 
 #============================  Constructors  =============================#

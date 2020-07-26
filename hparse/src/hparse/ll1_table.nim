@@ -246,7 +246,7 @@ proc makeLL1TableParser*[C, L](grammar: BnfGrammar[C, L]): LL1Table[C, L] =
 
   for nterm, nullAlts in nullable:
     let first = followTable[nterm]
-    for alt in nullAlts:
+    for alt in nullAlts.deduplicate():
       let ruleId = ruleId(nterm, alt)
 
       if nterm notin result:
