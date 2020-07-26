@@ -10,13 +10,20 @@ type
   AltId* = int
   FirstTable*[C, L] = Table[BnfNterm, Table[AltId, TokSet[C, L]]]
   FollowTable*[C, L] = Table[BnfNterm, TokSet[C, L]]
-  LL1Table*[C, L] = object
-    table: Table[BnfNTerm, RuleLookup[C, L]]
-    # [Current term + Current token] -> Rule to use
+
+#*************************************************************************#
+#******************************  LL1Table  *******************************#
+#*************************************************************************#
+#===========================  Type definition  ===========================#
+
+type
+  LL1Table*[C, L] = Table[BnfNTerm, RuleLookup[C, L]]
+
+#==============================  Accessors  ==============================#
 
 func getRule*[C, L, I](
   tbl: LL1Table[C, L], nterm: BnfNterm, tok: Token[C, L, I]): RuleId =
-  tbl.table[nterm].getRule(tok)
+  tbl[nterm].getRule(tok)
 
 func `[]`*[A, B, C](
   table: Table[A, Table[B, C]], aKey: A, bKey: B): C =
@@ -214,24 +221,28 @@ const pconf* = GrammarPrintConf(
 proc makeLL1TableParser*[C, L](grammar: BnfGrammar[C, L]): LL1Table[C, L] =
   # let firstTable = getFirst(grammar)
   # let followTable = getFollow(grammar, firstTable)
-  mixin items
+  # mixin items
   let (firstTable, followTable, nullable) = getSets(grammar)
   for ruleId, alt in grammar.iterrules():
     if ruleId.head notin firstTable:
       #[ IMPLEMENT REVIEW what has to be done ]#
       discard
     else:
-      raiseAssert("#[ IMPLEMENT build lookup table using `TokLookup` ]#")
-      # for first in items(firstTable[ruleId.head][ruleId.alt]):
-      #   if ruleId.head notin result:
-      #     result[ruleId.head] = toTable({first : ruleId})
-      #   else:
-      #     result[ruleId.head][first] = ruleId
+      let first = firstTable[ruleId.head][ruleId.alt]
+      if ruleId.head notin result:
+        result[ruleId.head] = initRuleLookup(first, ruleId)
+      else:
+        result[ruleId.head].addRule(first, ruleId, allowConflict = false)
+
   for nterm, nullAlts in nullable:
-    raiseAssert("#[ IMPLEMENT add alternatives to lookup ]#")
-    # for tok in items(followTable[nterm]):
-    #   for nullAlt in nullAlts: # QUESTION ERROR?
-    #     result[nterm][tok] = ruleId(nterm, nullAlt)
+    let first = followTable[nterm]
+    for alt in nullAlts:
+      let ruleId = ruleId(nterm, alt)
+
+      if nterm notin result:
+        result[nterm] = initRuleLookup(first, ruleId)
+      else:
+        result[nterm].addRule(first, ruleId, allowConflict = false)
 
 
 
@@ -239,22 +250,22 @@ proc makeLL1TableParser*[C, L](grammar: BnfGrammar[C, L]): LL1Table[C, L] =
     debugecho "\e[35mFIRST\e[39m set"
     for head, alts in firstTable:
       for id, alt in alts:
-        debugecho fmt("{head.exprRepr():>20}[{id}] -> {alt}")
+        debugecho fmt("{alt.exprRepr():>40} -> [{id}]{head.exprRepr()}")
 
     debugecho "\e[35mFOLLOW\e[39m set"
     for head, alts in followTable:
-      dechofmt "{head.exprRepr():>20} -> {alts}"
+      dechofmt "{alts.exprRepr():>40} -> {head.exprRepr()}"
 
-    debugecho "Parse table:\n", newTermGrid(
-      (0,0),
-      toGrid(
-        result,
-        # aConvCb = matchCurry2(BnfNterm, true, exprRepr),
-        # # bConvCb = matchCurry2(C, L, pconf, exprRepr),
-        # cConvCb = matchCurry2(RuleId, true, exprRepr)
-      ).toTermBufGrid(),
-      makeAsciiGridBorders()
-    ).toTermBuf().toString()
+    # debugecho "Parse table:\n", newTermGrid(
+    #   (0,0),
+    #   toGrid(
+    #     result,
+    #     # aConvCb = matchCurry2(BnfNterm, true, exprRepr),
+    #     # # bConvCb = matchCurry2(C, L, pconf, exprRepr),
+    #     # cConvCb = matchCurry2(RuleId, true, exprRepr)
+    #   ).toTermBufGrid(),
+    #   makeAsciiGridBorders()
+    # ).toTermBuf().toString()
 
 #============================  Parser object  ============================#
 

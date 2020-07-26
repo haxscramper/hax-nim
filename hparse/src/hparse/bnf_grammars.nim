@@ -430,6 +430,7 @@ func `$`*(nterm: BnfNterm): string = nterm.exprRepr()
 
 type
   RuleLookup*[C, L] = object
+    ## Lookup table for rules. Mapping `Token -> RuleId`
     rules: seq[RuleId]
     tokMap: TokLookup[C, L]
 
@@ -437,14 +438,30 @@ type
 
 #==============================  Accessors  ==============================#
 
-func getRule*[C, L, I](
-  rlookup: RuleLookup[C, L], tok: Token[C, L, I]): RuleId =
+func getRule*[C, L, I](rlookup: RuleLookup[C, L],
+                       tok: Token[C, L, I]
+                      ): RuleId =
   ## Get single rule from lookup table. Raise exception on rule
   ## conflict.
+  raiseAssert("#[ IMPLEMENT ]#")
   discard
 
-#===========================  Pretty-printing  ===========================#
+func addRule*[C, L](rlookup: var RuleLookup[C, L],
+                    first: TokSet[C, L],
+                    ruleId: RuleId,
+                    allowconflict: bool = false
+                   ): void =
+  ## Add new rule to lookup table
+  raiseAssert("#[ IMPLEMENT ]#")
 
 #============================  Constructors  =============================#
 
+func initRuleLookup*[C, L](first: TokSet[C, L],
+                           ruleId: RuleId
+                          ): RuleLookup[C, L] =
+  ## Create new rule lookup table
+  raiseAssert("#[ IMPLEMENT ]#")
+
 #========================  Other implementation  =========================#
+
+#===========================  Pretty-printing  ===========================#

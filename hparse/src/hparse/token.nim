@@ -176,7 +176,7 @@ func incl*[C, L](
 
 func exprRepr*[L](lset: LexSet[L]): string =
   (
-    lset.lexemes.mapIt($it) &
+    lset.lexemes.mapIt(($it).wrap("''")) &
       lset.hasAll.tern(@["_"], @[])
   ).join(", ").wrap("{}")
 
