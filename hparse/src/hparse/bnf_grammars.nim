@@ -422,3 +422,29 @@ func exprRepr*(id: RuleId, normalize: bool = false): string =
 
 func `$`*(id: RuleId): string = id.exprRepr()
 func `$`*(nterm: BnfNterm): string = nterm.exprRepr()
+
+#*************************************************************************#
+#*****************************  Rule lookup  *****************************#
+#*************************************************************************#
+#===========================  Type definition  ===========================#
+
+type
+  RuleLookup*[C, L] = object
+    rules: seq[RuleId]
+    tokMap: TokLookup[C, L]
+
+#=============================  Predicates  ==============================#
+
+#==============================  Accessors  ==============================#
+
+func getRule*[C, L, I](
+  rlookup: RuleLookup[C, L], tok: Token[C, L, I]): RuleId =
+  ## Get single rule from lookup table. Raise exception on rule
+  ## conflict.
+  discard
+
+#===========================  Pretty-printing  ===========================#
+
+#============================  Constructors  =============================#
+
+#========================  Other implementation  =========================#

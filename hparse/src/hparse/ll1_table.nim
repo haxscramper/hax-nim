@@ -11,13 +11,12 @@ type
   FirstTable*[C, L] = Table[BnfNterm, Table[AltId, TokSet[C, L]]]
   FollowTable*[C, L] = Table[BnfNterm, TokSet[C, L]]
   LL1Table*[C, L] = object
-    rules: seq[RuleId]
-    table: Table[BnfNTerm, TokLookup[C, L]]
+    table: Table[BnfNTerm, RuleLookup[C, L]]
     # [Current term + Current token] -> Rule to use
 
 func getRule*[C, L, I](
   tbl: LL1Table[C, L], nterm: BnfNterm, tok: Token[C, L, I]): RuleId =
-  tbl.rules[tbl.table[nterm].getAlt(tok)]
+  tbl.table[nterm].getRule(tok)
 
 func `[]`*[A, B, C](
   table: Table[A, Table[B, C]], aKey: A, bKey: B): C =
@@ -276,7 +275,8 @@ proc newLL1TableParser*[C, L](
   let bnfg = grammar.toBNF()
   plog:
     debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
-    debugecho "\e[41mBNF grammar\e[49m:\n", bnfg.exprRepr(true, conf = pconf), "\n"
+    debugecho "\e[41mBNF grammar\e[49m:\n", bnfg.exprRepr(true, conf = pconf),
+      "\n"
   result.parseTable = makeLL1TableParser(bnfg)
   result.start = bnfg.start
   result.grammar = bnfg
