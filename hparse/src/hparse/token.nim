@@ -88,7 +88,23 @@ func incl*[L](s: var LexSet[L], other: LexSet[L]): void =
 func makeLexSet*[L](): LexSet[L] =
   LexSet[L](lexemes: initHashSet[L](2))
 
+func initLexSet*[L](hasAll: bool, lexemes: HashSet[L]): LexSet[L] =
+  LexSet[L](hasAll: hasAll, lexemes: lexemes)
+
+func getHasAll*[L](lset: LexSet[L]): bool = lset.hasAll
+func getLexemes*[L](lset: LexSet[L]): HashSet[L] = lset.lexemes
+
 #==============================  Token set  ==============================#
+
+func initTokSet*[C, L](
+  tokens: Table[C, LexSet[L]], hasEof: bool): TokSet[C, L] =
+  TokSet[C, L](tokens: tokens, hasEof: hasEof)
+
+func getTokens*[C, L](tset: TokSet[C, L]): Table[C, LexSet[L]] =
+  tset.tokens
+
+func getHasEof*[C, L](tset: TokSet[C, L]): bool =
+  tset.hasEof
 
 const eofTok*: EofTok = EofTok()
 

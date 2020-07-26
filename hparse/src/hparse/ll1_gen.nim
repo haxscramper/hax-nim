@@ -14,6 +14,39 @@ import parse_primitives, parser_common, parse_tree, parse_helpers, token
 
 ## LL1 parser generator code
 
+func makeInitCalls*[T](val: T): NimNode = newLit(val)
+
+func makeInitCalls*[A, B](table: Table[A, B]): NimNode =
+  mixin makeInitCalls
+  result = nnkTableConstr.newTree()
+  for key, val in table:
+    result.add newColonExpr(key.makeInitCalls, val.makeInitCalls)
+
+  result = newCall("toTable", result)
+
+func makeInitCalls*[A](hset: HashSet[A]): NimNode =
+  mixin makeInitCalls
+  result = nnkBracket.newTree()
+  for val in hset:
+    result.add val.makeInitCalls()
+
+  result = newCall("toHashSet", result)
+
+func makeInitCalls*[C, L](tok: TokSet[C, L]): NimNode =
+  mixin makeInitCalls
+  result = newCall(
+    "initTokSet",
+    nnkExprEqExpr.newTree(ident "tokens", tok.getTokens().makeInitCalls()),
+    nnkExprEqExpr.newTree(ident "hasEof", tok.getHasEof().makeInitCalls()))
+
+func makeInitCalls*[L](lex: LexSet[L]): NimNode =
+  mixin makeInitCalls
+  result = newCall(
+    "initLexSet",
+    nnkExprEqExpr.newTree(ident "hasAll", lex.getHasAll().makeInitCalls()),
+    nnkExprEqExpr.newTree(ident "lexemes", lex.getLexemes().makeInitCalls()))
+
+
 func makeIds[C, L](): tuple[cId, lId, iId: NimNode] =
   (
     cId: ident($(typeof C)),
@@ -171,7 +204,7 @@ proc makeSetLiteral[T](s: set[T]): NimNode =
     result.add ident($elem)
 
 proc makeSetLiteral*[C, L](s: TokSet[C, L]): NimNode =
-  newLit(s)
+  makeInitCalls(s)
 
 proc makeParseBlock[C, L](
   patt: CompPatt[C, L],
@@ -322,7 +355,8 @@ proc makeNtoMTimesBlock[C, L](
     # contains nested `{N,M}` rules.
     var `cnt` = 0
     var `subItems`: seq[ParseTree[`c`, `l`, `i`]]
-    while `countConstraints` and `toksIdent`.peek().kind in `laLiteral`:
+    let laSet = `laLiteral`
+    while `countConstraints` and `toksIdent`.peek() in laSet:
       `bodyParse`
       inc `cnt`
       `subItems`.add `itemIdent`
