@@ -128,10 +128,12 @@ suite "LL(1) parser tree actions":
     }, standalone = true)
 
   test "Drop rule":
-    var toks = mapString("[[c,z,d,[e,d]],[e,d,f]]").makeStream(
-      nextTokCb = (
-        proc(tok: LTok, pos: int) = echo "Reading ", tok.toTokStr(), " @ ", pos
-      )
+    let text = "[[c,z,d,[e,d]],[e,d,f]]"
+    # let text = "[a,b]"
+    var toks = mapString(text).makeStream(
+      # nextTokCb = (
+      #   proc(tok: LTok, pos: int) = echo "Reading ", tok.exprRepr(), " @ ", pos
+      # )
     )
     let tree = parser.parse(toks)
 

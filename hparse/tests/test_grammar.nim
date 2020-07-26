@@ -23,7 +23,7 @@ func `==`(lhs, rhs: Token): bool =
 func mapString(s: string): seq[LTok] =
   s.mapIt(
     case it:
-      of '[':
+      of '[', ']', ',':
         makeTokenNoInfo(tkPunct, $it)
       else:
         makeTokenNoInfo(tkIdent, $it)

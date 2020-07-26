@@ -5,7 +5,7 @@ import initcalls
 ## Parse tree contains actual token /values/ - concrete lexemes and
 ## additional information (whatever you deem necessary adding).
 ## `Token` represents lexical unit found in *input data*.
-## `ExpectedToken` describes required token category and OPTIONAL
+## `ExpectedToken` describes *required* token category and OPTIONAL
 ## lexeme value.
 
 #*************************************************************************#
@@ -130,7 +130,7 @@ const eofTok*: EofTok = EofTok()
 
 func contains*[C, L, I](s: TokSet[C, L], tk: Token[C, L, I]): bool =
   if tk.cat in s.tokens:
-    s.tokens[tk.cat].hasAll or tk.lex in s.tokens[tk.cat]
+    (s.tokens[tk.cat].hasAll) or (tk.lex in s.tokens[tk.cat])
   else:
     false
 
@@ -160,8 +160,15 @@ func incl*[C, L](
     else:
       s.tokens[cat].incl lex
 
-func `$`*[C, L](s: TokSet[C, L]): string =
-  (s.vals.mapIt($it) & s.hasEof.tern(@[ "$" ], @[])).join(", ").wrap("{}")
+func exprRepr*[L](lset: LexSet[L]): string =
+  (
+    lset.lexemes.mapIt($it) &
+      lset.hasAll.tern(@["_"], @[])
+  ).join(", ").wrap("{}")
+
+func exprRepr*[C, L](s: TokSet[C, L]): string =
+  s.tokens.mapPairs(fmt("{lhs} -> {rhs.exprRepr()}")
+  ).join(", ").wrap("{}")
 
 iterator pairs*[C, L](s: TokSet[C, L]): (C, LexSet[L]) =
   for cat, lset in s.tokens:
@@ -340,11 +347,11 @@ type
   #       intoken*: string
   #       inputpos*: int
 
-func toTokStr*[C, L, I](tok: Token[C, L, I]): string =
+func exprRepr*[C, L, I](tok: Token[C, L, I]): string =
   # TODO remove prefix from category enum
   fmt("({tok.cat} '{tok.lex}')")
 
-func toTokStr*[C, L](exp: ExpectedToken[C, L]): string =
+func exprRepr*[C, L](exp: ExpectedToken[C, L]): string =
   if exp.hasLex:
     fmt("({exp.cat} '{exp.lex}')")
   else:
@@ -361,5 +368,5 @@ template assertToken*[C, L, I](
   exp: ExpectedToken[C, L], tok: Token[C, L, I]): untyped =
   if not matches(exp, tok):
     raiseAssert(
-      "Unexpected token _" & toTokStr(tok) & "_, expected _" &
-        toTokStr(exp) & "_")
+      "Unexpected token _" & exprRepr(tok) & "_, expected _" &
+        exprRepr(exp) & "_")

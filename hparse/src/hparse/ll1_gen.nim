@@ -230,7 +230,7 @@ proc makeAltBlock[C, L](alt: CompPatt[C, L], sets: NTermSets[C, L]): NimNode =
     let selector = `selectorLit`
     let peek = `toksIdent`.peek()
     let `altId` = selector.getAlt(peek)
-    echo "selected id ", `altId`, " for token ", peek.toTokStr()
+    # echo "selected id ", `altId`, " for token ", peek.exprRepr()
 
   result.add: withIt(nnkCaseStmt.newTree(altId)):
     for branch in branches & @[elseBody]:
@@ -341,7 +341,11 @@ proc makeNtoMTimesBlock[C, L](
     var `cnt` = 0
     var `subItems`: seq[ParseTree[`c`, `l`, `i`]]
     let laSet = `laLiteral`
+    # echo "entering loop"
+    # echo `toksIdent`.peek().exprRepr(), " ", `toksIdent`.peek() in laSet
+    # echo laSet.exprRepr()
     while `countConstraints` and `toksIdent`.peek() in laSet:
+      # echo "found item"
       `bodyParse`
       inc `cnt`
       `subItems`.add `itemIdent`
@@ -388,8 +392,12 @@ proc makeParseBlock[C, L](
     else:
       newEmptyNode()
 
+  let
+    comment = $patt & " " & $patt.kind
+    commentLit = newLit(comment)
+
   return newStmtList(
-    newCommentStmtNode($patt & " " & $patt.kind),
+    newCommentStmtNode(comment),
     quote do:
       var `resIdent`: ParseTree[`cId`, `lId`, `iId`] = block:
         `result`
@@ -482,7 +490,7 @@ proc `$`*[C, L](patt: CompPatt[C, L]): string =
     of pkNterm:
        &"<{patt.nterm}>"
     of pkTerm:
-       &"'{patt.tok}'"
+       &"'{patt.tok.exprRepr()}'"
     of pkAlternative:
       patt.patts.mapIt($it).join(" | ")
     of pkConcat:
