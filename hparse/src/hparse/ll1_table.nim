@@ -10,8 +10,14 @@ type
   AltId* = int
   FirstTable*[C, L] = Table[BnfNterm, Table[AltId, TokSet[C, L]]]
   FollowTable*[C, L] = Table[BnfNterm, TokSet[C, L]]
-  LL1Table*[C, L] = Table[BnfNTerm, TokLookup[C, L]]
+  LL1Table*[C, L] = object
+    rules: seq[RuleId]
+    table: Table[BnfNTerm, TokLookup[C, L]]
     # [Current term + Current token] -> Rule to use
+
+func getRule*[C, L, I](
+  tbl: LL1Table[C, L], nterm: BnfNterm, tok: Token[C, L, I]): RuleId =
+  tbl.rules[tbl.table[nterm].getAlt(tok)]
 
 func `[]`*[A, B, C](
   table: Table[A, Table[B, C]], aKey: A, bKey: B): C =
@@ -108,12 +114,14 @@ func getSets*[C, L](grammar: BnfGrammar[C, L]): tuple[
                 makeTokSet[C, L]()
 
 
-            # showLog fmt "Adding {first:>30} to FIRST of {rule.head}[{rule.alt}]"
+            # showLog fmt "Adding {first:>30} to FIRST of
+            # {rule.head}[{rule.alt}]"
             updated |= result.first[rule.head][rule.alt].containsOrIncl(first)
 
 
             if not elem.isNullable(result.nullable):
-              # showInfo fmt "Found non-nullable element {elem.exprRepr()}"
+              # showInfo fmt "Found non-nullable element
+              # {elem.exprRepr()}"
               break # Found non-nullable element, finishing FIRST computation
             # else:
               # showInfo fmt "Element {elem.exprRepr()} of kind {elem.kind} is nullable"
@@ -303,8 +311,7 @@ proc parse*[C, L, I](
           curr = toks.next()
       of fbkNterm:
         # if parser.parseTable.contains((top.nterm, curr)):
-        let altId = parser.parseTable[top.nterm].getAlt(curr)
-        let rule: RuleId = ruleId(top.nterm, altId)
+        let rule: RuleId = parser.parseTable.getRule(top.nterm, curr)
         let stackadd = parser.grammar.getProductions(rule)
         if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
           ntermStack.add TermProgress[C, L, I](

@@ -114,6 +114,20 @@ iterator items*[L](lset: LexSet[L]): L =
   for lex in lset.lexemes:
     yield lex
 
+func containsOrIncl*[A](hs: var HashSet[A], other: HashSet[A]): bool =
+  for elem in other:
+    if elem notin hs:
+      hs.incl elem
+      result = false
+
+func containsOrIncl*[L](ls: var LexSet[L], other: LexSet[L]): bool =
+  if other.hasAll and (not ls.hasAll):
+    ls.hasAll = true
+    result = false
+
+  if not containsOrIncl(ls.lexemes, other.lexemes):
+    result = false
+
 #==============================  Token set  ==============================#
 
 func initTokSet*[C, L](
@@ -208,12 +222,17 @@ func union*[C, L](s: seq[TokSet[C, L]]): TokSet[C, L] =
 
 func containsOrIncl*[C, L](
   s: var TokSet[C, L], other: TokSet[C, L]): bool =
-  raiseAssert("implement")
-  # if (s.hasEof == other.hasEof) and ((s.vals - other.vals).len == 0):
-  #   result = false
+  if other.hasEof and (not s.hasEof):
+    s.hasEof = true
+    result = false
 
-  # s.hasEof = s.hasEof or other.hasEof
-  # s.vals.incl other.vals
+  for cat, lset in other.tokens:
+    if cat notin s.tokens:
+      result = false
+      s.tokens[cat] = lset
+    else:
+      if not containsOrIncl(s.tokens[cat], lset):
+        result = false
 
 func hash*[C, L](s: TokSet[C, L]): Hash =
   var h: Hash = 0
