@@ -285,72 +285,30 @@ proc parse*[C, L, I](
   var done = false
   var parseDone: bool = false
   while not done:
-    plog:
-      var stackshots: seq[TermBuf]
-      var msg: string
-
-      block:
-        var stackstr: seq[string]
-        stackstr.add fmt(" {\"VV\":^20} ")
-        for idx, it in stack.reversed():
-          stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
-
-        stackstr.add ""
-        for idx, nterm in ntermStack.reversed():
-          stackstr.add fmt(
-            "@ {nterm.nterm.exprRepr():14} [{nterm.elems.len}/{nterm.expected}]")
-
-        stackshots.add stackstr.toTermBuf()
-
     let top: FlatBnf[C, L] = stack.pop()
-
-    plog:
-      case top.kind:
-        of fbkTerm:
-          msg &= fmt "Expecting {top.exprRepr()}\n"
-
-        of fbkNterm:
-          msg &= fmt "Started parsing {top.exprRepr()}\n"
-        else:
-          discard
 
     case top.kind:
       of fbkTerm:
         if top.tok == curr.kind:
-          plog: msg &= fmt("Accepted token '{curr}' ({curr.kind})\n")
           ntermStack.last().elems.add newTree(curr)
 
           if toks.finished():
             done = true
           else:
             curr = toks.next()
-            # plog: msg &= fmt "Read token '{curr}' ({curr.kind})"
         else:
           # ERROR IMPLEMENT
-          discard
           plog: echo "unexpected token ", curr
       of fbkNterm:
         if parser.parseTable.contains((top.nterm, curr.kind)):
           let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
           let stackadd = parser.grammar.getProductions(rule)
-
-          plog:
-            msg &= fmt("Current token is '{curr}' ({curr.kind})\n")
-            msg &= fmt("[{top.exprRepr()} + {curr.kind}] => {rule.exprRepr()}\n")
-            msg &= fmt "Started parsing <{rule.head}> using alt {rule.alt}\n"
-
           if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
-            plog: msg &= "Empty production\n"
             ntermStack.add TermProgress[C, L, I](
               nterm: rule.head, expected: 0)
           else:
             ntermStack.add TermProgress[C, L, I](
               nterm: rule.head, expected: stackadd.len)
-
-            plog:
-              msg &= fmt "- [ {top.exprRepr():25} ]\n"
-              for elem in stackadd:
-                msg &= fmt("+ [ {elem.exprRepr:25} ]\n")
 
           stack &= stackadd.reversed().filterIt(it.kind != fbkEmpty)
         else:
@@ -360,12 +318,10 @@ proc parse*[C, L, I](
           )
 
       of fbkEmpty:
-        plog: echo "Empty token"
         discard # ERROR ?
 
     while (ntermStack.len > 0) and (ntermStack.last().elems.len == ntermStack.last().expected):
       let last = ntermStack.pop()
-      plog: msg &= fmt("Finished parsing {last.nterm} with {last.expected} elems\n")
       if ntermStack.len > 0:
         ntermStack.last().elems.add(
           if last.nterm.generated:
@@ -377,22 +333,8 @@ proc parse*[C, L, I](
             newTree(last.nterm.name, last.elems)
         )
       else:
-        plog: msg &= "Completely finished input sequence\n"
         result = newTree(last.nterm.name, last.elems)
         parseDone = true
-
-    plog:
-      stackshots.add toTermBuf(msg.split("\n").mapIt(fmt "  {it:<47}  "))
-      block:
-        var stackstr: seq[string]
-        stackstr.add fmt(" {\"VV\":^20} ")
-        for idx, it in stack.reversed():
-          stackstr.add fmt("[{idx:2} {it.exprRepr():<17}]")
-
-        stackshots.add stackstr.toTermBuf()
-
-      echo stackshots.toTermBuf().toString()
-      echo "\e[92m", fmt"""{"-":-^95}""", "\e[39m"
 
   if parseDone:
     return result
