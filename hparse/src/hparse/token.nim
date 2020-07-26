@@ -1,5 +1,6 @@
-import sets, sequtils, hashes, tables, strutils, strformat
+import sets, sequtils, hashes, tables, strutils, strformat, macros
 import hmisc/helpers
+import initcalls
 
 ## Parse tree contains actual token /values/ - concrete lexemes and
 ## additional information (whatever you deem necessary adding).
@@ -202,12 +203,39 @@ func hash*[C, L](s: TokSet[C, L]): Hash =
 #===========================  Type definition  ===========================#
 
 type
+  LexLookup*[L] = object
+    table: Table[L, seq[int]]
+    hasAll: seq[int]
+
   TokLookup*[C, L] = object
-    f1*: int
+    table: Table[C, LexLookup[L]]
 
 #=============================  Contructors  =============================#
 
-func makeTokLookup*[C, L](altSets: seq[TokSet[C, L]]): TokLookup[C, L] =
+func initTokLookup*[C, L](table: Table[C, LexLookup[L]]): TokLookup[C, L] =
+  TokLookup[C, L](table: table)
+
+func initLexLookup*[L](
+  table: Table[L, seq[int]], hasAll: seq[int]): LexLookup[L] =
+  LexLookup(table: table, hasAll: hasAll)
+
+func makeInitCalls*[C, L](lookup: TokLookup[C, L]): NimNode =
+  mixin makeInitCalls
+  result = newCall(
+    "initTokLookup",
+    nnkExprEqExpr.newTree(ident "table", lookup.table.makeInitCalls()))
+
+func makeInitCalls*[L](lookup: LexLookup[L]): NimNode =
+  mixin makeInitCalls
+  result = newCall(
+    "initLexLookup",
+    nnkExprEqExpr.newTree(ident "table", lookup.table.makeInitCalls()),
+    nnkExprEqExpr.newTree(ident "hasAll", lookup.hasAll.makeInitCalls())
+  )
+
+
+func makeTokLookup*[C, L](
+  altSets: seq[TokSet[C, L]], canConflict: bool = false): TokLookup[C, L] =
   ## Create token lookup from sequence of alternatives
   # TODO detect ambiguity
   # TODO IMPLEMENT

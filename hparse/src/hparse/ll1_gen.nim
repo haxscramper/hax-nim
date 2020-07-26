@@ -10,31 +10,11 @@ import hashes, tables, sets
 
 import lexer
 import parse_primitives, parser_common, parse_tree, parse_helpers, token
+import initcalls
 
 
 ## LL1 parser generator code
 
-func makeInitCalls*[T](val: T): NimNode =
-  when T is enum:
-    ident($val)
-  else:
-    newLit(val)
-
-func makeInitCalls*[A, B](table: Table[A, B]): NimNode =
-  mixin makeInitCalls
-  result = nnkTableConstr.newTree()
-  for key, val in table:
-    result.add newColonExpr(key.makeInitCalls, val.makeInitCalls)
-
-  result = newCall("toTable", result)
-
-func makeInitCalls*[A](hset: HashSet[A]): NimNode =
-  mixin makeInitCalls
-  result = nnkBracket.newTree()
-  for val in hset:
-    result.add val.makeInitCalls()
-
-  result = newCall("toHashSet", result)
 
 func makeInitCalls*[C, L](tok: TokSet[C, L]): NimNode =
   mixin makeInitCalls
@@ -236,7 +216,7 @@ proc makeAltBlock[C, L](alt: CompPatt[C, L], sets: NTermSets[C, L]): NimNode =
 
   let
     selector: TokLookup[C, L] = makeTokLookup(sets)
-    selectorLit = newLit(selector)
+    selectorLit = makeInitCalls(selector)
     toksIdent = ident "toks"
     altId = ident "altId"
     elseBody = nnkElse.newTree(
@@ -248,7 +228,9 @@ proc makeAltBlock[C, L](alt: CompPatt[C, L], sets: NTermSets[C, L]): NimNode =
 
   result = quote do:
     let selector = `selectorLit`
-    let `altId` = selector.getAlt(`toksIdent`.peek())
+    let peek = `toksIdent`.peek()
+    let `altId` = selector.getAlt(peek)
+    echo "selected id ", `altId`, " for token ", peek.toTokStr()
 
   result.add: withIt(nnkCaseStmt.newTree(altId)):
     for branch in branches & @[elseBody]:
