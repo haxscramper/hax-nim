@@ -39,6 +39,12 @@ template withIt*(val, body: untyped): untyped =
       body
     it
 
+template withResIt*(val, body: untyped): untyped =
+  block:
+    var it {.inject.} = val
+    body
+
+
 template anyOfIt*(sequence: typed, predicate: untyped): bool =
   ## Return `true` if for any of the items in sequence `predicate`
   ## evaluates as `true`. Otherwise return false.

@@ -1,11 +1,12 @@
-import sugar, strutils, sequtils, strformat
-import sets
+import sugar, strutils, sequtils, strformat, sets, random
+import hmisc/types/graphviz_ast
 
 
 #===========================  implementation  ============================#
 
 import hparse/[
   ll1_table,
+  ll1_gen,
   grammars,
   bnf_grammars, # FIXME HACK not necessary but removeing it generates
                 # `rule cannot be called` compilation error.
@@ -53,33 +54,30 @@ import hparse/ll1_table
 
 suite "Table-driven vs recursive descent":
   test "Image generation":
-    const nt = nterm[TokenKind]
+    const nt = nterm[TokenKind, string]
+    proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
     const grammarConst = {
       # list ::= '[' <elements> ']'
       "list" : andP(
-        tok(tkOpBrace),
+        tok(tkPunct, "["),
         nt("elements"),
-        tok(tkCloseBrace)
+        tok(tkPunct, "]")
       ),
       # elements ::= <element> (',' <element>)*
       "elements" : andP(
         nt("element"),
-        zeroP(andP(
-          tok(tkComma),
-          nt("element")
-        ))
+        zeroP(andP(tok(tkPunct, ","), nt("element")))
       ),
       # element ::= 'ident' | <list>
-      "element" : orP(
-        tok(tkIdent),
-        nt("list")
-      )
+      "element" : orP(tok(tkIdent), nt("list"))
     }
 
     let
       grammarVal = grammarConst
-      recursiveParser = newLL1RecursiveParser[Token](grammarConst)
-      tableParser = newLL1TableParser(
+      recursiveParser = newLL1RecursiveParser[
+        TokenKind, string, void](grammarConst)
+
+      tableParser = newLL1TableParser[TokenKind, string](
         grammarVal.toGrammar(), retainGenerated = false)
       testInput = "[a,b,e,e,z,e]"
 

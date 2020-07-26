@@ -22,6 +22,11 @@ func `|=`*(a: var bool, b: bool): void = a = a or b
 func contains*[A, B, C](table: Table[A, Table[B, C]], pair: (A, B)): bool =
   (pair[0] in table) and (pair[1] in table[pair[0]])
 
+func contains*[C, L, I](
+  table: Table[BnfNterm, TokLookup[C, L]],
+  pair: (BnfNterm, Token[C, L, I])): bool =
+  (pair[0] in table) and (pair[1] in table[pair[0]])
+
 iterator iterrules*[C, L](grammar: BnfGrammar[C, L]): tuple[
   id: RuleId, alt: BnfPatt[C, L]] =
   for head, patts in grammar.rules:
@@ -289,33 +294,31 @@ proc parse*[C, L, I](
 
     case top.kind:
       of fbkTerm:
-        if top.tok == curr.kind:
-          ntermStack.last().elems.add newTree(curr)
+        assertToken(top.tok, curr)
+        ntermStack.last().elems.add newTree(curr)
 
-          if toks.finished():
-            done = true
-          else:
-            curr = toks.next()
+        if toks.finished():
+          done = true
         else:
-          # ERROR IMPLEMENT
-          plog: echo "unexpected token ", curr
+          curr = toks.next()
       of fbkNterm:
-        if parser.parseTable.contains((top.nterm, curr.kind)):
-          let rule: RuleId = parser.parseTable[top.nterm, curr.kind]
-          let stackadd = parser.grammar.getProductions(rule)
-          if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
-            ntermStack.add TermProgress[C, L, I](
-              nterm: rule.head, expected: 0)
-          else:
-            ntermStack.add TermProgress[C, L, I](
-              nterm: rule.head, expected: stackadd.len)
-
-          stack &= stackadd.reversed().filterIt(it.kind != fbkEmpty)
+        # if parser.parseTable.contains((top.nterm, curr)):
+        let altId = parser.parseTable[top.nterm].getAlt(curr)
+        let rule: RuleId = ruleId(top.nterm, altId)
+        let stackadd = parser.grammar.getProductions(rule)
+        if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
+          ntermStack.add TermProgress[C, L, I](
+            nterm: rule.head, expected: 0)
         else:
-          raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
-           "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
-           fmt("({curr.kind})")
-          )
+          ntermStack.add TermProgress[C, L, I](
+            nterm: rule.head, expected: stackadd.len)
+
+        stack &= stackadd.reversed().filterIt(it.kind != fbkEmpty)
+        # else:
+        #   raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
+        #    "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
+        #    fmt("({curr.kind})")
+        #   )
 
       of fbkEmpty:
         discard # ERROR ?

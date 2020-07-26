@@ -518,3 +518,39 @@ proc parse*[C, L, I](
   parser: LL1RecursiveDescentParser[C, L, I],
   toks: var TokStream[Token[C, L, I]]): ParseTree[C, L, I] =
   parser.startCb(toks)
+
+template newLL1RecursiveParser*[C, L, I](
+  body: typed,
+  standalone: bool = false): untyped =
+  # Trillion IQ hack
+  macro buildParser(): untyped =
+    let grammar = toGrammar(body)
+    let compGrammar = computeGrammar(grammar)
+    let cbName = grammar.start.makeParserName()
+    result = newStmtList(
+      makeGrammarParser(compGrammar),
+      nnkLetSection.newTree(
+        nnkIdentDefs.newTree(
+          newIdentNode("cb"),
+          newEmptyNode(),
+          nnkBracketExpr.newTree(
+            newIdentNode(cbName),
+            newIdentNode($(typeof I))
+          )
+        )
+      ),
+      if standalone:
+        nnkLetSection.newTree(
+          nnkIdentDefs.newTree(
+            newIdentNode("parser"),
+            newEmptyNode(),
+            nnkCall.newTree(
+              newIdentNode("newLL1RecursiveDescent"),
+              newIdentNode("cb"))))
+      else:
+        newCall("newLL1RecursiveDescent", ident "cb")
+    )
+
+    colorPrint(result, doPrint = false)
+
+  buildParser()

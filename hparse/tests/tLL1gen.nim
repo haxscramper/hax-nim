@@ -11,47 +11,7 @@ import hparse/bnf_grammars # Unless I import this one explicitly I get
                            # error with `hashes`.
 import hashes, sets, tables
 
-template withResIt*(val, body: untyped): untyped =
-  block:
-    var it {.inject.} = val
-    body
-
 #======================  grammar parser generation  ======================#
-template newLL1RecursiveParser[C, L, I](
-  body: typed,
-  standalone: bool = false): untyped =
-  # Trillion IQ hack
-  macro buildParser(): untyped =
-    let grammar = toGrammar(body)
-    let compGrammar = computeGrammar(grammar)
-    let cbName = grammar.start.makeParserName()
-    result = newStmtList(
-      makeGrammarParser(compGrammar),
-      nnkLetSection.newTree(
-        nnkIdentDefs.newTree(
-          newIdentNode("cb"),
-          newEmptyNode(),
-          nnkBracketExpr.newTree(
-            newIdentNode(cbName),
-            newIdentNode($(typeof I))
-          )
-        )
-      ),
-      if standalone:
-        nnkLetSection.newTree(
-          nnkIdentDefs.newTree(
-            newIdentNode("parser"),
-            newEmptyNode(),
-            nnkCall.newTree(
-              newIdentNode("newLL1RecursiveDescent"),
-              newIdentNode("cb"))))
-      else:
-        newCall("newLL1RecursiveDescent", ident "cb")
-    )
-
-    colorPrint(result, doPrint = false)
-
-  buildParser()
 
 #======================  dummy value construction  =======================#
 
