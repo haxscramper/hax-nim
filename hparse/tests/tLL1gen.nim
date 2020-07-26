@@ -93,19 +93,20 @@ suite "LL(1) parser simple":
     })
 
 suite "LL(1) parser tree actions":
-  const nt = nterm[TokenKind]
-  let parser = newLL1RecursiveParser[Token]({
+  const nt = nterm[TokenKind, string]
+  proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
+  let parser = newLL1RecursiveParser[Token, string, void]({
       # list ::= '[' <elements> ']'
       "list" : andP(
-        tok(tkOpBrace).addAction(taDrop),
+        tok(tkPunct, "[").addAction(taDrop),
         nt("elements").addAction(taSpliceDiscard),
-        tok(tkCloseBrace).addAction(taDrop)
+        tok(tkPunct, "]").addAction(taDrop)
       ),
       # elements ::= <element> (',' <element>)*
       "elements" : andP(
         nt("element").addAction(taSpliceDiscard),
         zeroP(andP(
-          tok(tkComma).addAction(taDrop),
+          tok(tkPunct, ",").addAction(taDrop),
           nt("element").addAction(taSpliceDiscard)
         ).addAction(taSpliceDiscard)).addAction(taSpliceDiscard)
       ),
@@ -117,10 +118,8 @@ suite "LL(1) parser tree actions":
     })
 
   test "Drop rule":
-    let tree = parseTopLevel(
-      mapString("[[c,z,d,[e,d]],[e,d,f]]"),
-      parseList
-    )
+    var toks = mapString("[[c,z,d,[e,d]],[e,d,f]]").makeStream()
+    let tree = parser.parse(toks)
 
     echo "--- FINAL ---"
     echo tree.treeRepr("tk")

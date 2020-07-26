@@ -112,7 +112,7 @@ func toDotGraphPretty*[C, L, I](
       itaddr,
       label = case it.kind:
         of ptkNTerm: it.nterm
-        of ptkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}")
+        of ptkTerm: fmt("{it.tok.cat.tokKindStr(kindPref)}")
         else: it.nodeKindStr()
       ,
       shape = case it.kind:
@@ -147,7 +147,7 @@ func toDotGraphPrecise*[C, L, I](tree: ParseTree[C, L, I], kindPref: string): Gr
     let itaddr: int = cast[int](addr it[])
     let label = case it.kind:
       of ptkNTerm: it.nterm
-      of ptkTerm: fmt("{it.tok.kind.tokKindStr(kindPref)}\n'{it.tok}'")
+      of ptkTerm: fmt("{it.tok.cat.tokKindStr(kindPref)}\n'{it.tok}'")
       of ptkList: it.nodeKindStr()
 
     result.addNode(makeNode(
@@ -214,7 +214,9 @@ func treeReprImpl*[C, L, I](
 
   result = case node.kind:
     of ptkTerm:
-      @[ fmt("{prefStr}{node.tok.kind.tokKindStr(kindPref)} = '{node.tok}'") ]
+      @[ fmt(
+        "{prefStr}[{node.tok.cat.tokKindStr(kindPref)}, '{node.tok.lex}']"
+      ) ]
     of ptkNTerm:
       @[ fmt("{prefStr}{node.nterm}") ]
     of ptkList:

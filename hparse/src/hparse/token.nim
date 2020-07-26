@@ -50,6 +50,11 @@ func matches*[C, L, I](exp: ExpectedToken[C, L], tok: Token[C, L, I]): bool =
   # TODO IMPLEMENT
   discard
 
+func makeToken*[C, L, I](cat: C, lex: L): Token[C, L, I] =
+  Token[C, L, void](cat: cat, lex: lex)
+
+func makeTokenNoInfo*[C, L](cat: C, lex: L): Token[C, L, void] =
+  Token[C, L, void](cat: cat, lex: lex)
 
 #*************************************************************************#
 #******************************  Token set  ******************************#
@@ -85,6 +90,9 @@ func incl*[L](s: var LexSet[L], other: LexSet[L]): void =
   s.hasAll = s.hasAll or other.hasAll
   s.lexemes.incl(other.lexemes)
 
+func contains*[L](lset: LexSet[L], lex: L): bool =
+  lex in lset.lexemes
+
 func makeLexSet*[L](): LexSet[L] =
   LexSet[L](lexemes: initHashSet[L](2))
 
@@ -109,7 +117,10 @@ func getHasEof*[C, L](tset: TokSet[C, L]): bool =
 const eofTok*: EofTok = EofTok()
 
 func contains*[C, L, I](s: TokSet[C, L], tk: Token[C, L, I]): bool =
-  tk in s.vals
+  if tk.cat in s.tokens:
+    s.tokens[tk.cat].hasAll or tk.lex in s.tokens[tk.cat]
+  else:
+    false
 
 func contains*[C, L](s: TokSet[C, L], tk: EofTok): bool =
   s.hasEof

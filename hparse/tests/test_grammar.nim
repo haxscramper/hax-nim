@@ -19,11 +19,11 @@ func `==`(lhs, rhs: Token): bool =
         true
   )
 
-func mapString(s: string): seq[Token] =
+func mapString(s: string): seq[LTok] =
   s.mapIt(
     case it:
-      of '[': Token(kind: tkOpBrace)
-      of ']': Token(kind: tkCloseBrace)
-      of ',': Token(kind: tkComma)
-      else: Token(kind: tkIdent, strVal: $it)
+      of '[':
+        makeTokenNoInfo(tkPunct, $it)
+      else:
+        makeTokenNoInfo(tkIdent, $it)
   )
