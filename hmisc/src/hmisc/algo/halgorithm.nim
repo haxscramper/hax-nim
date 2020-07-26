@@ -105,9 +105,10 @@ func msgjoin*(args: varargs[string, `$`]): string =
     if idx == args.len - 1:
       result &= args[idx]
     else:
-      if args[idx].endsWith({'`', '[', '(', '\''}):
+      const wraps: set[char] = {'_', '`', '\'', '\"'}
+      if args[idx].endsWith({'[', '(', '\'', '#', '@'} + wraps):
         result &= args[idx]
-      elif args[idx + 1].startsWith({',', '`', '\'', ' '}):
+      elif args[idx + 1].startsWith({',', ' '} + wraps):
         result &= args[idx]
       else:
         result &= args[idx] & " "

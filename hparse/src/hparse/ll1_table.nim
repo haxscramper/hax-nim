@@ -23,7 +23,17 @@ type
 
 func getRule*[C, L, I](
   tbl: LL1Table[C, L], nterm: BnfNterm, tok: Token[C, L, I]): RuleId =
-  tbl[nterm].getRule(tok)
+  try:
+    return tbl[nterm].getRule(tok)
+  except AssertionError:
+    {.noSideEffect.}:
+      var e = getCurrentException()
+      e.msg = msgjoin(
+        "Failure to get rule for nterm `", nterm.exprRepr(), "`: ",
+        getCurrentExceptionMsg())
+
+      raise e
+
 
 func `[]`*[A, B, C](
   table: Table[A, Table[B, C]], aKey: A, bKey: B): C =
@@ -230,9 +240,9 @@ proc makeLL1TableParser*[C, L](grammar: BnfGrammar[C, L]): LL1Table[C, L] =
     else:
       let first = firstTable[ruleId.head][ruleId.alt]
       if ruleId.head notin result:
-        result[ruleId.head] = initRuleLookup(first, ruleId)
+        result[ruleId.head] = initRuleLookup(first, ruleId, canConflict = false)
       else:
-        result[ruleId.head].addRule(first, ruleId, allowConflict = false)
+        result[ruleId.head].addRule(first, ruleId, canConflict = false)
 
   for nterm, nullAlts in nullable:
     let first = followTable[nterm]
@@ -242,11 +252,16 @@ proc makeLL1TableParser*[C, L](grammar: BnfGrammar[C, L]): LL1Table[C, L] =
       if nterm notin result:
         result[nterm] = initRuleLookup(first, ruleId)
       else:
-        result[nterm].addRule(first, ruleId, allowConflict = false)
+        result[nterm].addRule(first, ruleId, canConflict = false)
 
 
 
   plog:
+    debugecho "\e[35mNULLABLE\e[39m set"
+    for nterm, nullAlts in nullable:
+      for alt in nullAlts:
+        debugecho fmt("{nterm.exprRepr()}[{alt}]")
+
     debugecho "\e[35mFIRST\e[39m set"
     for head, alts in firstTable:
       for id, alt in alts:
@@ -341,7 +356,8 @@ proc parse*[C, L, I](
       of fbkEmpty:
         discard # ERROR ?
 
-    while (ntermStack.len > 0) and (ntermStack.last().elems.len == ntermStack.last().expected):
+    while (ntermStack.len > 0) and
+          (ntermStack.last().elems.len == ntermStack.last().expected):
       let last = ntermStack.pop()
       if ntermStack.len > 0:
         ntermStack.last().elems.add(

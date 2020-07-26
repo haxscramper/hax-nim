@@ -166,8 +166,13 @@ func getHasEof*[C, L](tset: TokSet[C, L]): bool =
 const eofTok*: EofTok = EofTok()
 
 iterator items*[C, L](s: TokSet[C, L]): ExpectedToken[C, L] =
-  for it in s.vals:
-    yield it
+  for cat, lset in pairs(s.tokens):
+    if lset.hasAll:
+      yield makeExpToken[C, L](cat)
+
+    for lex in items(lset):
+      yield makeExpToken[C, L](cat, lex)
+
 
 iterator pairs*[C, L](s: TokSet[C, L]): (C, LexSet[L]) =
   for cat, lset in s.tokens:
@@ -287,25 +292,32 @@ func `[]`*[L](tl: LexLookup[L], lex: L): seq[int] =
 func addAlt*[L](ll: var LexLookup[L],
                 lex: L,
                 alt: int,
-                allowconflict: bool = false): void =
+                canconflict: bool = false): void =
   ## Add `lex` -> `alt` pair to lookup table.
   if lex notin ll.table:
     ll.table[lex] = @[alt]
   else:
-    if ll.table[lex].len > 1 and (not allowconflict):
-      raiseAssert("#[ IMPLEMENT cannot add conflicting lookup pair ]#")
+    # debugecho ll.table[lex].len
+    if ll.table[lex].len > 0 and (not canconflict):
+      raiseAssert(msgjoin(
+        "New pair for lexeme lookup: `", lex,
+        "` conflicts with already existing id #", ll.table[lex][0],
+        "- cannot add #", alt, "(NOTE: canconflict = true)"
+      ))
     else:
       ll.table[lex].add alt
 
 func addHasAll*[L](ll: var LexLookup[L],
                    alt: int,
-                   allowconflict: bool = false): void =
-  if ll.hasAll.len > 1 and (not allowconflict):
+                   canconflict: bool = false): void =
+  if ll.hasAll.len > 0 and (not canconflict):
     raiseAssert("#[ IMPLEMENT Cannot add conflicting has-all to lexeme lookup ]#")
   else:
     ll.hasAll.add alt
 
 #============================  Constructors  =============================#
+func initLexLookup*[L](): LexLookup[L] =
+  LexLookup[L](table: initTable[L, seq[int]](2))
 
 func initLexLookup*[L](
   table: Table[L, seq[int]], hasAll: seq[int]): LexLookup[L] =
@@ -344,6 +356,8 @@ func `[]`*[C, L](tl: TokLookup[C, L], cat: C): LexLookup[L] =
 func contains*[C, L](tl: TokLookup[C, L], cat: C): bool = cat in tl.table
 
 #===================  Predicates/accessors/iterators  ====================#
+func initTokLookup*[C, L](): TokLookup[C, L] =
+  TokLookup[C, L](table: initTable[C, LexLookup[L]](2))
 
 func initTokLookup*[C, L](table: Table[C, LexLookup[L]]): TokLookup[C, L] =
   TokLookup[C, L](table: table)
@@ -398,7 +412,10 @@ func getAlt*[C, L, I](
     if token.lex in lookup[token.cat]:
       let alts = lookup[token.cat][token.lex]
       if alts.len > 1:
-        raiseAssert("#[ IMPLEMENT more than one alternative ]#")
+        raiseAssert(msgjoin(
+          "Attempt to get single option from more than one alternatives for",
+          token.exprRepr(), "- it has", alts.len, "alternatives"
+        ))
       else:
         return alts[0]
     elif lookup[token.cat].hasAll.len > 0:
@@ -415,14 +432,14 @@ func getAlt*[C, L, I](
 func addAlt*[C, L](tl: var TokLookup[C, L],
                    tok: ExpectedToken[C, L],
                    alt: int,
-                   alloconflict: bool = false): void =
+                   canconflict: bool = false): void =
   if tok.cat notin tl.table:
     tl.table[tok.cat] = initLexLookup[L]()
 
   if tok.hasLex:
-    tl.table[tok.cat].addAlt(tok.lex, alt)
+    tl.table[tok.cat].addAlt(tok.lex, alt, canconflict = canconflict)
   else:
-    tl.table[tok.cat].addHasAll(alt)
+    tl.table[tok.cat].addHasAll(alt, canconflict = canconflict)
 
 
 #*************************************************************************#

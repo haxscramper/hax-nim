@@ -443,23 +443,32 @@ func getRule*[C, L, I](rlookup: RuleLookup[C, L],
                       ): RuleId =
   ## Get single rule from lookup table. Raise exception on rule
   ## conflict.
-  raiseAssert("#[ IMPLEMENT ]#")
+  rlookup.rules[rlookup.tokMap.getAlt(tok)]
 
-func addRule*[C, L](rlookup: var RuleLookup[C, L],
+func addRule*[C, L](rl: var RuleLookup[C, L],
                     first: TokSet[C, L],
                     ruleId: RuleId,
-                    allowconflict: bool = false
+                    canconflict: bool = false
                    ): void =
   ## Add new rule to lookup table
-  raiseAssert("#[ IMPLEMENT ]#")
+  let idx = rl.rules.len
+  rl.rules.add ruleId
+  for tok in items(first):
+    debugecho tok.exprRepr(), " -> ", ruleId.exprRepr(), " id: ", idx
+    rl.tokMap.addAlt(tok, idx, canconflict = canconflict)
 
 #============================  Constructors  =============================#
+func initRuleLookup*[C, L](): RuleLookup[C, L] =
+  RuleLookup[C, L](tokMap: initTokLookup[C, L]())
 
 func initRuleLookup*[C, L](first: TokSet[C, L],
-                           ruleId: RuleId
+                           ruleId: RuleId,
+                           canconflict: bool = false
                           ): RuleLookup[C, L] =
   ## Create new rule lookup table
-  raiseAssert("#[ IMPLEMENT ]#")
+  result = initRuleLookup[C, L]()
+  result.addRule(first, ruleId, canconflict = canconflict)
+  # raiseAssert("#[ IMPLEMENT ]#")
 
 #========================  Other implementation  =========================#
 
