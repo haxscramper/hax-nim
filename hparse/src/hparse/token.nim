@@ -1,4 +1,4 @@
-import sets, sequtils, hashes, tables
+import sets, sequtils, hashes, tables, strutils, strformat
 import hmisc/helpers
 
 ## Parse tree contains actual token /values/ - concrete lexemes and
@@ -48,7 +48,14 @@ func makeExpToken*[C, L](category: C): ExpectedToken[C, L] =
 func matches*[C, L, I](exp: ExpectedToken[C, L], tok: Token[C, L, I]): bool =
   ## Return true if token `tok` matches with expected token `exp`
   # TODO IMPLEMENT
-  discard
+  if tok.cat != exp.cat:
+    false
+  else:
+    if exp.hasLex:
+      exp.lex == tok.lex
+    else:
+      true
+
 
 func makeToken*[C, L, I](cat: C, lex: L): Token[C, L, I] =
   Token[C, L, void](cat: cat, lex: lex)
@@ -214,3 +221,49 @@ func getAlt*[C, L, I](
   # TODO raise exception if token is not found
   # TODO IMPLEMENT
   discard
+
+#*************************************************************************#
+#*********************  Unexpected token exceptions  *********************#
+#*************************************************************************#
+
+type
+  LinePosInfo* = object
+    line*: int
+    column*: int
+    filename*: string
+
+  # ParserErrorKind* = enum
+
+  #   pekUnexpectedToken
+
+  # ParserError = ref object of CatchableError
+  #   linepos*: Option[LinePosInfo]
+  #   case kind*: ParserErrorKind
+  #     of pekUnexpectedToken:
+  #       expected*: string
+  #       intoken*: string
+  #       inputpos*: int
+
+func toTokStr*[C, L, I](tok: Token[C, L, I]): string =
+  # TODO remove prefix from category enum
+  fmt("({tok.cat} '{tok.lex}')")
+
+func toTokStr*[C, L](exp: ExpectedToken[C, L]): string =
+  if exp.hasLex:
+    fmt("({exp.cat} '{exp.lex}')")
+  else:
+    fmt("({exp.cat} _)")
+
+func getLinePos*[C, L, I](tok: Token[C, L, I]): LinePosInfo =
+  getLinePos(tok.info)
+
+func hasLinePosInfo*[C, L, I](tok: Token[C, L, I]): bool =
+  const res = compiles(getLinePos(tok.info)) and
+    (getLinePos(tok.info) is LinePosInfo)
+
+template assertToken*[C, L, I](
+  exp: ExpectedToken[C, L], tok: Token[C, L, I]): untyped =
+  if not matches(exp, tok):
+    raiseAssert(
+      "Unexpected token _" & toTokStr(tok) & "_, expected _" &
+        toTokStr(exp) & "_")

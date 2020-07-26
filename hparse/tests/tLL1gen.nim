@@ -16,8 +16,9 @@ template withResIt*(val, body: untyped): untyped =
     body
 
 #======================  grammar parser generation  ======================#
-
-template newLL1RecursiveParser[C, L, I](body: typed): untyped =
+template newLL1RecursiveParser[C, L, I](
+  body: typed,
+  standalone: bool = false): untyped =
   # Trillion IQ hack
   macro buildParser(): untyped =
     let grammar = toGrammar(body)
@@ -35,7 +36,16 @@ template newLL1RecursiveParser[C, L, I](body: typed): untyped =
           )
         )
       ),
-      newCall("newLL1RecursiveDescent", ident "cb")
+      if standalone:
+        nnkLetSection.newTree(
+          nnkIdentDefs.newTree(
+            newIdentNode("parser"),
+            newEmptyNode(),
+            nnkCall.newTree(
+              newIdentNode("newLL1RecursiveDescent"),
+              newIdentNode("cb"))))
+      else:
+        newCall("newLL1RecursiveDescent", ident "cb")
     )
 
     colorPrint(result, doPrint = false)
@@ -95,7 +105,7 @@ suite "LL(1) parser simple":
 suite "LL(1) parser tree actions":
   const nt = nterm[TokenKind, string]
   proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
-  let parser = newLL1RecursiveParser[Token, string, void]({
+  newLL1RecursiveParser[Token, string, void]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkPunct, "[").addAction(taDrop),
@@ -115,10 +125,14 @@ suite "LL(1) parser tree actions":
         tok(tkIdent).addAction(taPromote),
         nt("list").addAction(taPromote)
       )
-    })
+    }, standalone = true)
 
   test "Drop rule":
-    var toks = mapString("[[c,z,d,[e,d]],[e,d,f]]").makeStream()
+    var toks = mapString("[[c,z,d,[e,d]],[e,d,f]]").makeStream(
+      nextTokCb = (
+        proc(tok: LTok, pos: int) = echo "Reading ", tok.toTokStr(), " @ ", pos
+      )
+    )
     let tree = parser.parse(toks)
 
     echo "--- FINAL ---"

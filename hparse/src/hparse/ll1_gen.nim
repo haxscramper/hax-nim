@@ -14,7 +14,11 @@ import parse_primitives, parser_common, parse_tree, parse_helpers, token
 
 ## LL1 parser generator code
 
-func makeInitCalls*[T](val: T): NimNode = newLit(val)
+func makeInitCalls*[T](val: T): NimNode =
+  when T is enum:
+    ident($val)
+  else:
+    newLit(val)
 
 func makeInitCalls*[A, B](table: Table[A, B]): NimNode =
   mixin makeInitCalls
@@ -45,7 +49,6 @@ func makeInitCalls*[L](lex: LexSet[L]): NimNode =
     "initLexSet",
     nnkExprEqExpr.newTree(ident "hasAll", lex.getHasAll().makeInitCalls()),
     nnkExprEqExpr.newTree(ident "lexemes", lex.getLexemes().makeInitCalls()))
-
 
 func makeIds[C, L](): tuple[cId, lId, iId: NimNode] =
   (
@@ -239,7 +242,7 @@ proc makeAltBlock[C, L](alt: CompPatt[C, L], sets: NTermSets[C, L]): NimNode =
     elseBody = nnkElse.newTree(
       quote do:
         # TODO IMPLEMENT generated more informative error messages
-        raise CodeError(msg: "Unexpected token")
+        raiseAssert("Unexpected token")
     )
 
 
@@ -264,7 +267,7 @@ proc makeTermBlock[C, L](term: CompPatt[C, L]): NimNode =
   return quote do:
     let expected = `tokIdent`
     let tok = next(`toksIdent`)
-    assert matches(expected, tok)
+    assertToken(expected, tok)
     newTree(tok)
 
 proc makeNTermBlock[C, L](nterm: CompPatt[C, L]): NimNode =

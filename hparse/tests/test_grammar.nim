@@ -1,4 +1,5 @@
 import hparse/[parse_tree, token]
+import sequtils
 
 type
   TokenKind = enum

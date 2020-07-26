@@ -9,7 +9,7 @@ import strformat
 
 proc colorPrint*(
   node: NimNode,
-  tmpfile: string = "/tmp/nimast.tmp.nim",
+  tmpfile: string = "/tmp/nimast_tmp.nim",
   doPrint: bool = true): void =
   # TODO convert nim ast into adequately readable form without using
   # `pygmentize`. Maybe even color macros/templates/procs differently.

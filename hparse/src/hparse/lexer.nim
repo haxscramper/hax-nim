@@ -26,9 +26,11 @@ type
     # buffer)
     matchers*: seq[Matcher[Tok]]
 
+  CbProc*[Tok] = proc(tok: Tok, curPos: int)
 
   TokStream*[Tok] = object
     ## Buffer for tokens. Modeled after `std/streams` implementation
+    nextTokCb: CbProc[Tok]
     curPos: int ## Current position in buffer
     buffer: seq[Tok] ## Token buffer
     newTok: proc(): tuple[stop: bool, tok: Tok] ## Callback to get new
@@ -40,6 +42,7 @@ proc next*[Tok](ts: var TokStream[Tok]): Tok =
   ## buffer
   if ts.curPos < ts.buffer.len - 1:
     inc ts.curPos
+    if ts.nextTokCb != nil: ts.nextTokCb(ts.buffer[ts.curPos], ts.curPos)
     return ts.buffer[ts.curPos]
   else:
     if ts.atEnd:
@@ -55,13 +58,17 @@ proc next*[Tok](ts: var TokStream[Tok]): Tok =
 
       ts.buffer.add tok
       inc ts.curPos
+      if ts.nextTokCb != nil: ts.nextTokCb(tok, ts.curPos)
+      return tok
 
-func makeStream*[Tok](tokens: seq[Tok]): TokStream[Tok] =
+func makeStream*[Tok](
+  tokens: seq[Tok], nextTokCb: CbProc[Tok] = nil): TokStream[Tok] =
   TokStream[Tok](
     buffer: tokens,
     newTok: proc(): auto = (stop: true, tok: Tok()),
     atEnd: true,
-    curPos: -1
+    curPos: -1,
+    nextTokCb: nextTokCb
   )
 
 func finished*[Tok](toks: TokStream[Tok]): bool =
