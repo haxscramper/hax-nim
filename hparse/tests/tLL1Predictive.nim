@@ -1,4 +1,5 @@
 import sugar, strutils, sequtils, strformat
+import sets
 
 
 #===========================  implementation  ============================#
@@ -8,6 +9,7 @@ import hparse/[
   grammars,
   bnf_grammars, # FIXME HACK not necessary but removeing it generates
                 # `rule cannot be called` compilation error.
+  token,
   lexer
 ]
 
@@ -20,16 +22,21 @@ include test_grammar
 import unittest
 
 suite "Predictive LL(1)":
-  let nt = nterm[TokenKind]
+  let nt = nterm[TokenKind, string]
+  proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
   test "Simple grammar":
     let nte = nt("element")
     let grammar = {
       # list ::= '[' <elements> ']'
-      "list" : andP(tok(tkOpBrace), nt("elements"), tok(tkCloseBrace)),
+      "list" : andP(
+        tok(tkPunct, "["),
+        nt("elements"),
+        tok(tkPunct, "]")
+      ),
       # elements ::= <element> (',' <element>)*
       "elements" : andP(
         nte,
-        zeroP(andP(tok(tkComma), nt("element")))
+        zeroP(andP(tok(tkPunct, ","), nt("element")))
       ),
       # element ::= 'ident' | <list>
       "element" : orP(tok(tkIdent), nt("list"))

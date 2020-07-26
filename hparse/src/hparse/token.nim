@@ -181,9 +181,13 @@ func toTkind*[C, L](s: set[C]): TokSet[C, L] =
   result = makeTokSet[C, L]()
   (result.vals = s)
 
-func makeTokSet*[C, L, I](tok: Token[C, L, I]): TokSet[C, L] =
+# func makeTokSet*[C, L, I](tok: Token[C, L, I]): TokSet[C, L] =
+#   result = makeTokSet[C, L]()
+#   result.vals.incl tok
+
+func makeTokSet*[C, L](tok: ExpectedToken[C, L]): TokSet[C, L] =
   result = makeTokSet[C, L]()
-  result.vals.incl tok
+  result.incl tok
 
 func makeTokSet*[C, L](eof: EofTok): TokSet[C, L] =
   result = makeTokSet[C, L]()
@@ -196,15 +200,20 @@ iterator items*[C, L](s: TokSet[C, L]): ExpectedToken[C, L] =
 func union*[C, L](s: seq[TokSet[C, L]]): TokSet[C, L] =
   result.hasEof = s.anyOfIt(it.hasEof)
   for it in s:
-    result.vals.incl it.vals
+    for cat, lset in pairs(it):
+      if cat notin result.tokens:
+        result.tokens[cat] = lset
+      else:
+        result.tokens[cat].incl lset
 
 func containsOrIncl*[C, L](
   s: var TokSet[C, L], other: TokSet[C, L]): bool =
-  if (s.hasEof == other.hasEof) and ((s.vals - other.vals).len == 0):
-    result = false
+  raiseAssert("implement")
+  # if (s.hasEof == other.hasEof) and ((s.vals - other.vals).len == 0):
+  #   result = false
 
-  s.hasEof = s.hasEof or other.hasEof
-  s.vals.incl other.vals
+  # s.hasEof = s.hasEof or other.hasEof
+  # s.vals.incl other.vals
 
 func hash*[C, L](s: TokSet[C, L]): Hash =
   var h: Hash = 0

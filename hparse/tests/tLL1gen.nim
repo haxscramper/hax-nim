@@ -3,7 +3,8 @@ import typetraits
 import hmisc/hpprint
 import hmisc/algo/[halgorithm, htree_mapping]
 import hmisc/types/graphviz_ast
-import hparse/[ll1_gen, grammars, parse_primitives, lexer, token], macros
+import hparse/[
+  ll1_gen, grammars, parse_primitives, lexer, token], macros
 include test_grammar
 
 import hparse/bnf_grammars # Unless I import this one explicitly I get

@@ -4,13 +4,13 @@ import hmisc/algo/hseq_mapping
 import hmisc/types/[seq2d, hdrawing, hterm_buf]
 import sugar, sequtils, hashes, tables, strutils, strformat, deques, sets
 
-import bnf_grammars, grammars, parse_helpers, parse_tree
+import bnf_grammars, grammars, parse_helpers, parse_tree, token
 
 type
   AltId* = int
-  FirstTable*[Tk] = Table[BnfNterm, Table[AltId, TokSet[Tk]]]
-  FollowTable*[Tk] = Table[BnfNterm, TokSet[Tk]]
-  LL1Table*[Tk] = Table[BnfNTerm, Table[Tk, RuleId]]
+  FirstTable*[C, L] = Table[BnfNterm, Table[AltId, TokSet[C, L]]]
+  FollowTable*[C, L] = Table[BnfNterm, TokSet[C, L]]
+  LL1Table*[C, L] = Table[BnfNTerm, TokLookup[C, L]]
     # [Current term + Current token] -> Rule to use
 
 func `[]`*[A, B, C](
@@ -22,30 +22,30 @@ func `|=`*(a: var bool, b: bool): void = a = a or b
 func contains*[A, B, C](table: Table[A, Table[B, C]], pair: (A, B)): bool =
   (pair[0] in table) and (pair[1] in table[pair[0]])
 
-iterator iterrules*[Tk](grammar: BnfGrammar[Tk]): tuple[
-  id: RuleId, alt: BnfPatt[Tk]] =
+iterator iterrules*[C, L](grammar: BnfGrammar[C, L]): tuple[
+  id: RuleId, alt: BnfPatt[C, L]] =
   for head, patts in grammar.rules:
     for altId, alt in patts:
       yield (id: ruleId(head, altId), alt: alt)
 
-proc necessaryTerms*[Tk](
-  id: RuleId, grammar: BnfGrammar[Tk]): seq[BnfNTerm] =
+proc necessaryTerms*[C, L](
+  id: RuleId, grammar: BnfGrammar[C, L]): seq[BnfNTerm] =
   ## Generate list of nonterminals that might appear at rhs of production
-  let patt: BnfPatt[Tk] = grammar.rules[id.head][id.alt]
+  let patt: BnfPatt[C, L] = grammar.rules[id.head][id.alt]
   if patt.elems[0].kind == fbkNterm:
     result.add patt.elems[0].nterm
 
-func isNullable[Tk](
-  fbnf: FlatBnf[Tk],
+func isNullable[C, L](
+  fbnf: FlatBnf[C, L],
   nulls: Table[BnfNterm, seq[AltId]]): bool =
   case fbnf.kind:
     of fbkEmpty: true
     of fbkTerm: false
     of fbkNterm: fbnf.nterm in nulls
 
-func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
-  first: FirstTable[Tk],
-  follow: FollowTable[Tk],
+func getSets*[C, L](grammar: BnfGrammar[C, L]): tuple[
+  first: FirstTable[C, L],
+  follow: FollowTable[C, L],
   nullable: Table[BnfNterm, seq[AltId]]] =
 
   for head, alts in grammar.rules:
@@ -53,18 +53,18 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
       # Generate empty `FIRST/FOLLOW` sets - each rule+alternative pair
       # corresponds to empty set.
       if head notin result.first:
-        result.first[head] = {altId : makeTokSet[Tk]()}.toTable()
+        result.first[head] = {altId : makeTokSet[C, L]()}.toTable()
       else:
-        result.first[head][altId] = makeTokSet[Tk]()
-      # result.follow[rule.head] = {AltId(rule.alt) : makeTokSet[Tk]()}.toTable()
-      result.follow[head] = makeTokSet[Tk]()
+        result.first[head][altId] = makeTokSet[C, L]()
+      # result.follow[rule.head] = {AltId(rule.alt) : makeTokSet[C, L]()}.toTable()
+      result.follow[head] = makeTokSet[C, L]()
 
   block: # Add end token to `FOLLOW`
     var endNterms = initDeque[BnfNterm]()
     endNterms.addLast grammar.start
     while endNterms.len > 0:
       let nterm = endNterms.popFirst()
-      result.follow[nterm] = makeTokSet[Tk](eofTok)
+      result.follow[nterm] = makeTokSet[C, L](eofTok)
       for altId, alt in grammar.rules[nterm]:
         if alt.elems.last.kind == fbkNterm:
           endNterms.addLast alt.elems.last.nterm
@@ -100,7 +100,7 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
                 makeTokSet(elem.tok)
               of fbkEmpty:
                 # QUESTION ERROR?
-                makeTokSet[Tk]()
+                makeTokSet[C, L]()
 
 
             # showLog fmt "Adding {first:>30} to FIRST of {rule.head}[{rule.alt}]"
@@ -116,7 +116,7 @@ func getSets*[Tk](grammar: BnfGrammar[Tk]): tuple[
           # showInfo fmt "Finished processing {body.exprRepr()}"
 
       block: # `FOLLOW` set construction
-        var tailFollow: TokSet[Tk] = result.follow[rule.head] # `FOLLOW`
+        var tailFollow: TokSet[C, L] = result.follow[rule.head] # `FOLLOW`
         # for the nonterminal we are working with - need to add this
         # as `FOLLOW` for element at the end
         for elem in body.elems.reversed(): # Iterate over all elements
@@ -199,7 +199,7 @@ const pconf* = GrammarPrintConf(
   normalizeNterms: true
 )
 
-proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
+proc makeLL1TableParser*[C, L](grammar: BnfGrammar[C, L]): LL1Table[C, L] =
   # let firstTable = getFirst(grammar)
   # let followTable = getFollow(grammar, firstTable)
   mixin items
@@ -209,15 +209,17 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
       #[ IMPLEMENT REVIEW what has to be done ]#
       discard
     else:
-      for first in items(firstTable[ruleId.head][ruleId.alt]):
-        if ruleId.head notin result:
-          result[ruleId.head] = toTable({first : ruleId})
-        else:
-          result[ruleId.head][first] = ruleId
+      raiseAssert("#[ IMPLEMENT build lookup table using `TokLookup` ]#")
+      # for first in items(firstTable[ruleId.head][ruleId.alt]):
+      #   if ruleId.head notin result:
+      #     result[ruleId.head] = toTable({first : ruleId})
+      #   else:
+      #     result[ruleId.head][first] = ruleId
   for nterm, nullAlts in nullable:
-    for tok in items(followTable[nterm]):
-      for nullAlt in nullAlts: # QUESTION ERROR?
-        result[nterm][tok] = ruleId(nterm, nullAlt)
+    raiseAssert("#[ IMPLEMENT add alternatives to lookup ]#")
+    # for tok in items(followTable[nterm]):
+    #   for nullAlt in nullAlts: # QUESTION ERROR?
+    #     result[nterm][tok] = ruleId(nterm, nullAlt)
 
 
 
@@ -236,7 +238,7 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
       toGrid(
         result,
         # aConvCb = matchCurry2(BnfNterm, true, exprRepr),
-        # # bConvCb = matchCurry2(Tk, pconf, exprRepr),
+        # # bConvCb = matchCurry2(C, L, pconf, exprRepr),
         # cConvCb = matchCurry2(RuleId, true, exprRepr)
       ).toTermBufGrid(),
       makeAsciiGridBorders()
@@ -245,18 +247,19 @@ proc makeLL1TableParser*[Tk](grammar: BnfGrammar[Tk]): LL1Table[Tk] =
 #============================  Parser object  ============================#
 
 type
-  LL1TableParser*[Tk] = object
+  LL1TableParser*[C, L] = object
     start: BnfNterm
-    grammar: BnfGrammar[Tk]
-    parseTable: LL1Table[Tk]
+    grammar: BnfGrammar[C, L]
+    parseTable: LL1Table[C, L]
     retainGenerated: bool
 
-func getGrammar*[Tk](parser: LL1TableParser[Tk]): BnfGrammar[Tk] =
+func getGrammar*[C, L](
+  parser: LL1TableParser[C, L]): BnfGrammar[C, L] =
   parser.grammar
 
-proc newLL1TableParser*[Tk](
-  grammar: Grammar[Tk],
-  retainGenerated: bool = false): LL1TableParser[Tk] =
+proc newLL1TableParser*[C, L](
+  grammar: Grammar[C, L],
+  retainGenerated: bool = false): LL1TableParser[C, L] =
   let bnfg = grammar.toBNF()
   plog:
     debugecho "\e[41mInput grammar\e[49m:\n", grammar.exprRepr()
@@ -267,18 +270,18 @@ proc newLL1TableParser*[Tk](
   result.retainGenerated = retainGenerated
 
 type
-  TermProgress[Tok] = object
+  TermProgress[C, L, I] = object
     nterm: BnfNterm
     expected: int
-    elems: seq[ParseTree[Tok]]
+    elems: seq[ParseTree[C, L, I]]
 
-proc parse*[Tok, Tk](
-  parser: LL1TableParser[Tk],
-  toks: var TokStream[Tok]): ParseTree[Tok] =
-  var stack: seq[FlatBnf[Tk]]
-  stack.add FlatBnf[Tk](kind: fbkNterm, nterm: parser.start)
-  var curr: Tok = toks.next()
-  var ntermStack: seq[TermProgress[Tok]] = @[]
+proc parse*[C, L, I](
+  parser: LL1TableParser[C, L],
+  toks: var TokStream[Token[C, L, I]]): ParseTree[C, L, I] =
+  var stack: seq[FlatBnf[C, L]]
+  stack.add FlatBnf[C, L](kind: fbkNterm, nterm: parser.start)
+  var curr: Token[C, L, I] = toks.next()
+  var ntermStack: seq[TermProgress[C, L, I]] = @[]
   var done = false
   var parseDone: bool = false
   while not done:
@@ -299,7 +302,7 @@ proc parse*[Tok, Tk](
 
         stackshots.add stackstr.toTermBuf()
 
-    let top: FlatBnf[Tk] = stack.pop()
+    let top: FlatBnf[C, L] = stack.pop()
 
     plog:
       case top.kind:
@@ -338,9 +341,11 @@ proc parse*[Tok, Tk](
 
           if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
             plog: msg &= "Empty production\n"
-            ntermStack.add TermProgress[Tok](nterm: rule.head, expected: 0)
+            ntermStack.add TermProgress[C, L, I](
+              nterm: rule.head, expected: 0)
           else:
-            ntermStack.add TermProgress[Tok](nterm: rule.head, expected: stackadd.len)
+            ntermStack.add TermProgress[C, L, I](
+              nterm: rule.head, expected: stackadd.len)
 
             plog:
               msg &= fmt "- [ {top.exprRepr():25} ]\n"
