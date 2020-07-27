@@ -55,6 +55,12 @@ suite "Block grid":
     echo text
 
     "/tmp/grid.html".writeFile(text)
+
+
+  test "Graphviz block grid":
+    let grid = makeGrid(@[@["hell", "eolrsd"], @["", "123"]])
+    let graph = makeDotGraph(nodes = @[makeNode(1, grid.toHtml())])
+    graph.toPng("/tmp/hello.png")
     quit 0
 
 

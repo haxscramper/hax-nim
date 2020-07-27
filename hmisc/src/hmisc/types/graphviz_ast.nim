@@ -329,6 +329,10 @@ type
 
 #============================  constructors  =============================#
 
+func makeDotGraph*(nodes: seq[Node] = @[],
+                   edges: seq[Edge] = @[]): Graph =
+  Graph(nodes: nodes, edges: edges)
+
 func addEdge*(graph: var Graph, edge: Edge): void =
   graph.edges.add edge
 
@@ -368,6 +372,9 @@ func makeNode*(
   result.id = id
   result.label = some(label)
   result.color = color
+
+func makeNode*(id: NodeId, html: HtmlElem): Node =
+  Node(id: id, shape: nsaPlaintext, htmlLabel: html)
 
 
 type
