@@ -43,6 +43,7 @@ type
         cellColor*: Color
         cellBgColor*: Color
         cellSize*: ArrSize
+        dotPort*: int
       else:
         discard
 
@@ -130,6 +131,7 @@ func `[]=`*(xml: var XmlNode, attrname: string, attrval: string): void =
   else:
     xml.attrs = {attrname : attrval}.toXmlAttributes()
 
+
 func toXml(html: HtmlElem): XmlNode =
   case html.kind:
     of hekTable:
@@ -139,6 +141,9 @@ func toXml(html: HtmlElem): XmlNode =
       result = newElement("tr")
     of hekCell:
       result = newElement("td")
+      if html.dotPort != 0:
+        result["port"] = "t" & $html.dotPort
+
     of hekText:
       result = newText(html.textStr)
       if html.textColor != colNoColor:
@@ -157,10 +162,15 @@ func toXml(html: HtmlElem): XmlNode =
 
 
   if html.attrs != nil:
-    result.attrs = html.attrs
+    var tmp = result.attrs
+    for key, val in pairs(html.attrs):
+      tmp[key] = val
+
+    result.attrs = tmp
 
   for row in html.elements:
     result.add row.toXml()
+
 
 proc toPrettyStr*(n: XmlNode): string = add(result, n, 0, 2, true)
 proc toFlatStr*(n: XmlNode): string = add(result, n, 0, 0, false)

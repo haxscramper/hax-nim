@@ -97,16 +97,17 @@ suite "Table-driven vs recursive descent":
     )
 
     let
-      tokens: seq[LTok] = mapString(testInput)
-      tokenNode = tokens.mapIt(
+      tokens: seq[LTok] = mapString(testInput).makeStream().getBuffer()
+      tokenNode = tokens.mapPairs(
         toHtmlTableVert(@[
           #[ IMPLEMENT correct token coloring ]#
           toHtmlText(
-            ($it.cat).tokKindStr("tk"),
-            color = color.highlight(it).color),
-          toHtmlText(quote($it.lex),
-                     props = {htpBold}).toHtmlCell(). withIt do:
-            it["align"] = "center"
+            ("  " & $rhs.cat & "  ").tokKindStr("tk"),
+            color = color.highlight(rhs).color).toHtmlCell(). withIt do:
+              it["align"] = "center"
+              it.dotPort = idx + 1
+          ,
+          toHtmlText(quote($rhs.lex), props = {htpBold})
         ])
       ).toHtmlTableHoriz().withIt do:
         it.border = 1
@@ -115,7 +116,8 @@ suite "Table-driven vs recursive descent":
 
     var resultGraph: Graph
     block:
-      var tree = recursiveTree.toDotGraph(colorCb = color, idshift = 1)
+      var tree = recursiveTree.toDotGraph(
+        colorCb = color, idshift = 1, bottomTokens = true)
       tree.isCluster = true
       tree.name = "recursive"
       tree.topNodes.add:
@@ -125,11 +127,18 @@ suite "Table-driven vs recursive descent":
           it.labelAlign = nlaLeft
           it.labelLeftPad = " ".repeat(10)
 
-      tree.topNodes.add makeNode(toNodeId(rand(100000)), tokenNode)
+      let tokNodeId = toNodeId(rand(100000))
+      for it in tokens:
+        let pos = it.getPosInfo() + 1
+        tree.addEdge(makeEdge(
+            pos.toNodeId(), tokNodeId.addRecord(pos)))
+
+      let tokNode = makeNode(tokNodeId, tokenNode)
+      tree.addNode tokNode
       resultGraph.addSubgraph(tree)
 
     block:
-      var tree = tableTree.toDotGraph(colorCb = color)
+      var tree = tableTree.toDotGraph(colorCb = color, bottomTokens = true)
       tree.isCluster = true
       tree.name = "table"
       tree.topNodes.add:
@@ -142,7 +151,14 @@ suite "Table-driven vs recursive descent":
           it.labelLeftPad = " ".repeat(10)
 
 
-      tree.topNodes.add makeNode(toNodeId(rand(100000)), tokenNode)
+      let tokNodeId = toNodeId(rand(100000))
+      for it in tokens:
+        let pos = it.getPosInfo() + 1
+        tree.addEdge(makeEdge(pos.toNodeId(), tokNodeId.addRecord(pos)))
+
+      let tokNode = makeNode(tokNodeId, tokenNode)
+      tree.addNode tokNode
+
       resultGraph.addSubgraph(tree)
 
     resultGraph.styleNode.fontname = "Consolas"

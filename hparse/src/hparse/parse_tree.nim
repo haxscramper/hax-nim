@@ -110,7 +110,7 @@ func toDotGraphPretty*[C, L, I](
 
     if it.kind == ptkTerm:
       when hasPosInfo(it.tok):
-        nextaddr = toNodeId(it.tok.getPosInfo())
+        nextaddr = toNodeId(it.tok.getPosInfo() + 1)
 
       result.addEdge(makeEdge(itaddr, nextaddr))
 

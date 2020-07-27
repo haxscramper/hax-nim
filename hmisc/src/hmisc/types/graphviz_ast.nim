@@ -27,9 +27,18 @@ type
     path: seq[int]
     record: seq[int]
 
-func `$`(id: NodeId): string =
+func isRecord*(id: NodeId): bool =
+  id.record.len > 0
+
+
+
+func toStr*(id: NodeId, isRecord: bool = false): string =
+  (id.isRecord or isRecord).tern("struct", "") &
   id.path.mapIt("t" & $it).join("_") &
-    (if id.record.len > 0: ":" & id.record.join(":") else: "")
+    (id.record.len > 0).tern(
+      ":" & id.record.mapIt("t" & $it).join(":"), "")
+
+func `$`(id: NodeId): string = toStr(id)
 
 
 converter toNodeId*(id: int): NodeId =
@@ -64,8 +73,6 @@ func quote*(input: string): string =
   ]).wrap(("\"", "\""))
 
 
-func isRecord(id: NodeId): bool =
-  id.record.len > 0
 
 
 
@@ -406,7 +413,7 @@ type
     # IR for conversion to string
     case kind: DotTreeKind
       of dtkNodeDef:
-        nodeId: NodeId
+        nodeId: string
         nodeAttributes: StringTableRef
       of dtkEdgeDef:
         origin: NodeId
@@ -428,7 +435,9 @@ func toString(record: RecordField): string =
 func toTree(node: Node, idshift: int, level: int = 0): DotTree =
   var attr = newStringTable()
   result = DotTree(kind: dtkNodeDef)
-  result.nodeId = node.id.addIdShift(idshift)
+  result.nodeId = node.id.addIdShift(idshift).toStr(
+   node.shape in {nsaPlaintext})
+
   if node.width > 0: attr["width"] = $node.width
   if node.height > 0: attr["height"] = $node.height
   if node.fontname.len > 0: attr["fontname"] = node.fontname.quote()
