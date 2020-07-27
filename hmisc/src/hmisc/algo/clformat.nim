@@ -16,12 +16,21 @@ const romanNumerals = [
   (1, "I")
 ]
 
-proc toRomanNumeral*(x: int): string =
+func toRomanNumeral*(x: int): string =
   var x = x
   for (num, numStr) in romanNumerals:
     result.add(numStr.repeat(x div num))
     x = x mod num
 
+func toPluralNoun*(noun: string, count: int, addNum: bool = true): string =
+  # NOTE placeholder implementation,
+  # TODO implement algorith described here: http://users.monash.edu/~damian/papers/HTML/Plurals.html
+  if count == 1:
+    return $count & " " & noun
+  else:
+    return $count & " " & noun & "s"
+
 
 when isMainModule:
   echo toRomanNumeral(12)
+  # echo toPluralNoun("item", 0)

@@ -1,12 +1,25 @@
 import strutils, sequtils, strformat
 import ../types/hnim_ast
-import ../algo/[halgorithm, hseq_mapping]
+import ../algo/[halgorithm, hseq_mapping, clformat]
 
 func pptConst*(val: string): ValObjTree =
   ValObjTree(kind: okConstant, strlit: val)
 
 func pptSeq*(vals: varargs[ValObjTree]): ValObjTree =
   ValObjTree(kind: okSequence, valItems: toSeq(vals))
+
+func pptSeq*(valType: string, vals: varargs[ValObjTree]): ValObjTree =
+  ValObjTree(kind: okSequence, valItems: toSeq(vals), itemType: valType)
+
+func pptMap*(kvTypes: (string, string),
+             vals: varargs[tuple[
+               key: string,
+               val: ValObjTree]]): ValObjTree =
+
+  ValObjTree(kind: okTable,
+             keyType: kvTypes[0],
+             valType: kvTypes[1],
+             valPairs: toSeq(vals))
 
 func pptObj*(name: string,
              flds: varargs[tuple[
@@ -64,7 +77,15 @@ func lispReprImpl*(tree: ValObjTree,
               tree.namedFields.tern(&":{lhs} ", "") &
               rhs.lispReprImpl(params, level + 1)).
             joinw().
-            wrap((tree.namedObject.tern(&"({tree.name} ", "("), ")"))
+            wrap do:
+              if tree.namedObject:
+                if tree.name.validIdentifier():
+                  (&"({tree.name} ", ")")
+                else:
+                  (&"(`{tree.name}` ", ")")
+              else:
+                (("(", ")"))
+
 
 func lispRepr*(tree: ValObjTree, maxlevel: int = 60): string =
   lispReprImpl(tree, TreeReprParams(
@@ -75,37 +96,67 @@ func lispRepr*(tree: ValObjTree, maxlevel: int = 60): string =
 func treeReprImpl*(tree: ValObjTree,
                    params: TreeReprParams,
                    pref: seq[bool],
-                   parentMaxIdx, currIdx: int): seq[string] =
+                   parentMaxIdx, currIdx: int,
+                   parentKind: ObjKind): seq[string] =
+
   let arrow =
-    case tree.kind:
+    case parentKind:
       of okComposed: "+-> "
       of okConstant: "+-> "
       of okSequence: "+-- "
-      of okTable: "+-> "
+      of okTable: "+-: "
 
   let prefStr =
-    pref.mapIt(it.tern("|   ", "    ")).join("") &
-    (pref.len > 0).tern(arrow, "")
+    if pref.len > 0:
+      if parentKind == okSequence and pref.len == 1:
+        arrow
+      else:
+        pref.mapIt(it.tern("|   ", "    ")).join("") & arrow
+    else:
+      ""
 
   case tree.kind:
     of okConstant:
       return @[prefStr & tree.strLit]
     of okSequence:
+      if pref.len + 1 > params.maxdepth:
+        return @[prefStr & "... (" &
+          (tree.itemType.len > 0).tern(&"seq[{tree.itemType}], ", "") &
+          toPluralNoun("item", tree.valItems.len) & ")"]
+
       for idx, item in tree.valItems:
         result &= treeReprImpl(
           item,
           params,
           pref & @[currIdx != parentMaxIdx],
           parentMaxIdx = tree.valItems.len - 1,
-          currIdx = idx
+          currIdx = idx,
+          parentKind = tree.kind
         )
     of okTable:
-      raiseAssert("#[ IMPLEMENT ]#")
+      result  &= prefStr &
+        (tree.keyType.len > 0 and tree.valType.len > 0).tern(
+          &"[{tree.keyType} -> {tree.valType}]", "")
+      let prefStr = pref.mapIt(it.tern("|   ", "    ")).join("")
+      result &= concat mapPairs(tree.valPairs) do:
+         @[prefStr & (currIdx < parentMaxIdx).tern("|", " ") & "   +-: " & lhs] &
+         treeReprImpl(
+           rhs,
+           params,
+           pref & @[currIdx != parentMaxIdx] &
+             (rhs.kind == okConstant).tern(
+               @[idx < tree.valPairs.len - 1], @[]),
+           parentMaxIdx = tree.valPairs.len - 1,
+           currIdx = idx,
+           parentKind = rhs.kind
+         )
     of okComposed:
       if tree.sectioned:
         raiseAssert("#[ IMPLEMENT ]#")
       else:
-        result &= prefStr & tree.name
+        result &= prefStr & tree.name.validIdentifier.tern(
+          tree.name, tree.name.wrap("``")) & ":"
+
         result &= concat mapPairs(tree.fldPairs) do:
           tree.namedFields.tern(@[prefStr & lhs], @[]) &
           treeReprImpl(
@@ -113,7 +164,8 @@ func treeReprImpl*(tree: ValObjTree,
             params,
             pref & @[currIdx != parentMaxIdx],
             parentMaxIdx = tree.fldPairs.len - 1,
-            currIdx = idx
+            currIdx = idx,
+            parentKind = tree.kind
           )
 
 func treeRepr*(tree: ValObjTree,
@@ -123,4 +175,6 @@ func treeRepr*(tree: ValObjTree,
     TreeReprParams(
       maxDepth: maxlevel
     ),
-    @[], 0, 0).join("\n")
+    @[], 0, 0,
+    parentKind = tree.kind
+  ).join("\n")

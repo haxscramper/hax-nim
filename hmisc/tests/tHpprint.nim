@@ -668,16 +668,26 @@ suite "Repr pprint":
       "(Hello 12)"
 
   test "Tree repr":
-    echo pptConst("12").treeRepr()
-    echo pptSeq(pptConst("12"), pptConst("123123")).treeRepr()
-    echo pptObj("EE",
+    assertEq pptConst("12").treeRepr(), "12"
+    assertEq pptSeq(pptConst("12"), pptConst("123123")).treeRepr(),
+      "+-- 12\n+-- 123123"
+
+    let obj = pptObj("Parent object",
                 pptConst("12"),
                 pptConst("12"),
-                pptObj("EE",
+                pptSeq(pptConst "Hello", pptConst "1231"),
+                pptSeq("item", pptConst "Hello", pptConst "1231"),
+                pptMap(("int", "float"), {
+                  "Hello" : pptConst("Workd"),
+                  "Nice" : pptSeq(pptConst("123"), pptConst("q234"))
+                }),
+                pptObj("Object name",
                   pptConst("12"),
                   pptConst("12"),
-                  pptConst("12")
-    )).treeRepr()
+                  pptConst("12")))
+
+    echo obj.treeRepr(maxlevel = 1)
+    echo obj.treeRepr()
 
 suite "Large object printout":
   test "Large JSON as treeRepr":
