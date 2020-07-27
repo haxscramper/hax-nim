@@ -154,6 +154,8 @@ func shiftRc*(pos: ArrPos, dRC: (int, int) = (1, 1)): ArrPos =
 func shiftC*(pos: ArrPos, dCol: int = 1): ArrPos = shiftRC(pos, 0, dCol)
 func shiftR*(pos: ArrPos, dRow: int = 1): ArrPos = shiftRC(pos, dRow, 0)
 converter toArrPos*(pos: (int, int)): ArrPos = makeArrPos(pos)
+func toArrSize*(pos: ArrPos): ArrSize =
+  makeArrSize(w = pos.col + 1, h = pos.row + 1)
 func unpack*(pos: ArrPos): tuple[row, col: int] = (pos.row, pos.col)
 func `==`(a, b: ArrPos): bool = (a.row == b.row) and (a.col == b.col)
 

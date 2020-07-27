@@ -138,13 +138,31 @@ proc makeTermGridConf(
   obj: ValObjTree,
   config: GridConvConfig,
   stage: GridConvStage): TermTextConf =
-  echo "Making term text conf, role: ", stage.role
+  discard
+  # echo "Making term text conf, role: ", stage.role
 
 proc toPGrid*[T](obj: T): string =
   var counter = makeCounter()
   let tree = toSimpleTree(obj, counter)
   let (grid, edges) = toGrid[TermTextConf](tree, makeTermGridConf)
   return grid.toTermBuf().toString()
+
+proc toHTML*(grid: BlockGrid[StrBlock]): HtmlElem =
+  result = HtmlElem(kind: hekTable, border: 1)
+  for (pos, cell) in grid.iterSomeCells():
+    case cell.isItem:
+      of true:
+        result.setOrAddCell(
+          pos,
+          withIt(cell.item.joinl().toHtmlCell()) do:
+            it.cellSize = cell.size()
+        )
+      of false:
+        result.setOrAddCell(
+          pos,
+          withIt(cell.grid.toHTML().toHtmlCell()) do:
+            it.cellSize = cell.size()
+        )
 
 # proc foldObject(obj: ObjTree): tuple[node: Node, edges: seq[Edge]] =
 #   ##[

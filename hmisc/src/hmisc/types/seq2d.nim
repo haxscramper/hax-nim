@@ -68,6 +68,10 @@ func fillToSize*[T](grid: var Seq2D[T], size: ArrSize, val: T): void =
 func fillToSize*[T](grid: var Seq2D[T], rows, cols: int, default: T): void =
   grid.fillToSize(makeArrSize(w = cols, h = rows), default)
 
+func setOrAdd*[T](grid: var Seq2D[T], pos: ArrPos, val: T, default: T): void =
+  grid.fillToSize(pos.toArrSize(), default)
+  grid[pos] = val
+
 func len*[T](s: Seq2D[T]): int =
   s.elems.len
 
@@ -413,6 +417,12 @@ func insertRow*[T](
 
   grid.elems.insertRow(row.mapIt(some(it)), rowIdx)
   grid.lookup.insertRow(newrows, rowIdx)
+
+func setOrAdd*[T](grid: var MulticellGrid[T], pos: ArrPos, item: T): void =
+  grid.elems.setOrAdd(pos, some(item), none(T))
+  grid.lookup.setOrAdd(pos,
+                       some(makeArrRect(pos, size1x1)),
+                       none(ArrRect))
 
 func toMulticell*[T](grid: Seq2D[T]): MulticellGrid[T] =
   result.fillToSize(grid.size())

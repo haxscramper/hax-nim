@@ -38,6 +38,7 @@ type
 
 #=========================  accessor functions  ==========================#
 
+func size*[T](cell: GridCell[T]): ArrSize = cell.size
 func width*[T](cell: GridCell[T]): int = cell.size.width
 func height*[T](cell: GridCell[T]): int = cell.size.height
 
@@ -97,32 +98,42 @@ func colNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.colNum()
 func rowNum*[T](grid: BlockGrid[T]): int = grid.grid.elems.rowNum()
 func size*[T](grid: BlockGrid[T]): ArrSize = grid.grid.elems.size()
 
-func colRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): ArrRange =
+func colRange*[T](grid: BlockGrid[T],
+                  pos: ArrPos | tuple[row, col: int]): ArrRange =
   let start = pos.col
   var finish = pos.col
 
   return toRange((start, finish))
 
-func rowRange*[T](grid: BlockGrid[T], pos: ArrPos | tuple[row, col: int]): ArrRange =
+func rowRange*[T](grid: BlockGrid[T],
+                  pos: ArrPos | tuple[row, col: int]): ArrRange =
   let start = pos.row
   var finish = pos.row
 
 
   return toRange((start, finish))
 
-func `[]=`*[T](grid: var BlockGrid[T], row, col: int, cell: GridCell[T]): void =
+func `[]=`*[T](grid: var BlockGrid[T],
+               row, col: int, cell: GridCell[T]): void =
   grid.grid[makeArrPos(row, col)] = (cell.size, cell)
 
-func `[]=`*[T](grid: var BlockGrid[T], pos: ArrPos, cell: GridCell[T]): void =
+func `[]=`*[T](grid: var BlockGrid[T],
+               pos: ArrPos, cell: GridCell[T]): void =
   grid.grid[makeArrRect(pos, cell.size)] = cell
 
 iterator itercells*[T](grid: BlockGrid[T]): (ArrPos, Option[GridCell[T]]) =
   for (pos, cell) in grid.grid.elems.itercells():
     yield (makeArrPos(pos), cell)
 
+
+iterator iterSomeCells*[T](grid: BlockGrid[T]): (ArrPos, GridCell[T]) =
+  for (pos, cell) in grid.grid.elems.iterSomeCells():
+    yield (makeArrPos(pos), cell)
+
 #============================  constructors  =============================#
 
-func toMulticell*[T](grid: Seq2D[Option[GridCell[T]]]): MulticellGrid[GridCell[T]] =
+func toMulticell*[T](grid: Seq2D[Option[GridCell[T]]]
+                    ): MulticellGrid[GridCell[T]] =
   for (pos, cell) in grid.iterSomeCells():
     result.fillToSize(pos.makeArrPos().expandSize(cell.size))
     result[makeArrRect(pos, cell.size)] = cell
@@ -176,6 +187,11 @@ func makeGrid*[T](arg: Seq2D[T], conf: TermGridConf): BlockGrid[T] =
     borders: conf
   )
 
+func makeGrid*(strs: seq[seq[string]]): BlockGrid[StrBlock] =
+  BlockGrid[StrBlock](grid:
+    strs.toStrGrid(@[""].toStrBlock()).mapIt2D(makeCell(it)).toMulticell()
+  )
+
 func makeGrid*[T](arg: Seq2D[GridCell[T]], conf: TermGridConf): BlockGrid[T] =
   BlockGrid[T](grid: arg.toMulticell(), borders: conf)
 
@@ -204,6 +220,11 @@ func appendRow*[T](grid: var BlockGrid[T], row: seq[GridCell[T]]): void =
     assert cell.size.height() == 1
 
   grid.grid.insertRow(rowIdx = grid.rowNum(), row)
+
+func setOrAdd*[T](grid: var BlockGrid[T],
+                  pos: ArrPos, subgrid: BlockGrid[T]) =
+  grid.grid.setOrAdd(pos, toCell(subgrid))
+
 
 #==========================  string conversion  ==========================#
 

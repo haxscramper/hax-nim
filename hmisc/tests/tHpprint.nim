@@ -8,7 +8,8 @@ import hmisc/types/[
   block_grid,
   hdrawing,
   hnim_ast,
-  htrie
+  htrie,
+  html_ast
 ]
 
 import hmisc/macros/[obj_field_macros]
@@ -41,6 +42,20 @@ suite "Block grid":
   test "Convert object tree into grid":
     echo toPGrid("Hello")
     echo toPGrid(("Hello", 12, 1.2))
+
+  test "Block grid to html table":
+    var grid = makeGrid(
+      @[@["hello", "123"],
+        @["world", "1234", "123"]])
+
+    grid.setOrAdd(makeArrPos(0, 2), makeGrid(
+      @[@["eee", "Ewer"], @["123", "123"]]))
+
+    let text = grid.toHtml().toHtmlDoc()
+    echo text
+
+    "/tmp/grid.html".writeFile(text)
+    quit 0
 
 
 suite "Block labeling":
@@ -686,8 +701,8 @@ suite "Repr pprint":
                   pptConst("12"),
                   pptConst("12")))
 
-    echo obj.treeRepr(maxlevel = 1)
-    echo obj.treeRepr()
+    discard obj.treeRepr(maxlevel = 1)
+    discard obj.treeRepr()
 
 suite "Large object printout":
   test "Large JSON as treeRepr":
