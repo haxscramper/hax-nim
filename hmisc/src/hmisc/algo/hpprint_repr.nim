@@ -115,14 +115,16 @@ func treeReprImpl*(tree: ValObjTree,
     else:
       ""
 
+  let prefStrNoarrow = pref.mapIt(it.tern("|   ", "    ")).join("")
   case tree.kind:
     of okConstant:
       return @[prefStr & tree.strLit]
     of okSequence:
       if pref.len + 1 > params.maxdepth:
-        return @[prefStr & "... (" &
-          (tree.itemType.len > 0).tern(&"seq[{tree.itemType}], ", "") &
-          toPluralNoun("item", tree.valItems.len) & ")"]
+        return @[prefStr & (tree.itemType.len > 0).tern(
+          &"seq[{tree.itemType}] ", "") & "... (" &
+          toPluralNoun("item", tree.valItems.len) & ")"
+        ]
 
       for idx, item in tree.valItems:
         result &= treeReprImpl(
@@ -134,12 +136,18 @@ func treeReprImpl*(tree: ValObjTree,
           parentKind = tree.kind
         )
     of okTable:
-      result  &= prefStr &
-        (tree.keyType.len > 0 and tree.valType.len > 0).tern(
-          &"[{tree.keyType} -> {tree.valType}]", "")
-      let prefStr = pref.mapIt(it.tern("|   ", "    ")).join("")
+      let name = (tree.keyType.len > 0 and tree.valType.len > 0).tern(
+          &"[{tree.keyType} -> {tree.valType}] ", "")
+      if pref.len + 1 > params.maxdepth:
+        result &= prefStr & name & "... (" &
+          toPluralNoun("pair", tree.valPairs.len) & ")"
+        return
+      else:
+        result &= prefStr & name
+
       result &= concat mapPairs(tree.valPairs) do:
-         @[prefStr & (currIdx < parentMaxIdx).tern("|", " ") & "   +-: " & lhs] &
+         @[prefStrNoarrow & (currIdx < parentMaxIdx).tern("|", " ") &
+           "   +-: " & lhs] &
          treeReprImpl(
            rhs,
            params,
@@ -154,8 +162,16 @@ func treeReprImpl*(tree: ValObjTree,
       if tree.sectioned:
         raiseAssert("#[ IMPLEMENT ]#")
       else:
-        result &= prefStr & tree.name.validIdentifier.tern(
-          tree.name, tree.name.wrap("``")) & ":"
+        let
+          name = tree.name.validIdentifier.tern(
+            tree.name, tree.name.wrap("``"))
+
+        if pref.len + 1 > params.maxdepth:
+          result &= prefStr & name & " ... (" &
+            toPluralNoun("field", tree.fldPairs.len) & ")"
+          return
+        else:
+          result &= prefStr & name & ":"
 
         result &= concat mapPairs(tree.fldPairs) do:
           tree.namedFields.tern(@[prefStr & lhs], @[]) &
