@@ -71,6 +71,9 @@ func makeStream*[Tok](
     nextTokCb: nextTokCb
   )
 
+func getBuffer*[Tok](toks: TokStream[Tok]): seq[Tok] =
+  toks.buffer
+
 func finished*[Tok](toks: TokStream[Tok]): bool =
   toks.atEnd and toks.curPos == toks.buffer.len - 1
 

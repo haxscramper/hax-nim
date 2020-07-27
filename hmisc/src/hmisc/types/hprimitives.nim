@@ -1,6 +1,9 @@
 import unicode, strutils, sequtils, strformat
 import ../algo/hmath
 
+import colors
+const colNoColor* = Color(-1)
+
 
 #=========================================================================#
 #===========================  String helpers  ============================#

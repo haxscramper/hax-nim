@@ -1,5 +1,5 @@
 import sugar, strutils, sequtils, strformat, sets, random
-import hmisc/types/graphviz_ast
+import hmisc/types/[graphviz_ast, html_ast]
 
 
 #===========================  implementation  ============================#
@@ -81,12 +81,26 @@ suite "Table-driven vs recursive descent":
         grammarVal.toGrammar(), retainGenerated = false)
       testInput = "[a,b,e,e,z,e]"
 
-    let recursiveTree = mapString(testInput).makeStream().withResIt:
-      recursiveParser.parse(it)
+    let
+      recursiveTree = mapString(testInput).makeStream().withResIt:
+        recursiveParser.parse(it)
+      tableTree = mapString(testInput).makeStream().withResIt:
+        tableParser.parse(it)
 
-    let tableTree = mapString(testInput).makeStream().withResIt:
-      tableParser.parse(it)
+    let
+      tokens: seq[LTok] = mapString(testInput)
+      tokenNode = tokens.mapIt(
+        toHtmlTableVert(@[
+          #[ IMPLEMENT correct token coloring ]#
+          toHtmlText(($it.cat).tokKindStr("tk")),
+          toHtmlText(quote($it.lex),
+                     props = {htpBold}).toHtmlCell(). withIt do:
+            it["align"] = "center"
+        ]).withIt do:
+          it.border = 1
+      ).toHtmlTableHoriz()
 
+    "/tmp/page.html".writeFile(tokenNode.toHtmlDoc())
 
     var resultGraph: Graph
     block:
@@ -100,14 +114,7 @@ suite "Table-driven vs recursive descent":
           it.labelAlign = nlaLeft
           it.labelLeftPad = " ".repeat(10)
 
-      tree.topNodes.add:
-        withIt makeNode(
-          toNodeId(rand(100000)),
-          "Input string: " & testInput,
-          shape = nsaNone
-        ):
-          it.width = 10
-
+      tree.topNodes.add makeNode(toNodeId(rand(100000)), tokenNode)
       resultGraph.addSubgraph(tree)
 
     block:
@@ -124,15 +131,7 @@ suite "Table-driven vs recursive descent":
           it.labelLeftPad = " ".repeat(10)
 
 
-      tree.topNodes.add:
-        withIt makeNode(
-          toNodeId(rand(100000)),
-          "Input string: " & testInput,
-          shape = nsaNone
-        ):
-          it.width = 10
-          # it.shape = nsaNone
-
+      tree.topNodes.add makeNode(toNodeId(rand(100000)), tokenNode)
       resultGraph.addSubgraph(tree)
 
     resultGraph.styleNode.fontname = "Consolas"

@@ -2,7 +2,7 @@ import colors, options, strtabs, ropes, sequtils, strutils, strformat
 import ../helpers
 # import ../halgorithm
 
-import html_ast
+import html_ast, hprimitives
 
 #================================  TODO  =================================#
 #[
@@ -209,7 +209,6 @@ type
     clsRounded = "rounded"
     clsFilled = "filled"
 
-const colNoColor* = Color(-1)
 
 type
   RecordField = object
@@ -328,10 +327,15 @@ type
     edges*: seq[Edge]
 
 #============================  constructors  =============================#
+func initNode*(): Node =
+  Node(color: colNoColor, style: nstDefault)
 
-func makeDotGraph*(nodes: seq[Node] = @[],
+func makeDotGraph*(name: string = "G",
+                   nodes: seq[Node] = @[],
                    edges: seq[Edge] = @[]): Graph =
-  Graph(nodes: nodes, edges: edges)
+  Graph(nodes: nodes,
+        edges: edges,
+        styleNode: initNode())
 
 func addEdge*(graph: var Graph, edge: Edge): void =
   graph.edges.add edge
@@ -425,14 +429,18 @@ func toTree(node: Node, level: int = 0): DotTree =
       if node.style != nstDefault:
         attr["style"] = $node.style
 
-      if node.color != colNoColor:
-        attr["color"] = ($node.color).quote()
+      if node.shape != nsaPlaintext:
+        if node.color != colNoColor:
+          attr["color"] = ($node.color).quote()
 
   case node.shape:
     of nsaRecord, nsaMRecord:
       attr["label"] = node.flds.mapIt(toString(it)).join("|").quote()
     of nsaPlaintext:
-      attr["label"] = " <" & $node.htmlLabel & "> "
+      attr["label"] = " <\n" & (node.htmlLabel.toFlatStr() & "> ").
+        split("\n").
+        mapIt("  ".repeat(level + 1) & it).
+        joinl()
     else:
       if node.label.isSome():
         if node.labelAlign != nlaDefault:

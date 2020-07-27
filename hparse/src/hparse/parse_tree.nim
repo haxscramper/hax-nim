@@ -1,7 +1,7 @@
 import parse_primitives, token
 import sequtils, strformat, strutils, colors
 
-import hmisc/types/graphviz_ast
+import hmisc/types/[ graphviz_ast, html_ast, hprimitives ]
 import hmisc/algo/htree_mapping
 import hmisc/helpers
 
