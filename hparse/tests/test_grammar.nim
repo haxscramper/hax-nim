@@ -6,9 +6,9 @@ type
     tkPunct
     tkIdent
 
-  LTok = Token[TokenKind, string, void]
+  LTok = Token[TokenKind, string, LexInfo]
   TPatt = Patt[TokenKind, string]
-  PTree = ParseTree[TokenKind, string, void]
+  PTree = ParseTree[TokenKind, string, LexInfo]
 
 func `$`(tok: LTok): string = tok.lex
 func `==`(lhs, rhs: Token): bool =
@@ -24,7 +24,7 @@ func mapString(s: string): seq[LTok] =
   s.mapIt(
     case it:
       of '[', ']', ',':
-        makeTokenNoInfo(tkPunct, $it)
+        makeToken[TokenKind, string, LexInfo](tkPunct, $it)
       else:
-        makeTokenNoInfo(tkIdent, $it)
+        makeToken[TokenKind, string, LexInfo](tkIdent, $it)
   )

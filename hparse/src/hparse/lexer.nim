@@ -1,6 +1,6 @@
 # To support lexing in both compiled and interpreted environments as
 # well as at compile-time
-import regex
+import regex, token
 import streams, strformat
 
 type
@@ -63,6 +63,10 @@ proc next*[Tok](ts: var TokStream[Tok]): Tok =
 
 func makeStream*[Tok](
   tokens: seq[Tok], nextTokCb: CbProc[Tok] = nil): TokStream[Tok] =
+  var tokens = tokens
+  for idx in 0 ..< tokens.len:
+    setPosInfo(tokens[idx], idx)
+
   TokStream[Tok](
     buffer: tokens,
     newTok: proc(): auto = (stop: true, tok: Tok()),

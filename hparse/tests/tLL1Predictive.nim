@@ -75,7 +75,7 @@ suite "Table-driven vs recursive descent":
     let
       grammarVal = grammarConst
       recursiveParser = newLL1RecursiveParser[
-        TokenKind, string, void](grammarConst)
+        TokenKind, string, LexInfo](grammarConst)
 
       tableParser = newLL1TableParser[TokenKind, string](
         grammarVal.toGrammar(), retainGenerated = false)
@@ -87,7 +87,7 @@ suite "Table-driven vs recursive descent":
       tableTree = mapString(testInput).makeStream().withResIt:
         tableParser.parse(it)
 
-    let color = TokenStyleCb[TokenKind, string, void](
+    let color = TokenStyleCb[TokenKind, string, LexInfo](
       cb: proc(tok: LTok): TokenStyle =
         case tok.cat:
           of tkPunct:
@@ -115,7 +115,7 @@ suite "Table-driven vs recursive descent":
 
     var resultGraph: Graph
     block:
-      var tree = recursiveTree.toDotGraph(colorCb = color)
+      var tree = recursiveTree.toDotGraph(colorCb = color, idshift = 1)
       tree.isCluster = true
       tree.name = "recursive"
       tree.topNodes.add:

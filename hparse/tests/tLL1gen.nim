@@ -41,7 +41,7 @@ import hashes, sets, tables
 suite "LL(1) parser simple":
   const nt = nterm[TokenKind, string]
   proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
-  let parser = newLL1RecursiveParser[Token, string, void]({
+  let parser = newLL1RecursiveParser[Token, string, LexInfo]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkPunct, "["),
@@ -66,7 +66,7 @@ suite "LL(1) parser simple":
 suite "LL(1) parser tree actions":
   const nt = nterm[TokenKind, string]
   proc tok(k: TokenKind): auto = tok[TokenKind, string](k)
-  newLL1RecursiveParser[Token, string, void]({
+  newLL1RecursiveParser[Token, string, LexInfo]({
       # list ::= '[' <elements> ']'
       "list" : andP(
         tok(tkPunct, "[").addAction(taDrop),

@@ -106,8 +106,12 @@ func toDotGraphPretty*[C, L, I](
 
   tree.iterateItBFS(it.getSubnodes(), it.kind != ptkTerm):
     let itaddr = toNodeId(cast[int](addr it[]))
-    let nextaddr = toNodeId(cast[int](addr it[]) + 1)
+    var nextaddr = toNodeId(cast[int](addr it[]) + 1)
+
     if it.kind == ptkTerm:
+      when hasPosInfo(it.tok):
+        nextaddr = toNodeId(it.tok.getPosInfo())
+
       result.addEdge(makeEdge(itaddr, nextaddr))
 
       let tokNode = makeNode(
@@ -147,6 +151,7 @@ func toDotGraphPretty*[C, L, I](
         of ptkNTerm: nstFilled
         else: nstDefault
     ))
+
     for tr in subt:
       result.addEdge(makeEdge(
         itaddr,
@@ -191,18 +196,24 @@ func toDotGraph*[C, L, I](
   kindPref: string = "",
   preciseRepr: bool = false,
   bottomTokens: bool = false,
-  colorCb: TokenStyleCb[C, L, I] = TokenStyleCb[C, L, I]()): Graph =
+  colorCb: TokenStyleCb[C, L, I] = TokenStyleCb[C, L, I](),
+  idshift: int = 0): Graph =
   ##[
 
 ## Parameters
 
 :bottomTokens: Put all token nodes at bottom. Works only with pretty graph
+:idshift: add this number to each node ID. Useful when putting several
+  graphs on the same image - this way different subclusters won't be
+  interfering with each other's nodes
 
   ]##
   if preciseRepr:
-    toDotGraphPrecise(tree, kindPref)
+    result = toDotGraphPrecise(tree, kindPref)
   else:
-    toDotGraphPretty(tree, kindPref, bottomTokens, colorCb)
+    result = toDotGraphPretty(tree, kindPref, bottomTokens, colorCb)
+
+  result.idshift = idshift
 
 proc toPng*[C, L, I](
   tree: ParseTree[C, L, I],

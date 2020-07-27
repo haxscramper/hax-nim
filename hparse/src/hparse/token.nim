@@ -15,6 +15,13 @@ import initcalls
 #===========================  Type definition  ===========================#
 
 type
+  LexInfo* = object
+    ## Predefined type for `Info` field in token. Default
+    ## implementation provided most common features. It is recommended
+    ## but not mandatory to use this type for third generic parameter
+    ## in `Token`.
+    pos*: int ## Position of *token* in original lexer stream
+
   Token*[Category, Lexeme, Info] = object
     ## Actual value of input token
     cat*: Category ## Token category. It is REQUIRED to be correct as
@@ -59,13 +66,25 @@ func matches*[C, L, I](exp: ExpectedToken[C, L], tok: Token[C, L, I]): bool =
 
 
 func makeToken*[C, L, I](cat: C, lex: L): Token[C, L, I] =
-  Token[C, L, void](cat: cat, lex: lex)
+  Token[C, L, I](cat: cat, lex: lex)
 
 func makeTokenNoInfo*[C, L](cat: C, lex: L): Token[C, L, void] =
   Token[C, L, void](cat: cat, lex: lex)
 
+#==============================  Accessors  ==============================#
+func setPosInfo*[C, L](tok: var Token[C, L, LexInfo], pos: int): void =
+  tok.info.pos = pos
 
+func getPosInfo*[C, L](tok: Token[C, L, LexInfo]): int =
+  tok.info.pos
 
+template setPosInfo*[C, L, I](tok: var Token[C, L, I], pos: int): untyped =
+  ## Fallback implementation for `setPosInfo`.
+  when compiles(setPosInfo(tok, pos)):
+    setPosInfo(tok, pos)
+
+template hasPosInfo*[C, L, I](tok: Token[C, L, I]): bool =
+  compiles(getPosInfo(tok))
 
 #*************************************************************************#
 #*****************************  Lexeme set  ******************************#

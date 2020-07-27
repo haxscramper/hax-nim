@@ -25,9 +25,11 @@ relevant places.
 type
   NodeId* = object
     path: seq[int]
+    record: seq[int]
 
 func `$`(id: NodeId): string =
-  id.path.mapIt("t" & $it).join(":")
+  id.path.mapIt("t" & $it).join("_") &
+    (if id.record.len > 0: ":" & id.record.join(":") else: "")
 
 
 converter toNodeId*(id: int): NodeId =
@@ -41,6 +43,15 @@ converter toNodeId*(ids: seq[int]): seq[NodeId] =
 converter toNodeId*[T](p: ptr T): NodeId =
   NodeId(path: @[cast[int](p)])
 
+func addIdShift*(node: NodeId, shift: int): NodeId =
+  result = node
+  if shift != 0:
+    result.path.add shift
+
+func addRecord*(node: NodeId, rec: int): NodeId =
+  result = node
+  result.record.add rec
+
 converter toNodeId*(ids: seq[seq[int]]): seq[NodeId] =
   ## Create multile node ids for record nodes
   # debugecho ids
@@ -53,7 +64,8 @@ func quote*(input: string): string =
   ]).wrap(("\"", "\""))
 
 
-func isRecord(id: NodeId): bool = id.path.len > 1
+func isRecord(id: NodeId): bool =
+  id.record.len > 0
 
 
 
@@ -315,6 +327,7 @@ type
     name*: string
     isCluster*: bool
     isWrapper*: bool
+    idshift*: int
 
     label*: string
     labelOnBottom*: bool
@@ -387,6 +400,7 @@ type
     dtkSubgraph
     dtkEdgeDef
     dtkProperty
+    dtkComment
 
   DotTree = ref object
     # IR for conversion to string
@@ -404,15 +418,17 @@ type
       of dtkSubgraph:
         section: seq[string]
         elements: seq[DotTree]
+      of dtkComment:
+        text: string
 
 func toString(record: RecordField): string =
   # TODO keep track of graph direction to ensure correct rotation
   &"<{record.id}>{record.text}"
 
-func toTree(node: Node, level: int = 0): DotTree =
+func toTree(node: Node, idshift: int, level: int = 0): DotTree =
   var attr = newStringTable()
   result = DotTree(kind: dtkNodeDef)
-  result.nodeId = node.id
+  result.nodeId = node.id.addIdShift(idshift)
   if node.width > 0: attr["width"] = $node.width
   if node.height > 0: attr["height"] = $node.height
   if node.fontname.len > 0: attr["fontname"] = node.fontname.quote()
@@ -474,7 +490,7 @@ func setSome[T](
   if val.isSome():
     table[name] = $val.get
 
-func toTree(edge: Edge, level: int = 0): DotTree =
+func toTree(edge: Edge, idshift: int, level: int = 0): DotTree =
   result = DotTree(kind: dtkEdgeDef)
   var attrs = newStringTable()
 
@@ -487,16 +503,19 @@ func toTree(edge: Edge, level: int = 0): DotTree =
   if edge.weight.isSome(): attrs["weight"] = ($edge.weight.get())
   if edge.style != edsDefault: attrs["style"] = ($edge.style)
 
-  result.origin = edge.src
-  result.targets = edge.to
+  result.origin = edge.src.addIdShift(idshift)
+  result.targets = edge.to.mapIt(it.addIdShift(idshift))
 
   result.edgeAttributes = attrs
+
+func toTreeComment(itms: varargs[string, `$`]): DotTree =
+  DotTree(kind: dtkComment, text: itms.join(" "))
 
 func toTree(attrs: StringTableRef): seq[DotTree] =
   for key, val in attrs:
     result.add DotTree(kind: dtkProperty, key: key, val: val)
 
-func toTree(graph: Graph, level: int = 0): DotTree =
+func toTree(graph: Graph, idshift: int, level: int = 0): DotTree =
   result = DotTree(kind: dtkSubgraph)
   var attrs = newStringTable()
 
@@ -516,7 +535,7 @@ func toTree(graph: Graph, level: int = 0): DotTree =
 
   result.elements &= toTree(attrs)
   block:
-    let styleNode = graph.styleNode.toTree(level + 1)
+    let styleNode = graph.styleNode.toTree(idshift, level + 1)
     if styleNode.nodeAttributes.len > 0:
       result.elements.add DotTree(
         kind: dtkProperty, globalProp: true,
@@ -527,20 +546,27 @@ func toTree(graph: Graph, level: int = 0): DotTree =
   if graph.topNodes.len > 0:
     var nodeIds: seq[NodeId]
     for node in graph.topNodes:
-      let tree = node.toTree(level + 1)
+      let tree = node.toTree(idshift, level + 1)
       result.elements.add tree
       nodeIds.add node.id
 
     block:
       var prevId: NodeId = nodeIds[0]
       for nodeId in nodeIds[1..^1]:
+        result.elements.add toTreeComment("Constraint edge idshift:", idshift)
+
+        # debugecho "-----"
+        # debugecho makeConstraintEdge(prevId, nodeId).toTree(0, level + 1)[]
+        # debugecho makeConstraintEdge(prevId, nodeId).toTree(idshift, level + 1)[]
         result.elements.add makeConstraintEdge(
-          prevId, nodeId).toTree(level + 1)
+          prevId, nodeId).toTree(idshift, level + 1)
+
         prevId = nodeId
 
     if graph.nodes.len > 0:
+      result.elements.add toTreeComment("Link from constraint id node")
       result.elements.add:
-        makeAuxEdge(nodeIds[^1], graph.nodes[0].id).toTree(level + 1)
+        makeAuxEdge(nodeIds[^1], graph.nodes[0].id).toTree(idshift, level + 1)
 
     # Edge(
     #     src: nodeIds[^1].id,
@@ -550,9 +576,13 @@ func toTree(graph: Graph, level: int = 0): DotTree =
     #   ).toTree(level + 1)
 
 
-  result.elements.add graph.nodes.mapIt(toTree(it, level + 1))
-  result.elements.add graph.edges.mapIt(toTree(it, level + 1))
-  result.elements.add graph.subgraphs.mapIt(toTree(it, level + 1))
+  # debugecho idshift
+  result.elements.add graph.nodes.mapIt(toTree(it, idshift, level + 1))
+  result.elements.add graph.edges.mapIt(toTree(it, idshift, level + 1))
+  result.elements.add graph.subgraphs.mapIt(
+    toTree(it,
+           idshift = (it.idshift != 0).tern(it.idshift, graph.idshift),
+           level = level + 1))
 
 
 
@@ -567,6 +597,8 @@ proc join(ropes: openarray[Rope], sep: string = " "): Rope =
 proc toRope(tree: DotTree, level: int = 0): Rope =
   let pref = "  ".repeat(level)
   case tree.kind:
+    of dtkComment:
+      rope(pref & "//" & tree.text)
     of dtkSubgraph:
       pref & tree.section.join(" ") & " {\n" &
         tree.elements.mapIt(toRope(it, level + 1)).join("\n") &
@@ -605,7 +637,7 @@ proc toRope(tree: DotTree, level: int = 0): Rope =
           rope(&"{pref}{tree.origin} -> {rhs}[{attrs}];")
 
 proc `$`*(graph: Graph): string =
-  $graph.toTree().toRope()
+  $graph.toTree(graph.idshift).toRope()
 
 #===============================  testing  ===============================#
 
@@ -633,6 +665,7 @@ let res = Graph(
   subgraphs: @[
     Graph(
       name: "ZZ",
+      idshift: 8880000,
       isCluster: true,
       nodes: @[
         Node(id: 999)
@@ -640,6 +673,8 @@ let res = Graph(
     )
   ]
 )
+
+# echo $res
 
 {.define(shellThrowException).}
 import shell
