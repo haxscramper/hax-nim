@@ -1,4 +1,4 @@
-import sugar, strutils, sequtils, strformat, sets, random
+import sugar, strutils, sequtils, strformat, sets, random, colors
 import hmisc/types/[graphviz_ast, html_ast]
 
 
@@ -87,24 +87,35 @@ suite "Table-driven vs recursive descent":
       tableTree = mapString(testInput).makeStream().withResIt:
         tableParser.parse(it)
 
+    let color = TokenStyleCb[TokenKind, string, void](
+      cb: proc(tok: LTok): TokenStyle =
+        case tok.cat:
+          of tkPunct:
+            result.color = colRed
+          of tkIdent:
+            result.color = colBlue
+    )
+
     let
       tokens: seq[LTok] = mapString(testInput)
       tokenNode = tokens.mapIt(
         toHtmlTableVert(@[
           #[ IMPLEMENT correct token coloring ]#
-          toHtmlText(($it.cat).tokKindStr("tk")),
+          toHtmlText(
+            ($it.cat).tokKindStr("tk"),
+            color = color.highlight(it).color),
           toHtmlText(quote($it.lex),
                      props = {htpBold}).toHtmlCell(). withIt do:
             it["align"] = "center"
-        ]).withIt do:
-          it.border = 1
-      ).toHtmlTableHoriz()
+        ])
+      ).toHtmlTableHoriz().withIt do:
+        it.border = 1
 
     "/tmp/page.html".writeFile(tokenNode.toHtmlDoc())
 
     var resultGraph: Graph
     block:
-      var tree = recursiveTree.toDotGraph()
+      var tree = recursiveTree.toDotGraph(colorCb = color)
       tree.isCluster = true
       tree.name = "recursive"
       tree.topNodes.add:
@@ -118,7 +129,7 @@ suite "Table-driven vs recursive descent":
       resultGraph.addSubgraph(tree)
 
     block:
-      var tree = tableTree.toDotGraph()
+      var tree = tableTree.toDotGraph(colorCb = color)
       tree.isCluster = true
       tree.name = "table"
       tree.topNodes.add:

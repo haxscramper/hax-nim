@@ -82,10 +82,25 @@ func len*[C, L, I](tree: ParseTree[C, L, I]): int =
 
 #==============================  graphviz  ===============================#
 
+
+type
+  TokenStyle* = object
+    color*: Color
+
+  TokenStyleCb*[C, L, I] = object
+    cb*: proc(token: Token[C, L, I]): TokenStyle {.noSideEffect.}
+
+func highlight*[C, L, I](cb: TokenStyleCb[C, L, I], tok: Token[C, L, I]): TokenStyle =
+  if cb.cb == nil:
+    result.color = colNoColor
+  else:
+    result = cb.cb(tok)
+
 func toDotGraphPretty*[C, L, I](
   tree: ParseTree[C, L, I],
   kindPref: string,
-  bottomTokens: bool): Graph =
+  bottomTokens: bool,
+  colorCb: TokenStyleCb): Graph =
   result.styleNode = Node(shape: nsaRect)
   var tokNodes: seq[Node]
 
@@ -121,8 +136,12 @@ func toDotGraphPretty*[C, L, I](
         else: nsaEllipse
       ,
       color = case it.kind:
-        of ptkNTerm: colLightBlue
-        else: colNoColor
+        of ptkNTerm:
+          colLightBlue
+        of ptkTerm:
+          colorCb.highlight(it.tok).color
+        else:
+          colNoColor
       ,
       style = case it.kind:
         of ptkNTerm: nstFilled
@@ -171,7 +190,8 @@ func toDotGraph*[C, L, I](
   tree: ParseTree[C, L, I],
   kindPref: string = "",
   preciseRepr: bool = false,
-  bottomTokens: bool = false): Graph =
+  bottomTokens: bool = false,
+  colorCb: TokenStyleCb[C, L, I] = TokenStyleCb[C, L, I]()): Graph =
   ##[
 
 ## Parameters
@@ -182,7 +202,7 @@ func toDotGraph*[C, L, I](
   if preciseRepr:
     toDotGraphPrecise(tree, kindPref)
   else:
-    toDotGraphPretty(tree, kindPref, bottomTokens)
+    toDotGraphPretty(tree, kindPref, bottomTokens, colorCb)
 
 proc toPng*[C, L, I](
   tree: ParseTree[C, L, I],
@@ -193,6 +213,7 @@ proc toPng*[C, L, I](
   tree.toDotGraph(kindPref, preciseRepr, bottomTokens).topng(path)
 
 #=========================  tree representation  =========================#
+
 func nodeKindStr*[C, L, I](node: ParseTree[C, L, I]): string =
   case node.kind:
     of ptkList: "[ ... ]"
