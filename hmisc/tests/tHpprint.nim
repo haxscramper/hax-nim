@@ -657,6 +657,28 @@ template treeStr(arg: untyped): untyped =
   var counter = makeCounter()
   toSimpleTree(arg, counter).prettyString(treeConf)
 
+import hmisc/algo/hpprint_repr
+suite "Repr pprint":
+  test "Lisp repr":
+    assertEq pptConst("12").lispRepr(), "12"
+    assertEq pptSeq(pptConst("12")).lispRepr(), "'(12)"
+    assertEq pptObj("Hello", {"we" : pptConst("12")}).lispRepr(),
+      "(Hello :we 12)"
+    assertEq pptObj("Hello", pptConst("12")).lispRepr(),
+      "(Hello 12)"
+
+  test "Tree repr":
+    echo pptConst("12").treeRepr()
+    echo pptSeq(pptConst("12"), pptConst("123123")).treeRepr()
+    echo pptObj("EE",
+                pptConst("12"),
+                pptConst("12"),
+                pptObj("EE",
+                  pptConst("12"),
+                  pptConst("12"),
+                  pptConst("12")
+    )).treeRepr()
+
 suite "Large object printout":
   test "Large JSON as treeRepr":
     let jsonNode = parseJson """
