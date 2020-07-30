@@ -49,11 +49,6 @@ func contains*[C, L, I](
   pair: (BnfNterm, Token[C, L, I])): bool =
   (pair[0] in table) and (pair[1] in table[pair[0]])
 
-iterator iterrules*[C, L](grammar: BnfGrammar[C, L]): tuple[
-  id: RuleId, alt: BnfPatt[C, L]] =
-  for head, patts in grammar.rules:
-    for altId, alt in patts:
-      yield (id: ruleId(head, altId), alt: alt)
 
 proc necessaryTerms*[C, L](
   id: RuleId, grammar: BnfGrammar[C, L]): seq[BnfNTerm] =

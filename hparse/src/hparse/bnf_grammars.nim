@@ -81,6 +81,8 @@ type
     ## of alternatives. Each item in sequence is expected to be
     ## `BnfPatt.flat == true`.
 
+
+
 #============================  Aux functions  ============================#
 
 func hash*(nterm: BnfNTerm): Hash =
@@ -139,6 +141,18 @@ func rule*[C, L](nterm: BnfNterm, patt: BnfPatt[C, L]): BnfRule[C, L] =
 
 func patt*[C, L](elems: seq[FlatBnf[C, L]]): BnfPatt[C, L] =
   BnfPatt[C, L](flat: true, elems: elems)
+
+#==============================  Accessors  ==============================#
+
+iterator iterrules*[C, L](grammar: BnfGrammar[C, L]): tuple[
+  id: RuleId, alt: BnfPatt[C, L]] =
+  for head, patts in grammar.rules:
+    for altId, alt in patts:
+      yield (id: ruleId(head, altId), alt: alt)
+
+iterator iterrules*[C, L](grammar: BnfGrammar[C, L], head: BnfNterm): RuleId =
+  for altId, _ in grammar.rules[head]:
+    yield ruleId(head, altId)
 
 
 #===================  Conversion from regular grammar  ===================#
