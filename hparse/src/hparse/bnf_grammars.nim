@@ -29,20 +29,12 @@ type
       of false:
         name*: NtermSym
 
-  FlatBnfKind* = enum
-    ## Flat BNF description item
-    fbkEmpty ## Empty production
-    fbkNterm ## Nonterminal element
-    fbkTerm ## Terminal element - token
-
   FlatBnf*[C, L] = object
     action*: TreeAct
-    case kind*: FlatBnfKind
-      of fbkEmpty:
-        nil
-      of fbkNterm:
+    case isTerm*: bool
+      of false:
         nterm*: BnfNterm
-      of fbkTerm:
+      of true:
         tok*: ExpectedToken[C, L] ## Token kind
 
 #=====================  Grammar & grammar elements  ======================#
@@ -255,11 +247,11 @@ func flatten[C, L](patt: BnfPatt[C, L]): seq[seq[FlatBnf[C, L]]] =
  else:
    case patt.kind:
      of bnfEmpty:
-       return @[ @[ FlatBnf[C, L](kind: fbkEmpty) ] ]
+       return @[ emptySeq[FlatBnf[C, L]]() ]
      of bnfTerm:
-       return @[ @[ FlatBnf[C, L](kind: fbkTerm, tok: patt.tok) ] ]
+       return @[ @[ FlatBnf[C, L](isTerm: true, tok: patt.tok) ] ]
      of bnfNterm:
-       return @[ @[ FlatBnf[C, L](kind: fbkNterm, nterm: patt.nterm) ] ]
+       return @[ @[ FlatBnf[C, L](isTerm: false, nterm: patt.nterm) ] ]
      of bnfConcat:
        for idx, sub in patt.patts:
          var newpatts: seq[seq[FlatBnf[C, L]]]
@@ -294,12 +286,14 @@ func toBNF*[C, L](
       let newpatts = rule.patt.flatten()
       for idx, elems in newpatts:
         let nterm = makeBnfNterm(rule.nterm.parent, rule.nterm.idx)
-        if elems.allOfIt(it.kind == fbkEmpty):
-          discard
-          result.add (rule(nterm, patt(elems))) # FIXME XXXX
-        else:
-          let elems = elems.filterIt(it.kind != fbkEmpty)
-          result.add rule(nterm, patt(elems)) # FIXME XXXX
+        # result.add(rule(nterm, elems)) # ERROR expression
+        # `rule(nterm, elems)` cannot be called
+        result.add(rule(nterm, patt(elems))) # FIXME XXXX WTF
+
+        # if false:
+        # else:
+        #   # let elems = elems.filterIt(it.kind != fbkEmpty)
+        #   result.add rule(nterm, patt(elems)) # FIXME XXXX
   else:
     result.add rule(makeBnfNterm(rule.nterm), top) # FIXME XXXX
     result &= newrules
@@ -326,7 +320,7 @@ func toBNF*[C, L](grammar: Grammar[C, L]): BnfGrammar[C, L] =
 
 func isEmpty*[C, L](patt: BnfPatt[C, L]): bool =
   ## Check if pattern describes empty production
-  (patt.elems.len == 1) and (patt.elems[0].kind == fbkEmpty)
+  (patt.elems.len == 0) # and (patt.elems[0].kind == fbkEmpty)
 
 func `[]`*[C, L](grammar: BnfGrammar[C, L], rule: RuleId): BnfPatt[C, L] =
   ## Get BNF pattern for rule
@@ -359,19 +353,23 @@ func exprRepr*(nterm: BnfNTerm, normalize: bool = false): string =
 func exprRepr*[C, L](
   fbnf: FlatBnf[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
-  case fbnf.kind:
-    of fbkNterm:
-      (fbnf.nterm.exprRepr(conf.normalizeNterms)).wrap(conf.ntermWrap)
-    of fbkTerm:
-      ($fbnf.tok).wrap(conf.termWrap)
-    of fbkEmpty:
-      conf.emptyProd
+  if fbnf.isTerm:
+    ($fbnf.tok).wrap(conf.termWrap)
+  else:
+    (fbnf.nterm.exprRepr(conf.normalizeNterms)).wrap(conf.ntermWrap)
+    # of fbkNterm:
+    # of fbkTerm:
+    # of fbkEmpty:
+    #   conf.emptyProd
 
 func exprRepr*[C, L](
   bnf: BnfPatt[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   if bnf.flat:
-    bnf.elems.mapIt(exprRepr(it, conf)).join(conf.concatSep)
+    if bnf.isEmpty:
+      conf.emptyProd
+    else:
+      bnf.elems.mapIt(exprRepr(it, conf)).join(conf.concatSep)
   else:
     case bnf.kind:
       of bnfEmpty:

@@ -54,16 +54,19 @@ proc necessaryTerms*[C, L](
   id: RuleId, grammar: BnfGrammar[C, L]): seq[BnfNTerm] =
   ## Generate list of nonterminals that might appear at rhs of production
   let patt: BnfPatt[C, L] = grammar.rules[id.head][id.alt]
-  if patt.elems[0].kind == fbkNterm:
+  if not patt.elems[0].isTerm:
     result.add patt.elems[0].nterm
 
 func isNullable[C, L](
   fbnf: FlatBnf[C, L],
   nulls: Table[BnfNterm, seq[AltId]]): bool =
-  case fbnf.kind:
-    of fbkEmpty: true
-    of fbkTerm: false
-    of fbkNterm: fbnf.nterm in nulls
+  if fbnf.isTerm:
+    false
+  else:
+    fbnf.nterm in nulls
+    # of fbkEmpty: true
+    # of fbkTerm: false
+    # of fbkNterm: 
 
 func getSets*[C, L](grammar: BnfGrammar[C, L]): tuple[
   first: FirstTable[C, L],
@@ -88,7 +91,7 @@ func getSets*[C, L](grammar: BnfGrammar[C, L]): tuple[
       let nterm = endNterms.popFirst()
       result.follow[nterm] = makeTokSet[C, L](eofTok)
       for altId, alt in grammar.rules[nterm]:
-        if alt.elems.last.kind == fbkNterm:
+        if not alt.elems.last.isTerm:
           endNterms.addLast alt.elems.last.nterm
 
   while true:
@@ -110,19 +113,16 @@ func getSets*[C, L](grammar: BnfGrammar[C, L]): tuple[
             # Y1 Y2` Store `FIRST` sets separately for each
             # alternative. Finish execution after first non-nullable
             # element is found.
-            let first = case elem.kind:
-              of fbkNterm:
+            let first =
+              if elem.isTerm:
+                # Add token to `FIRST[X]` directly
+                # showLog fmt "Found {elem.tok} @ {body.exprRepr()}[{idx}]"
+                makeTokSet(elem.tok)
+              else:
                 # Add elements from `FIRST[Yi]` to `FIRST[X, <alt>]`.
                 # Since `Yi` might have more than one alternative in
                 # grammar we have to merge all possible `FIRST` sets.
                 result.first[elem.nterm].mapPairs(rhs).union()
-              of fbkTerm:
-                # Add token to `FIRST[X]` directly
-                # showLog fmt "Found {elem.tok} @ {body.exprRepr()}[{idx}]"
-                makeTokSet(elem.tok)
-              of fbkEmpty:
-                # QUESTION ERROR?
-                makeTokSet[C, L]()
 
 
             # showLog fmt "Adding {first:>30} to FIRST of
@@ -145,34 +145,22 @@ func getSets*[C, L](grammar: BnfGrammar[C, L]): tuple[
         # as `FOLLOW` for element at the end
         for elem in body.elems.reversed(): # Iterate over all elements
           # in production in reverse order: `Y1 Y2 Y3 <- X`
-          case elem.kind:
-            of fbkTerm:
-              discard
-
-            of fbkNterm:
-              updated |= result.follow[elem.nterm].containsOrIncl(tailFollow)
-
-            of fbkEmpty:
-              discard
-              break # QUESTION
+          if not elem.isTerm:
+            updated |= result.follow[elem.nterm].containsOrIncl(tailFollow)
 
           if elem.isNullable(result.nullable):
             # Continue snowballing `FOLLOW` tail - current element is
             # nullable => whatever we have accumulated in tail can
             # possibly appear in production.
-            if elem.kind != fbkEmpty: # QUESTION ERROR?
-              tailFollow.incl(result.first[elem.nterm].mapPairs(rhs).union())
+            tailFollow.incl(result.first[elem.nterm].mapPairs(rhs).union())
           else:
             # Current elemen is not nullable => current tail is no
             # longer needed anc can be replaced with whatever
             # `FIRST[Yi]` contains.
-            case elem.kind:
-              of fbkNterm:
-                tailFollow = result.first[elem.nterm].mapPairs(rhs).union()
-              of fbkTerm:
-                tailFollow = makeTokSet(elem.tok)
-              else:
-                discard # ERROR?
+            if elem.isTerm:
+              tailFollow = makeTokSet(elem.tok)
+            else:
+              tailFollow = result.first[elem.nterm].mapPairs(rhs).union()
 
 
     if not updated:
@@ -313,7 +301,7 @@ proc parse*[C, L, I](
   parser: LL1TableParser[C, L],
   toks: var TokStream[Token[C, L, I]]): ParseTree[C, L, I] =
   var stack: seq[FlatBnf[C, L]]
-  stack.add FlatBnf[C, L](kind: fbkNterm, nterm: parser.start)
+  stack.add FlatBnf[C, L](isTerm: false, nterm: parser.start)
   var curr: Token[C, L, I] = toks.next()
   var ntermStack: seq[TermProgress[C, L, I]] = @[]
   var done = false
@@ -321,35 +309,20 @@ proc parse*[C, L, I](
   while not done:
     let top: FlatBnf[C, L] = stack.pop()
 
-    case top.kind:
-      of fbkTerm:
-        assertToken(top.tok, curr)
-        ntermStack.last().elems.add newTree(curr)
+    if top.isTerm:
+      assertToken(top.tok, curr)
+      ntermStack.last().elems.add newTree(curr)
 
-        if toks.finished():
-          done = true
-        else:
-          curr = toks.next()
-      of fbkNterm:
-        # if parser.parseTable.contains((top.nterm, curr)):
-        let rule: RuleId = parser.parseTable.getRule(top.nterm, curr)
-        let stackadd = parser.grammar.getProductions(rule)
-        if stackadd.len == 1 and stackadd[0].kind == fbkEmpty:
-          ntermStack.add TermProgress[C, L, I](
-            nterm: rule.head, expected: 0)
-        else:
-          ntermStack.add TermProgress[C, L, I](
-            nterm: rule.head, expected: stackadd.len)
-
-        stack &= stackadd.reversed().filterIt(it.kind != fbkEmpty)
-        # else:
-        #   raiseAssert msgjoin("Cannot reduce \e[32m", top.exprRepr(),
-        #    "\e[39m, current token: \e[33m'", curr, "'\e[39m ",
-        #    fmt("({curr.kind})")
-        #   )
-
-      of fbkEmpty:
-        discard # ERROR ?
+      if toks.finished():
+        done = true
+      else:
+        curr = toks.next()
+    else:
+      let rule: RuleId = parser.parseTable.getRule(top.nterm, curr)
+      let stackadd = parser.grammar.getProductions(rule)
+      ntermStack.add TermProgress[C, L, I](
+        nterm: rule.head, expected: stackadd.len)
+      stack &= stackadd.reversed()
 
     while (ntermStack.len > 0) and
           (ntermStack.last().elems.len == ntermStack.last().expected):
