@@ -73,18 +73,17 @@ suite "Table-driven vs recursive descent":
       "element" : orP(tok(tkIdent), nt("list"))
     }
 
+    let grammarVal = grammarConst
+    echo grammarVal.toGrammar().exprRepr()
+
     let
-      grammarVal = grammarConst
       recursiveParser = newLL1RecursiveParser[
         TokenKind, string, LexInfo](grammarConst)
-
-      earleyParser = newEarleyParser[TokenKind, string](
-        grammarVal.toGrammar())
-
       tableParser = newLL1TableParser[TokenKind, string](
         grammarVal.toGrammar(), retainGenerated = false)
 
       testInput = "[a,b,e,e,z,e]"
+
 
     let
       recursiveTree = mapString(testInput).makeStream().withResIt:
@@ -92,8 +91,6 @@ suite "Table-driven vs recursive descent":
       tableTree = mapString(testInput).makeStream().withResIt:
         tableParser.parse(it)
 
-      earleyTree = mapString(testInput).makeStream().withResIt:
-        earleyParser.parse(it)
 
     let color = TokenStyleCb[TokenKind, string, LexInfo](
       cb: proc(tok: LTok): TokenStyle =
@@ -171,3 +168,17 @@ suite "Table-driven vs recursive descent":
 
     resultGraph.styleNode.fontname = "Consolas"
     resultGraph.toPng("/tmp/combined.png")
+
+    echo "Starting earley parser"
+    let
+      earleyParser = newEarleyParser[TokenKind, string](
+        grammarVal.toGrammar())
+
+      earleyTree = mapString(testInput).makeStream().withResIt:
+        earleyParser.parse(it)
+
+    earleyTree[0].toPng("/tmp/earley.png")
+    echo earleyTree[0].treeRepr()
+    echo "Finished earley parser"
+
+

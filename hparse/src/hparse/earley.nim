@@ -44,6 +44,60 @@ func nextSymbol[C, L](gr: BnfGrammar[C, L], item: EItem): Option[FlatBnf[C, L]] 
     none(FlatBnf[C, L])
 
 #*************************************************************************#
+#***************************  Pretty-printing  ***************************#
+#*************************************************************************#
+
+
+proc printChart[C, L](gr: BnfGrammar[C, L], state: Chart): void =
+  echo "\e[31mCHART :\e[39m"
+  for idx, stateset in state:
+    echo fmt("\e[36mSTARTS:\e[39m {idx}")
+    for item in stateset:
+      var buf = fmt("{item.ruleId.exprRepr():<12}") & " ->"
+      for idx, sym in gr.ruleBody(item.ruleId):
+        if sym.isTerm:
+          buf &= fmt(" {sym.terminal.lex:>8}")
+        else:
+          buf &= fmt(" {sym.nterm:>8}")
+
+      buf = fmt("\e[32mEND   :\e[39m {item.finish} {buf:<60}")
+
+      echo buf
+    echo ""
+
+proc printItems[C, L](gr: BnfGrammar[C, L], state: State, onlyFull: bool = false): void =
+  for idx, stateset in state:
+    echo fmt("   === {idx:^3} ===   ")
+    for item in stateset:
+      if (item.nextPos == gr.ruleBody(item.ruleId).len) or (not onlyFull):
+        var buf = fmt("{gr.ruleName(item.ruleId):<12}") & " ->"
+        for idx, sym in gr.ruleBody(item.ruleId):
+          if idx == item.nextPos:
+            buf &= " •"
+
+          if sym.isTerm:
+            buf &= " " & sym.terminal.lex
+          else:
+            buf &= " " & sym.nterm
+
+        if item.nextPos == gr.ruleBody(item.ruleId).len:
+          buf = fmt("{buf:<60} \e[4m#\e[24m ({item.startPos})")
+        else:
+          buf = fmt("{buf:<60}   ({item.startPos})")
+
+        echo buf
+
+func printTreeRepr[C, L, I](pt: ParseTree[C, L, I], level: int = 0): string =
+  let pref = "  ".repeat(level)
+  if pt.isToken:
+   echo "[*]" & pref & $pt.token
+  else:
+    let rulestr = "" # TODO  pt.ruleId.exprRepr()
+    echo fmt("[{pt.subnodes.len}] {pref}{rulestr}")
+    for sub in pt.subnodes:
+      printTreeRepr(sub, level + 1)
+
+#*************************************************************************#
 #**************************  Item construction  **************************#
 #*************************************************************************#
 
@@ -94,6 +148,8 @@ func buildItems[C, L, I](parser: EarleyParser[C, L],
           scan(state, itemset, j, sym, parser.grammar, toks)
         else:
           predict(state, itemset, j, nullable, sym, parser.grammar)
+      inc j
+    inc itemset
 
 
 func chartOfItems[C, L](grammar: BnfGrammar[C, L],
@@ -159,18 +215,17 @@ func parseTree[C, L, I](gr: BnfGrammar[C, L],
         let singletok = (symbols.len == 1) and (symbols[0].isTerm)
         if not singletok:
           result = some(ParseTree[C, L, I](
-            kind: ptkNTerm,
+            kind: ptkNTerm, subnodes: @[], start: currpos
             # ruleId: alt, # TODO store rule name
-            subnodes: @[],
-            start: currpos.int))
+          ))
 
         for idx, sym in gr.ruleBody(alt):
           if sym.isTerm:
             if sym.matches(toks, currpos):
               let tree = ParseTree[C, L, I](
                 kind: ptkTerm,
-                start: currpos.int,
-                finish: currpos.int + 1,
+                start: currpos,
+                finish: currpos + 1,
                 tok: toks[currpos]
               )
 
@@ -210,10 +265,18 @@ func parseTree[C, L, I](gr: BnfGrammar[C, L],
 #*************************************************************************#
 
 func newEarleyParser*[C, L](grammar: Grammar[C, L]): EarleyParser[C, L] =
-  result.grammar = grammar.toBNF()
+  let bnfg = grammar.toBNF()
+  result.grammar = bnfg
+  result.start = bnfg.start
+
 
 func parse*[C, L, I](parser: EarleyParser[C, L],
                      toks: TokStream[Token[C, L, I]]): seq[ParseTree[C, L, I]] =
   let state = buildItems(parser, toks)
+  {.noSideEffect.}:
+    parser.grammar.printItems(state)
+
   let chart = chartOfItems(parser.grammar, state)
+  {.noSideEffect.}:
+    parser.grammar.printChart(chart)
   return parseTree(parser.grammar, toks, chart)
