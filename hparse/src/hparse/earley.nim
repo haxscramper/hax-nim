@@ -30,8 +30,19 @@ type
 func matches[C, L, I](sym: FlatBnf[C, L],
                       toks: TokStream[Token[C, L, I]],
                       pos: int): bool =
-  discard
+  if toks.finished or (not sym.isTerm):
+    false
+  else:
+    sym.tok.matches toks[pos]
 
+func contains(ns: NullSet, s: BnfNterm): bool = s in ns.nulls
+
+func append[A](a: var seq[A], b: A): void =
+  for it in a:
+    if it == b:
+      return
+
+  a.add b
 
 func nullableSymbols[C, L](gr: BnfGrammar[C, L]): NullSet =
   # TODO use null set construction from ll1 table parser
@@ -42,6 +53,7 @@ func nextSymbol[C, L](gr: BnfGrammar[C, L], item: EItem): Option[FlatBnf[C, L]] 
     some(gr.ruleBody(item.ruleId)[item.nextPos])
   else:
     none(FlatBnf[C, L])
+
 
 #*************************************************************************#
 #***************************  Pretty-printing  ***************************#
@@ -55,10 +67,11 @@ proc printChart[C, L](gr: BnfGrammar[C, L], state: Chart): void =
     for item in stateset:
       var buf = fmt("{item.ruleId.exprRepr():<12}") & " ->"
       for idx, sym in gr.ruleBody(item.ruleId):
-        if sym.isTerm:
-          buf &= fmt(" {sym.terminal.lex:>8}")
-        else:
-          buf &= fmt(" {sym.nterm:>8}")
+        buf &= fmt(" {sym.exprRepr():>8}")
+        # if sym.isTerm:
+        #   buf &= fmt(" {sym.terminal.lex:>8}")
+        # else:
+        #   buf &= fmt(" {sym.nterm:>8}")
 
       buf = fmt("\e[32mEND   :\e[39m {item.finish} {buf:<60}")
 
@@ -66,19 +79,21 @@ proc printChart[C, L](gr: BnfGrammar[C, L], state: Chart): void =
     echo ""
 
 proc printItems[C, L](gr: BnfGrammar[C, L], state: State, onlyFull: bool = false): void =
+  echo "\e[31mSTATE :\e[39m"
   for idx, stateset in state:
     echo fmt("   === {idx:^3} ===   ")
     for item in stateset:
       if (item.nextPos == gr.ruleBody(item.ruleId).len) or (not onlyFull):
-        var buf = fmt("{gr.ruleName(item.ruleId):<12}") & " ->"
+        var buf = fmt("{item.ruleId.exprRepr():<12}") & " ->"
         for idx, sym in gr.ruleBody(item.ruleId):
           if idx == item.nextPos:
             buf &= " •"
 
-          if sym.isTerm:
-            buf &= " " & sym.terminal.lex
-          else:
-            buf &= " " & sym.nterm
+          buf &= " " & sym.exprRepr()
+          # if sym.isTerm:
+          #   buf &= " " & sym.terminal.lex
+          # else:
+          #   buf &= " " & sym.nterm
 
         if item.nextPos == gr.ruleBody(item.ruleId).len:
           buf = fmt("{buf:<60} \e[4m#\e[24m ({item.startPos})")
@@ -106,7 +121,14 @@ func predict[C, L](state: var State,
                    nullable: NullSet,
                    symbol: FlatBnf[C, L],
                    gr: BnfGrammar[C, L]): void =
-  discard
+  let symbol = symbol.nterm
+  for (ruleId, _) in gr.iterrules():
+    if ruleId.head == symbol:
+      state[i].append(EItem(ruleId: ruleId, startPos: i, nextPos: 0))
+
+    if symbol in nullable:
+      state[i].append state[i][j].withIt do:
+        inc it.nextPos
 
 func scan[C, L, I](state: var State,
                    i, j: int,
@@ -124,7 +146,19 @@ func complete[C, L, I](state: var State,
                        i, j: int,
                        gr: BnfGrammar[C, L],
                        toks: TokStream[Token[C, L, I]]): void =
-  discard
+  let item = state[i][j]
+  for oldItem in state[item.startPos]:
+    let next = gr.nextSymbol(oldItem)
+    if next.isNone():
+      discard
+    else:
+      let sym: FlatBnf[C, L] = next.get()
+      if sym.isTerm:
+        discard
+      else:
+        if sym.nterm == item.ruleId.head:
+          state[i].append oldItem.withIt do:
+            inc it.nextPos
 
 func buildItems[C, L, I](parser: EarleyParser[C, L],
                          toks: TokStream[Token[C, L, I]]): State =
@@ -279,4 +313,5 @@ func parse*[C, L, I](parser: EarleyParser[C, L],
   let chart = chartOfItems(parser.grammar, state)
   {.noSideEffect.}:
     parser.grammar.printChart(chart)
+
   return parseTree(parser.grammar, toks, chart)
