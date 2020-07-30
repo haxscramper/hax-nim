@@ -146,6 +146,9 @@ iterator iterrules*[C, L](grammar: BnfGrammar[C, L], head: BnfNterm): RuleId =
   for altId, _ in grammar.rules[head]:
     yield ruleId(head, altId)
 
+func ruleBody*[C, L](grammar: BnfGrammar[C, L],
+                     ruleId: RuleId): seq[FlatBnf[C, L]] =
+  return grammar.rules[ruleId.head][ruleId.alt].elems
 
 #===================  Conversion from regular grammar  ===================#
 

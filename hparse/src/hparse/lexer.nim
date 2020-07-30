@@ -90,6 +90,8 @@ proc peek*[Tok](ts: var TokStream[Tok]): Tok =
   ts.move(-1)
   return next
 
+func `[]`*[Tok](ts: TokStream[Tok], pos: int | uint): Tok =
+  ts.buffer[pos.int]
 
 iterator items*[Tok](ts: var TokStream[Tok]): Tok =
   ## Iterate over tokems in tokens stream. New parsing is done only

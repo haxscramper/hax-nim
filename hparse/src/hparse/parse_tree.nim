@@ -30,11 +30,17 @@ Parse tree object
 
     ]##
     action*: TreeAct ## Tree action to execute after construction
+    # REVIEW wrap in getter/setter. Use single point for token and
+    # multiple values for other elements?
+    start*: int ## Start position of tree in input token stream
+    finish*: int ## End position of tree in input token stream
 
     case kind*: ParseTreeKind
       of ptkTerm:
         tok*: Token[C, L, I] ## Value of parsed token
       of ptkNTerm:
+        # IDEA REVIEW maybe use `RuleId` to retain information about
+        # original rules that has been used?
         nterm*: NTermSym ## Name of parsed nonterminal
         subnodes*: seq[ParseTree[C, L, I]] ## Sequence of parsed subnodes
       of ptkList:

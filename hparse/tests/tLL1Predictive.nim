@@ -5,8 +5,9 @@ import hmisc/types/[graphviz_ast, html_ast]
 #===========================  implementation  ============================#
 
 import hparse/[
-  ll1_table,
-  ll1_gen,
+  ll1_table, # Table-driven LL(1) parser
+  ll1_gen,   # Codegen-based LL(1) parser
+  earley,    # Earley parser
   grammars,
   bnf_grammars, # FIXME HACK not necessary but removeing it generates
                 # `rule cannot be called` compilation error.
@@ -77,8 +78,12 @@ suite "Table-driven vs recursive descent":
       recursiveParser = newLL1RecursiveParser[
         TokenKind, string, LexInfo](grammarConst)
 
+      earleyParser = newEarleyParser[TokenKind, string](
+        grammarVal.toGrammar())
+
       tableParser = newLL1TableParser[TokenKind, string](
         grammarVal.toGrammar(), retainGenerated = false)
+
       testInput = "[a,b,e,e,z,e]"
 
     let
@@ -86,6 +91,9 @@ suite "Table-driven vs recursive descent":
         recursiveParser.parse(it)
       tableTree = mapString(testInput).makeStream().withResIt:
         tableParser.parse(it)
+
+      earleyTree = mapString(testInput).makeStream().withResIt:
+        earleyParser.parse(it)
 
     let color = TokenStyleCb[TokenKind, string, LexInfo](
       cb: proc(tok: LTok): TokenStyle =
