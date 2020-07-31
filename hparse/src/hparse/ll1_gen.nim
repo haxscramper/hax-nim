@@ -462,7 +462,7 @@ proc makeRuleParser[C, L](
   impl[6] = quote do:
     `parseBody`
     case `resIdent`.kind:
-      of ptkTerm, ptkNTerm:
+      of ptkToken, ptkNTerm:
         return newTree(name = `ntermNterm`, subnodes = @[`resIdent`])
       of ptkList:
         return newTree(name = `ntermNterm`, subnodes = `resIdent`.getSubnodes())

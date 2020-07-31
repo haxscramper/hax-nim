@@ -14,7 +14,7 @@ import hmisc/helpers
 
 type
   ParseTreeKind* = enum
-    ptkTerm
+    ptkToken
     ptkNterm
     ptkList
 
@@ -36,7 +36,7 @@ Parse tree object
     finish*: int ## End position of tree in input token stream
 
     case kind*: ParseTreeKind
-      of ptkTerm:
+      of ptkToken:
         tok*: Token[C, L, I] ## Value of parsed token
       of ptkNTerm:
         # IDEA REVIEW maybe use `RuleId` to retain information about
@@ -60,7 +60,7 @@ proc newTree*[C, L, I](subtree: seq[ParseTree[C, L, I]]): ParseTree[C, L, I] =
 #   ParseTree[Tok](kind: ptkList, elements: toSeq(subtree))
 
 proc newTree*[C, L, I](tok: Token[C, L, I]): ParseTree[C, L, I] =
-  ParseTree[C, L, I](kind: ptkTerm, tok: tok)
+  ParseTree[C, L, I](kind: ptkToken, tok: tok)
 
 proc newTree*[C, L, I](
   name: NTermSym, subnodes: seq[ParseTree[C, L, I]]): ParseTree[C, L, I] =
@@ -74,11 +74,11 @@ func getSubnodes*[C, L, I](tree: ParseTree[C, L, I]): seq[ParseTree[C, L, I]] =
   case tree.kind:
     of ptkNterm: tree.subnodes
     of ptkList: tree.elements
-    of ptkTerm: @[]
+    of ptkToken: @[]
 
 func len*[C, L, I](tree: ParseTree[C, L, I]): int =
   case tree.kind:
-    of ptkTerm: 0
+    of ptkToken: 0
     of ptkNterm: tree.subnodes.len
     of ptkList: tree.elements.len
 
@@ -110,11 +110,11 @@ func toDotGraphPretty*[C, L, I](
   result.styleNode = Node(shape: nsaRect)
   var tokNodes: seq[Node]
 
-  tree.iterateItBFS(it.getSubnodes(), it.kind != ptkTerm):
+  tree.iterateItBFS(it.getSubnodes(), it.kind != ptkToken):
     let itaddr = toNodeId(cast[int](addr it[]))
     var nextaddr = toNodeId(cast[int](addr it[]) + 1)
 
-    if it.kind == ptkTerm:
+    if it.kind == ptkToken:
       when hasPosInfo(it.tok):
         nextaddr = toNodeId(it.tok.getPosInfo() + 1)
 
@@ -137,18 +137,18 @@ func toDotGraphPretty*[C, L, I](
       itaddr,
       label = case it.kind:
         of ptkNTerm: it.nterm
-        of ptkTerm: fmt("{it.tok.cat.tokKindStr(kindPref)}")
+        of ptkToken: fmt("{it.tok.cat.tokKindStr(kindPref)}")
         else: it.nodeKindStr()
       ,
       shape = case it.kind:
         of ptkNTerm: nsaDefault
-        of ptkTerm: nsaUnderline
+        of ptkToken: nsaUnderline
         else: nsaEllipse
       ,
       color = case it.kind:
         of ptkNTerm:
           colLightBlue
-        of ptkTerm:
+        of ptkToken:
           colorCb.highlight(it.tok).color
         else:
           colNoColor
@@ -173,11 +173,11 @@ func toDotGraphPretty*[C, L, I](
 
 func toDotGraphPrecise*[C, L, I](tree: ParseTree[C, L, I], kindPref: string): Graph =
   result.styleNode = Node(shape: nsaRect)
-  tree.iterateItBFS(it.subnodes, it.kind != ptkTerm):
+  tree.iterateItBFS(it.subnodes, it.kind != ptkToken):
     let itaddr: int = cast[int](addr it[])
     let label = case it.kind:
       of ptkNTerm: it.nterm
-      of ptkTerm: fmt("{it.tok.cat.tokKindStr(kindPref)}\n'{it.tok}'")
+      of ptkToken: fmt("{it.tok.cat.tokKindStr(kindPref)}\n'{it.tok}'")
       of ptkList: it.nodeKindStr()
 
     result.addNode(makeNode(
@@ -251,7 +251,7 @@ func treeReprImpl*[C, L, I](
   )
 
   result = case node.kind:
-    of ptkTerm:
+    of ptkToken:
       @[ fmt(
         "{prefStr}[{node.tok.cat.tokKindStr(kindPref)}, '{node.tok.lex}']"
       ) ]
@@ -273,7 +273,7 @@ func lispReprImpl*[C, L, I](
   node: ParseTree[C, L, I],
   kindPref: string, discardEmpty: bool): seq[string] =
   case node.kind:
-    of ptkTerm:
+    of ptkToken:
       var kindStr = $node.tok.kind
       if kindStr.startsWith(kindPref):
         kindStr = kindStr[kindPref.len .. ^1]
@@ -318,7 +318,7 @@ func runTreeActions*[C, L, I](tree: var ParseTree[C, L, I]): void =
     let subnode = subnodes[idx]
 
     case subnode.kind:
-      of ptkTerm:
+      of ptkToken:
         case subnode.action:
           of taPromote:
             if subnodes.len > 1:

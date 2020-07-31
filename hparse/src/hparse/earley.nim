@@ -135,7 +135,7 @@ proc printItems[C, L](gr: BnfGrammar[C, L], state: State, onlyFull: bool = false
 proc printTreeRepr*[C, L, I](pt: ParseTree[C, L, I], level: int = 0): void =
   let pref = "  ".repeat(level)
   case pt.kind:
-    of ptkTerm:
+    of ptkToken:
       echo "[*]" & pref & $pt.tok
     of ptkList:
       echo fmt("[ ... ]")
@@ -290,7 +290,7 @@ func parseTree[C, L, I](gr: BnfGrammar[C, L],
           if sym.isTerm:
             if sym.matches(toks, currpos):
               let tree = ParseTree[C, L, I](
-                kind: ptkTerm,
+                kind: ptkToken,
                 start: currpos,
                 finish: currpos + 1,
                 tok: toks[currpos]
@@ -309,7 +309,7 @@ func parseTree[C, L, I](gr: BnfGrammar[C, L],
           else:
             let res = aux(currpos, finish, sym.nterm)
             if res.isSome():
-              if (not (res.get().kind == ptkTerm)) and res.get().len == 0:
+              if (not (res.get().kind == ptkToken)) and res.get().len == 0:
                 discard
               else:
                 currpos = res.get().finish
