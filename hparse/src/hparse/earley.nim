@@ -343,11 +343,11 @@ func newEarleyParser*[C, L](grammar: Grammar[C, L]): EarleyParser[C, L] =
 func parse*[C, L, I](parser: EarleyParser[C, L],
                      toks: TokStream[Token[C, L, I]]): seq[ParseTree[C, L, I]] =
   let state = buildItems(parser, toks)
-  {.noSideEffect.}:
-    parser.grammar.printItems(state)
+  # {.noSideEffect.}:
+  #   parser.grammar.printItems(state)
 
   let chart = chartOfItems(parser.grammar, state)
-  {.noSideEffect.}:
-    parser.grammar.printChart(chart)
+  # {.noSideEffect.}:
+  #   parser.grammar.printChart(chart)
 
   return parseTree(parser.grammar, toks, chart)
