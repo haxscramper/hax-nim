@@ -174,11 +174,9 @@ suite "Table-driven vs recursive descent":
       earleyParser = newEarleyParser[TokenKind, string](
         grammarVal.toGrammar())
 
-      earleyTree = mapString(testInput).makeStream().withResIt:
+      earleyTree = mapString("[a]").makeStream().withResIt:
         earleyParser.parse(it)
 
     earleyTree[0].toPng("/tmp/earley.png")
-    echo earleyTree[0].treeRepr()
+    earleyTree[0].printTreeRepr()
     echo "Finished earley parser"
-
-

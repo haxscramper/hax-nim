@@ -35,7 +35,8 @@ func matches[C, L, I](sym: FlatBnf[C, L],
   else:
     sym.tok.matches toks[pos]
 
-func contains(ns: NullSet, s: BnfNterm): bool = s in ns.nulls
+func contains*(ns: NullSet, s: BnfNterm): bool = s in ns.nulls
+func len*(ns: NullSet): int = ns.nulls.len
 
 func append[A](a: var seq[A], b: A): void =
   for it in a:
@@ -44,16 +45,45 @@ func append[A](a: var seq[A], b: A): void =
 
   a.add b
 
-func nullableSymbols[C, L](gr: BnfGrammar[C, L]): NullSet =
-  # TODO use null set construction from ll1 table parser
-  discard
-
 func nextSymbol[C, L](gr: BnfGrammar[C, L], item: EItem): Option[FlatBnf[C, L]] =
   if gr.ruleBody(item.ruleId).len > item.nextPos:
     some(gr.ruleBody(item.ruleId)[item.nextPos])
   else:
     none(FlatBnf[C, L])
 
+#*************************************************************************#
+#**********************  Nullable set construction  **********************#
+#*************************************************************************#
+
+func isNullable[C, L](ns: NullSet, rule: seq[FlatBnf[C, L]]): bool =
+  for item in rule:
+    if item.isTerm:
+      return false
+    else:
+      if item.nterm notin ns:
+        return false
+
+  return true
+
+func updateNss[C, L](ns: var NullSet, gr: BnfGrammar[C, L]): void =
+  for head, alts in gr.rules:
+    for alt in alts:
+      if ns.isNullable(alt.elems):
+        ns.nulls.incl head
+
+func nullableSymbols[C, L](grammar: BnfGrammar[C, L]): NullSet =
+  while true:
+    let size = result.len
+    updateNss(result, grammar)
+    if result.len == size:
+      break
+
+#*************************************************************************#
+#***************************  Look detection  ****************************#
+#*************************************************************************#
+
+
+# TODO
 
 #*************************************************************************#
 #***************************  Pretty-printing  ***************************#
@@ -102,15 +132,19 @@ proc printItems[C, L](gr: BnfGrammar[C, L], state: State, onlyFull: bool = false
 
         echo buf
 
-func printTreeRepr[C, L, I](pt: ParseTree[C, L, I], level: int = 0): string =
+proc printTreeRepr*[C, L, I](pt: ParseTree[C, L, I], level: int = 0): void =
   let pref = "  ".repeat(level)
-  if pt.isToken:
-   echo "[*]" & pref & $pt.token
-  else:
-    let rulestr = "" # TODO  pt.ruleId.exprRepr()
-    echo fmt("[{pt.subnodes.len}] {pref}{rulestr}")
-    for sub in pt.subnodes:
-      printTreeRepr(sub, level + 1)
+  case pt.kind:
+    of ptkTerm:
+      echo "[*]" & pref & $pt.tok
+    of ptkList:
+      echo fmt("[ ... ]")
+      for sub in pt.getSubnodes():
+        printTreeRepr(sub, level + 1)
+    of ptkNterm:
+      echo fmt("[{pt.subnodes.len}] {pref}{pt.nterm}")
+      for sub in pt.getSubnodes():
+        printTreeRepr(sub, level + 1)
 
 #*************************************************************************#
 #**************************  Item construction  **************************#
@@ -152,7 +186,7 @@ func complete[C, L, I](state: var State,
     if next.isNone():
       discard
     else:
-      let sym: FlatBnf[C, L] = next.get()
+      let sym = next.get()
       if sym.isTerm:
         discard
       else:
@@ -163,25 +197,24 @@ func complete[C, L, I](state: var State,
 func buildItems[C, L, I](parser: EarleyParser[C, L],
                          toks: TokStream[Token[C, L, I]]): State =
   let nullable = nullableSymbols(parser.grammar)
-  var state: State
   for ruleId in parser.grammar.iterrules(parser.start):
-    state.add @[EItem(ruleId: ruleId, startPos: 0, nextPos: 0)]
+    result.add @[EItem(ruleId: ruleId, startPos: 0, nextPos: 0)]
 
   var itemset = 0
-  while itemset < state.len:
+  while itemset < result.len:
     var j = 0
-    while j < state[itemset].len:
+    while j < result[itemset].len:
       let next: Option[FlatBnf[C, L]] = parser.grammar.nextSymbol(
-        state[itemset][j])
+        result[itemset][j])
 
       if next.isNone():
-        complete(state, itemset, j, parser.grammar, toks)
+        complete(result, itemset, j, parser.grammar, toks)
       else:
         let sym: FlatBnf[C, L] = next.get()
         if sym.isTerm:
-          scan(state, itemset, j, sym, parser.grammar, toks)
+          scan(result, itemset, j, sym, parser.grammar, toks)
         else:
-          predict(state, itemset, j, nullable, sym, parser.grammar)
+          predict(result, itemset, j, nullable, sym, parser.grammar)
       inc j
     inc itemset
 
@@ -249,7 +282,7 @@ func parseTree[C, L, I](gr: BnfGrammar[C, L],
         let singletok = (symbols.len == 1) and (symbols[0].isTerm)
         if not singletok:
           result = some(ParseTree[C, L, I](
-            kind: ptkNTerm, subnodes: @[], start: currpos
+            kind: ptkNTerm, subnodes: @[], start: currpos, nterm: name.exprRepr()
             # ruleId: alt, # TODO store rule name
           ))
 
@@ -276,9 +309,12 @@ func parseTree[C, L, I](gr: BnfGrammar[C, L],
           else:
             let res = aux(currpos, finish, sym.nterm)
             if res.isSome():
-              currpos = res.get().finish
-              result.get().subnodes.add res.get()
-              result.get().finish = currpos
+              if (not (res.get().kind == ptkTerm)) and res.get().len == 0:
+                discard
+              else:
+                currpos = res.get().finish
+                result.get().subnodes.add res.get()
+                result.get().finish = currpos
             else:
               matchOk = false
               break ruleTry

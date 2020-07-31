@@ -357,7 +357,8 @@ func exprRepr*[C, L](
   fbnf: FlatBnf[C, L],
   conf: GrammarPrintConf = defaultGrammarPrintConf): string =
   if fbnf.isTerm:
-    ($fbnf.tok).wrap(conf.termWrap)
+    let lex = fbnf.tok.hasLex.tern(&".{fbnf.tok.lex}", "")
+    (&"{fbnf.tok.cat}{lex}").wrap(conf.termWrap)
   else:
     (fbnf.nterm.exprRepr(conf.normalizeNterms)).wrap(conf.ntermWrap)
     # of fbkNterm:
