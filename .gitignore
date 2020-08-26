@@ -13,6 +13,10 @@ nimcache/
 **/*.tmp
 **/*.html
 **/*.css
+**/*.o
+**/*.out
+**/*.txt.c
+**/secret.*
 
 /scripts/.circuit
 /scripts/.latex

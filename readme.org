@@ -1,15 +1,4 @@
-Collection of libraries and tools written in nim that I use
-in different projects
-
-- colecho :: colorful command-line echo alternative with support for
-  formating output. Supports multiple styles and message levels
-  (debug, warn, error, log)
-- hargparse :: *very* simple command-line options parser with support
-  for automatic generation of help messages. It is a very hack-ish
-  library - it will be supreseded by ~hargparse2~ at some point (see
-  =hargparse2/devnotes.org= for complete list of planned features).
-- create_script :: command-line utiltity to automate create of scripts
-  and simple programs. Development temprarily paused
-- hmisc :: miscelaneous helper functions/types
-- parse_path :: cli tool to simplify parsing file/directory paths
-- scripts :: misc cli utilities
+Leftover scraps from other projects. Originally I developed everything
+in this single repository and later moved everything into separate
+ones. You might some interestesting things here, but I'm not even sure
+if anything even compiles.
