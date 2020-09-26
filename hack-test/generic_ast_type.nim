@@ -1,50 +1,48 @@
 type
+  Token[C, L] = object
+    cat: C
+    lex: L
+
   AstKind = enum
     akList
     akToken
     akNterm
 
-  AstSelector = object
-    token: set[uint8]
-    nterm: set[uint8]
-
-  Ast[Node; Kind; Kinds: static[AstSelector]] = object
-    kind: Kind
+  Ast[Node; Lex; Kind] = object
     case tkind: AstKind
       of akList, akNterm:
         node: Node
-        subnodes: seq[Ast[Node, Kind, Kinds]]
+        subnodes: seq[Ast[Node, Lex, Kind]]
       of akToken:
-        token: Node
+        token: Token[Kind, Lex]
 
   AAstKind = enum
+    aakLex
     aakNode
-    aakLit
-    aakFloat
 
+  AAstLex = object
+    case kind: AAstKind
+      of aakLex:
+        discard
+      else:
+        discard
 
   AAst = object
     case kind: AAstKind
       of aakNode:
-        meta: string
-        nice: string
-      of aakLit:
-        data: float
-        world: float
-      of aakFloat:
-        zzz: char
+        discard
+      else:
+        discard
 
-func toUInt8Set[En: enum](enset: set[En]): set[uint8] =
-  debugecho enset
-  for val in enset:
-    result.incl uint8(ord(val))
+  CAst = Ast[AAst, AAstLex, AAstKind]
 
+func kind[N, L, K](aa: Ast[N, L, K]): K =
+  case aa.tkind:
+    of akList:
+      raiseAssert("#[ IMPLEMENT ]#")
+    of akNTerm:
+      aa.node.kind
+    of akToken:
+      aa.token.cat
 
-type
-  AstTree = Ast[AAst, AAstKind, AstSelector(
-    token: toUInt8Set({aakLit, aakFloat}),
-    nterm: toUInt8Set({aakNode})
-  )]
-
-let a = AstTree()
-echo typeof(a)
+# func `[]`[N, L, K](aa: Ast[N, L, K]):
