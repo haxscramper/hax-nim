@@ -8,7 +8,7 @@ proc parseRstString(s: string): PRstNode =
 
 let testStr = """
 
-*eee*
+*eee 12*
 
 e df sfa ee
 

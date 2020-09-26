@@ -1,3 +1,5 @@
+import macros
+
 type
   Lexer = object
     buf: seq[string]
@@ -9,7 +11,6 @@ func next(l: var Lexer) = inc l.idx
 
 var buf = Lexer(buf: @["hello", "world", "nice"])
 
-echo buf[]
 echo buf[+2]
 buf.next()
 echo buf[-1]

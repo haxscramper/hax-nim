@@ -1,6 +1,7 @@
 import macros, typetraits
 
 macro dumpType(a: typed) =
+  echo "\e[33m################3\e[39m"
   echo "=========== ", a.toStrLit()
   echo "=========== ", a.getType().toStrLit()
   let kind = a.getTypeImpl().kind
