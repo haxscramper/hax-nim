@@ -1,2 +1,6 @@
 .*
 !.gitignore
+*.csv
+*.json
+*.xlsx
+*.ics
