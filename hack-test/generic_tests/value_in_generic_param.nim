@@ -31,3 +31,8 @@ let inst = Obj(f1: Hell[int, "world"](f1: 12))
 impl(Obj())
 
 var x: Obj = Obj()
+
+block:
+  var x: Hell[int, "he"]; echo "typeof: ", typeof(x)
+block:
+  var x: Hell[12, "he"]; echo "typeof: ", typeof(x)

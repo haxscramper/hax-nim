@@ -30,7 +30,7 @@ proc cmd*(this: R2PipeApi, c: string): string =
     this.lib = r_core_new()
   return $r_core_cmd_str(this.lib, c)
 
-proc cmdj*(r: R2PipeApi , c: string):JsonNode =
+proc cmdj*(r: R2PipeApi, c: string): JsonNode =
   return parseJson(cmd(r, c))
 
 #================================  ----  =================================#
