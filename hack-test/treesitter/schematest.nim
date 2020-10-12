@@ -168,23 +168,42 @@ func makeImplTsFor(lang: string): PNode =
              Call[== newPIdent("tree_sitter_toml")]]])
   ).toNNode()
 
-  result.add newPProcDecl(
-    "parseString", {
-      "parser": newPType(parser),
-      "str": newPType("string")
-    },
-    some newPType(nodeType),
-    makeTree[PNode](
-      StmtList[
-        Call[== id("echo"), == lit("22")],
-        Call[
-          == id(nodeType),
-          Call[
-            == id("tsParseString"),
-            Call[== id("PtsParser"), == id("parser")],
+  let impl = makeTree[PNode]:
+    StmtList:
+      Call:
+        == id("ts_tree_root_node")
+        Call:
+          == id("ts_parser_parse_string")
+          Call:
+            == id("PtsParser")
+            == id("parser")
+          NilLit
+          DotExpr:
             == id("str")
-          ]]])
-  ).toNNode()
+            == id("cstring")
+          Call:
+            == id("uint32")
+            DotExpr:
+              == id("str")
+              == id("len")
+
+  # result.add newPProcDecl(
+  #   "parseString", {
+  #     "parser": newPType(parser),
+  #     "str": newPType("string")
+  #   },
+  #   some newPType(nodeType),
+  #   makeTree[PNode](
+  #     StmtList[
+  #       Call[== id("echo"), == lit("22")],
+  #       Call[
+  #         == id(nodeType),
+  #         Call[
+  #           == id("tsParseString"),
+  #           Call[== id("PtsParser"), == id("parser")],
+  #           == id("str")
+  #         ]]])
+  # ).toNNode()
 
 
 let spec = data.getElems().mapIt(it.toTree())
@@ -228,10 +247,13 @@ let file = inputLang & "_parser.nim"
 
 file.writeFile(buf.join("\n\n\n"))
 
-execShell makeGnuCmd("clang").withIt do:
-  it.arg "src/parser.c"
-  it - "c"
-  it - ("o", "", inputLang & "-parser-lib.o")
+let srcFiles = ["parser.c", "scanner.c"]
+
+for file in srcFiles:
+  execShell makeGnuCmd("clang").withIt do:
+    it.arg "src/" & file
+    it - "c"
+    it - ("o", "", file.dashedWords() & ".o")
 
 rmDir "cache.d"
 
@@ -244,16 +266,32 @@ try:
     it.subCmd "c"
     it - ("nimcache", "cache.d")
     it - ("forceBuild", "on")
-    it - ("passL", "toml-parser-lib.o")
+    for file in srcFiles:
+      # Link parser and external scanners
+      it - ("passL", file.dashedWords() & ".o")
+
+    # Link tree-sitter
+    it - ("passL", "-ltree-sitter")
+
     it.arg "parser_user.nim"
+
+  echo stdout
+  echo stderr
 except ShellError:
   for line in getCEx(ShellError).errstr.split("\n"):
-    if line.contains(["undefined reference", "external"]):
-      once:
-        err "Missing linking with external scanners"
+    if line.contains(["undefined reference"]):
+      if line.contains("external"):
+        once:
+          err "Missing linking with external scanners"
+      elif line.contains("ts_"):
+        once:
+          err "Missing linking with tree-sitter library"
+      else:
+        once:
+          err "Missing linking with other library"
+
       info line.split(" ")[^1][1..^2]
     elif line.contains(["/bin/ld", "ld returned"]):
       discard
     else:
       echo line
-  # printShellError()

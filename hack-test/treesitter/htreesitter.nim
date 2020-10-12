@@ -34,9 +34,10 @@ proc ts_parser_parse_string*(
 
 proc ts_tree_root_node*(self: PTSTree): TSNode {.cproc.}
 
-proc tsParseString*(self: PtsParser, str: string): TsNode {.nimcall.} =
+proc tsParseString222*(self: PtsParser, str: string): TsNode =
   ts_tree_root_node(
     ts_parser_parse_string(
       self, nil, str.cstring, uint32(str.len)))
+
 
 proc nodeType*(node: TSNode): string = $node.tsNodeType()
