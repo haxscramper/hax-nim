@@ -1,7 +1,7 @@
 {.push header: "<tree_sitter/api.h>"}
 
 {.pragma: cstruct, importc, incompleteStruct.}
-{.pragma: cproc, importc, cdecl, dynlib: "libclang.so".}
+{.pragma: cproc, importc, cdecl.}
 
 type
   TSTree* {.cstruct.} = object
@@ -24,7 +24,7 @@ type
 proc ts_parser_parse(
   self: PtsParser, oldTree: PtsTree, input: PtsInput): PtsTree {.cproc.}
 
-proc ts_node_type(a1: TSNode): cstring {.cproc.}
+proc ts_node_type*(a1: TSNode): cstring {.cproc.}
 
 proc ts_parser_new*(): PtsParser {.cproc.}
 proc ts_parser_set_language*(self: PtsParser, lang: PtsLanguage) {.cproc.}
@@ -34,10 +34,4 @@ proc ts_parser_parse_string*(
 
 proc ts_tree_root_node*(self: PTSTree): TSNode {.cproc.}
 
-proc tsParseString222*(self: PtsParser, str: string): TsNode =
-  ts_tree_root_node(
-    ts_parser_parse_string(
-      self, nil, str.cstring, uint32(str.len)))
-
-
-proc nodeType*(node: TSNode): string = $node.tsNodeType()
+# proc nodeType*(node: TSNode): string = $node.tsNodeType()

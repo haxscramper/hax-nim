@@ -123,8 +123,7 @@ func makeLangParserName(lang: string): string =
 
 
 dumpTree:
-  result = TomlParser(ts_parser_new())
-  ts_parser_set_language(result, tree_sitter_toml())
+  $ts_node_type(TSNode(node))
 
 func id(str: string): PNode = newPident(str)
 proc lit(arg: string | int): PNode = newPLit(arg)
@@ -135,16 +134,19 @@ func makeImplTsFor(lang: string): PNode =
     parser = lang.makeLangParserName()
     nodeType = lang.makeNodeName()
 
-
   result.add newPProcDecl(
     "tsNodeType",
     {"node" : newPtype(nodeType)},
     some newPType("string"),
-    makeTree[PNode](Call[
-      == newPIdent("nodeType"),
-      Call[
-        == id("TSNode"),
-        == id("node")]])
+    block:
+      makeTree[PNode]:
+        Prefix:
+          == "$".id
+          Call:
+            == id("ts_node_type")
+            Call:
+              == "TSNode".id
+              == "node".id
   ).toNNode()
 
   result.add newPProcDecl(
@@ -168,42 +170,35 @@ func makeImplTsFor(lang: string): PNode =
              Call[== newPIdent("tree_sitter_toml")]]])
   ).toNNode()
 
-  let impl = makeTree[PNode]:
-    StmtList:
-      Call:
-        == id("ts_tree_root_node")
-        Call:
-          == id("ts_parser_parse_string")
-          Call:
-            == id("PtsParser")
-            == id("parser")
-          NilLit
-          DotExpr:
-            == id("str")
-            == id("cstring")
-          Call:
-            == id("uint32")
-            DotExpr:
-              == id("str")
-              == id("len")
 
-  # result.add newPProcDecl(
-  #   "parseString", {
-  #     "parser": newPType(parser),
-  #     "str": newPType("string")
-  #   },
-  #   some newPType(nodeType),
-  #   makeTree[PNode](
-  #     StmtList[
-  #       Call[== id("echo"), == lit("22")],
-  #       Call[
-  #         == id(nodeType),
-  #         Call[
-  #           == id("tsParseString"),
-  #           Call[== id("PtsParser"), == id("parser")],
-  #           == id("str")
-  #         ]]])
-  # ).toNNode()
+  result.add newPProcDecl(
+    "parseString", {
+      "parser": newPType(parser),
+      "str": newPType("string")
+    },
+    some newPType(nodeType),
+    block:
+      makeTree[PNode]:
+        StmtList:
+          Call:
+            == id(nodeType)
+            Call:
+              == id("ts_tree_root_node")
+              Call:
+                == id("ts_parser_parse_string")
+                Call:
+                  == id("PtsParser")
+                  == id("parser")
+                NilLit()
+                DotExpr:
+                  == id("str")
+                  == id("cstring")
+                Call:
+                  == id("uint32")
+                  Call:
+                    == id("len")
+                    == id("str")
+  ).toNNode()
 
 
 let spec = data.getElems().mapIt(it.toTree())
@@ -264,6 +259,7 @@ startColorLogger()
 try:
   let (stdout, stderr, code) = runShell makeNimCmd("nim").withIt do:
     it.subCmd "c"
+    it - "r"
     it - ("nimcache", "cache.d")
     it - ("forceBuild", "on")
     for file in srcFiles:
@@ -281,16 +277,15 @@ except ShellError:
   for line in getCEx(ShellError).errstr.split("\n"):
     if line.contains(["undefined reference"]):
       if line.contains("external"):
-        once:
-          err "Missing linking with external scanners"
+        once: err "Missing linking with external scanners"
+        info line.split(" ")[^1][1..^2]
       elif line.contains("ts_"):
-        once:
-          err "Missing linking with tree-sitter library"
+        once: err "Missing linking with tree-sitter library"
+        info line
       else:
-        once:
-          err "Missing linking with other library"
+        once: err "Missing linking with other library"
+        info line
 
-      info line.split(" ")[^1][1..^2]
     elif line.contains(["/bin/ld", "ld returned"]):
       discard
     else:
