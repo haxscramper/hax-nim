@@ -26,4 +26,17 @@ proc ts_parser_parse(
 
 proc ts_node_type(a1: TSNode): cstring {.cproc.}
 
+proc ts_parser_new*(): PtsParser {.cproc.}
+proc ts_parser_set_language*(self: PtsParser, lang: PtsLanguage) {.cproc.}
+proc ts_parser_parse_string*(
+  self: PtsParser, tree: PtsTree,
+  input: cstring, length: uint32): PtsTree {.cproc.}
+
+proc ts_tree_root_node*(self: PTSTree): TSNode {.cproc.}
+
+proc tsParseString*(self: PtsParser, str: string): TsNode {.nimcall.} =
+  ts_tree_root_node(
+    ts_parser_parse_string(
+      self, nil, str.cstring, uint32(str.len)))
+
 proc nodeType*(node: TSNode): string = $node.tsNodeType()

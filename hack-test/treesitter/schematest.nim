@@ -1,9 +1,10 @@
-import macros, options, sequtils
+import macros, options, sequtils, strutils
 import compiler/ast
 import hmisc/macros/matching
-import hmisc/other/[hjson, hshell]
+import hmisc/other/[hjson, hshell, oswrap, colorlogger]
 import hnimast
-import hmisc/algo/[clformat, halgorithm]
+import hmisc/hexceptions
+import hmisc/algo/[clformat, halgorithm, hstring_algo]
 import hpprint, strutils
 import htreesitter
 
@@ -110,59 +111,149 @@ func makeGetKind(spec: NodeSpec, lang: string): ProcDecl[PNode] =
 
   result.impl = impl
 
+func camelCase(str: varargs[string, `$`]): string =
+  str.joinCamel()
+
+func pascalCase(str: varargs[string, `$`]): string =
+  result = str.joinCamel()
+  result[0] = result[0].toUpperAscii()
+
+func makeLangParserName(lang: string): string =
+  pascalCase(lang, "parser")
+
+
 dumpTree:
-  nodeType(TSTree(node))
+  result = TomlParser(ts_parser_new())
+  ts_parser_set_language(result, tree_sitter_toml())
+
+func id(str: string): PNode = newPident(str)
+proc lit(arg: string | int): PNode = newPLit(arg)
 
 func makeImplTsFor(lang: string): PNode =
   result = nnkStmtList.newPTree()
+  let
+    parser = lang.makeLangParserName()
+    nodeType = lang.makeNodeName()
+
 
   result.add newPProcDecl(
     "tsNodeType",
-    {"node" : newPType(lang.makeNodeName())},
+    {"node" : newPtype(nodeType)},
     some newPType("string"),
     makeTree[PNode](Call[
       == newPIdent("nodeType"),
       Call[
-        == newPident("TSNode"),
-        == newPident("node")]])
+        == id("TSNode"),
+        == id("node")]])
   ).toNNode()
 
   result.add newPProcDecl(
-    "tree_sitter_toml", @[],
+    "tree_sitter_" & lang, @[],
     some newPType("PtsLanguage"),
     exported = false,
     pragma = newPPRagma(@["importc", "cdecl"])
   ).toNNode()
 
 
+  result.add newPProcDecl(
+    camelCase("new", lang, "parser"), @[],
+    some newPType(parser),
+    makeTree[PNode](
+      StmtList[
+        Asgn[== id("result"),
+             Call[== id(parser),
+                  Call[== id("ts_parser_new")]]],
+        Call[== newPIdent("ts_parser_set_language"),
+             Call[== id("PtsParser"), == newPIdent("result")],
+             Call[== newPIdent("tree_sitter_toml")]]])
+  ).toNNode()
+
+  result.add newPProcDecl(
+    "parseString", {
+      "parser": newPType(parser),
+      "str": newPType("string")
+    },
+    some newPType(nodeType),
+    makeTree[PNode](
+      StmtList[
+        Call[== id("echo"), == lit("22")],
+        Call[
+          == id(nodeType),
+          Call[
+            == id("tsParseString"),
+            Call[== id("PtsParser"), == id("parser")],
+            == id("str")
+          ]]])
+  ).toNNode()
+
+
 let spec = data.getElems().mapIt(it.toTree())
+
+const inputLang = "toml"
 
 var buf: seq[string]
 
 buf.add $makeTree[PNode](ImportStmt[== newPIdent("htreesitter")])
-buf.add $makeKindEnum(spec, "toml").toNNode(standalone = true)
+buf.add $makeKindEnum(spec, inputLang).toNNode(standalone = true)
 
-let tree = makeTree[PNode]:
-  TypeSection[
-    TypeDef[
-      Postfix[
-        == newPident("*"),
-        == makeNodeName("toml").newPident(),
-      ],
-      Empty(),
-      DistinctTy[== newPIdent("TSNode")]]]
-
-buf.add $tree
-
-
-buf.add $makeImplTsFor("toml")
-buf.add $makeGetKind(spec, "toml").toNNode()
+func makeDistinctType(baseType, aliasType: NType[PNode]): PNode =
+  makeTree[PNode]:
+    TypeSection[
+      TypeDef[
+        Postfix[
+          == id("*"),
+          == aliasType.toNNode(),
+        ],
+        Empty(),
+        DistinctTy[== baseType.toNNode()]]]
 
 
-let file = "toml_parser.nim"
+buf.add $makeDistinctType(
+  newPType("TSNode"),
+  newPType(makeNodeName(inputLang))
+)
+
+
+buf.add $makeDistinctType(
+  newPType("PtsParser"),
+  newPType(makeLangParserName(inputLang))
+)
+
+
+buf.add $makeImplTsFor(inputLang)
+buf.add $makeGetKind(spec, inputLang).toNNode()
+
+
+let file = inputLang & "_parser.nim"
 
 file.writeFile(buf.join("\n\n\n"))
 
-execShell makeNimCmd("nim").withIt do:
-  it.subCmd "c"
-  it.arg file
+execShell makeGnuCmd("clang").withIt do:
+  it.arg "src/parser.c"
+  it - "c"
+  it - ("o", "", inputLang & "-parser-lib.o")
+
+rmDir "cache.d"
+
+# template do
+
+startColorLogger()
+
+try:
+  let (stdout, stderr, code) = runShell makeNimCmd("nim").withIt do:
+    it.subCmd "c"
+    it - ("nimcache", "cache.d")
+    it - ("forceBuild", "on")
+    it - ("passL", "toml-parser-lib.o")
+    it.arg "parser_user.nim"
+except ShellError:
+  for line in getCEx(ShellError).errstr.split("\n"):
+    if line.contains(["undefined reference", "external"]):
+      once:
+        err "Missing linking with external scanners"
+      info line.split(" ")[^1][1..^2]
+    elif line.contains(["/bin/ld", "ld returned"]):
+      discard
+    else:
+      echo line
+  # printShellError()
