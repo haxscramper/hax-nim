@@ -3,10 +3,12 @@ import compiler/ast
 import hmisc/macros/matching
 import hmisc/other/[hjson, hshell, oswrap, colorlogger]
 import hnimast
-import hmisc/hexceptions
+import hmisc/[hexceptions, hdebug_misc]
 import hmisc/algo/[clformat, halgorithm, hstring_algo]
 import hpprint, strutils
 import htreesitter
+
+{.experimental: "caseStmtMacros".}
 
 let data = "src/node-types.json".parseFile
 
@@ -122,8 +124,46 @@ func makeLangParserName(lang: string): string =
   pascalCase(lang, "parser")
 
 
-dumpTree:
-  $ts_node_type(TSNode(node))
+func newPTree(kind: NimNodeKind, val: string): PNode =
+  result = PNode(kind: kind.toNk())
+  result.strVal = val
+
+func newPTree(kind: NimNodeKind, val: SomeInteger): PNode =
+  result = PNode(kind: kind.toNK())
+  result.intVal = BiggestInt(val)
+
+
+macro pquote*(mainBody: untyped): untyped =
+  ## `quote` macro to generate `PNode` builder
+  func aux(body: NimNode): NimNode =
+    result = newCall("newPTree", ident $body.kind)
+    case body.kind:
+      of nnkAccQuoted:
+        if body[0].kind == nnkIdent and
+           not body[0].strVal().validIdentifier(): # Special case
+           # operators `[]` - most of the time you would want to
+           # declare `` proc `[]` `` rather than interpolate `[]`
+           # (which is not valid variable name even)
+          let bodyLit = newLit body[0].strVal()
+          return quote do:
+            newPTree(nnkAccQuoted, newPIdent(`bodyLit`))
+        else:
+          return body[0]
+      of nnkStrKinds:
+        result.add newLit body.strVal
+      of nnkFloatKinds:
+        result.add newLit body.floatVal
+      of nnkIntKinds:
+        result.add newLit body.intVal
+      of nnkIdent, nnkSym:
+        result = newCall("newPIdent", newLit(body.strVal))
+      else:
+        for subnode in body:
+          result.add aux(subnode)
+
+  result = aux(mainBody)
+  # echov result
+
 
 func id(str: string): PNode = newPident(str)
 proc lit(arg: string | int): PNode = newPLit(arg)
@@ -131,75 +171,56 @@ proc lit(arg: string | int): PNode = newPLit(arg)
 func makeImplTsFor(lang: string): PNode =
   result = nnkStmtList.newPTree()
   let
-    parser = lang.makeLangParserName()
-    nodeType = lang.makeNodeName()
+    parser: PNode = lang.makeLangParserName().newPType().toNNode()
+    nodeType: PNode = lang.makeNodeName().newPType().toNNode()
+    langLen: PNode = newPLit(lang.len)
 
-  result.add newPProcDecl(
-    "tsNodeType",
-    {"node" : newPtype(nodeType)},
-    some newPType("string"),
-    block:
-      makeTree[PNode]:
-        Prefix:
-          == "$".id
-          Call:
-            == id("ts_node_type")
-            Call:
-              == "TSNode".id
-              == "node".id
-  ).toNNode()
+  result.add pquote do:
+    proc tree_sitter_toml(): PtsLanguage {.importc, cdecl.}
+    proc tsNodeType*(node: `nodeType`): string =
+      echo "nil? ", TsNode(node).tree.isNil()
+      $ts_node_type(TSNode(node))
 
-  result.add newPProcDecl(
-    "tree_sitter_" & lang, @[],
-    some newPType("PtsLanguage"),
-    exported = false,
-    pragma = newPPRagma(@["importc", "cdecl"])
-  ).toNNode()
+    proc newTomlParser*(): `parser` =
+      result = `parser`(ts_parser_new())
+      ts_parser_set_language(PtsParser(result), tree_sitter_toml())
 
+    proc parseString*(parser: `parser`; str: string): `nodeType` =
+      `nodeType`(
+        ts_tree_root_node(
+          ts_parser_parse_string(
+            PtsParser(parser), nil, str.cstring, uint32(len(str)))))
 
-  result.add newPProcDecl(
-    camelCase("new", lang, "parser"), @[],
-    some newPType(parser),
-    makeTree[PNode](
-      StmtList[
-        Asgn[== id("result"),
-             Call[== id(parser),
-                  Call[== id("ts_parser_new")]]],
-        Call[== newPIdent("ts_parser_set_language"),
-             Call[== id("PtsParser"), == newPIdent("result")],
-             Call[== newPIdent("tree_sitter_toml")]]])
-  ).toNNode()
+  startHaxComp()
+  result.add pquote do:
+    func `[]`*(node: `nodeType`,
+               idx: int, withUnnamed: bool = false): `nodeType` =
+      if withUnnamed:
+        `nodeType`(ts_node_child(TSNode(node), uint32(idx)))
+      else:
+        `nodeType`(ts_node_named_child(TSNode(node), uint32(idx)))
 
+    func len*(node: `nodeType`, withUnnamed: bool = false): int =
+      if withUnnamed:
+        int(ts_node_child_count(TSNode(node)))
+      else:
+        int(ts_node_named_child_count(TSNode(node)))
 
-  result.add newPProcDecl(
-    "parseString", {
-      "parser": newPType(parser),
-      "str": newPType("string")
-    },
-    some newPType(nodeType),
-    block:
-      makeTree[PNode]:
-        StmtList:
-          Call:
-            == id(nodeType)
-            Call:
-              == id("ts_tree_root_node")
-              Call:
-                == id("ts_parser_parse_string")
-                Call:
-                  == id("PtsParser")
-                  == id("parser")
-                NilLit()
-                DotExpr:
-                  == id("str")
-                  == id("cstring")
-                Call:
-                  == id("uint32")
-                  Call:
-                    == id("len")
-                    == id("str")
-  ).toNNode()
+    iterator items(node: `nodeType`,
+                   withUnnamed: bool = false): `nodeType` =
+      for i in 0 .. node.len(withUnnamed):
+        yield node[i, withUnnamed]
 
+    proc treeRepr*(mainNode: `nodeType`,
+                   withUnnamed: bool = false): string =
+      proc aux(node: `nodeType`, level: int): seq[string] =
+        result = @["  ".repeat(level) & ($node.kind())[`langLen`..^1]]
+        echo result
+        echo node.len
+        for subn in items(node, withUnnamed):
+          result.add subn.aux(level + 1)
+
+      return aux(mainNode, 0).join("\n")
 
 let spec = data.getElems().mapIt(it.toTree())
 
@@ -207,19 +228,23 @@ const inputLang = "toml"
 
 var buf: seq[string]
 
-buf.add $makeTree[PNode](ImportStmt[== newPIdent("htreesitter")])
+proc add(strBuf: var seq[string], node: PNode) =
+  strBuf.add $node
+
+buf.add pquote do:
+  import htreesitter, sequtils, strutils
+
+# buf.add $makeTree[PNode](ImportStmt[== newPIdent("htreesitter")])
 buf.add $makeKindEnum(spec, inputLang).toNNode(standalone = true)
 
+
 func makeDistinctType(baseType, aliasType: NType[PNode]): PNode =
-  makeTree[PNode]:
-    TypeSection[
-      TypeDef[
-        Postfix[
-          == id("*"),
-          == aliasType.toNNode(),
-        ],
-        Empty(),
-        DistinctTy[== baseType.toNNode()]]]
+  let
+    aliasType = aliasType.toNNode()
+    baseType = baseType.toNNode()
+
+  pquote do:
+    type `aliasType`* = distinct `baseType`
 
 
 buf.add $makeDistinctType(
@@ -233,9 +258,13 @@ buf.add $makeDistinctType(
   newPType(makeLangParserName(inputLang))
 )
 
+let langId = newPident makeNodeName(inputLang)
 
-buf.add $makeImplTsFor(inputLang)
+buf.add pquote do:
+  proc tsNodeType*(node: `langId`): string
+
 buf.add $makeGetKind(spec, inputLang).toNNode()
+buf.add $makeImplTsFor(inputLang)
 
 
 let file = inputLang & "_parser.nim"
@@ -274,7 +303,9 @@ try:
   echo stdout
   echo stderr
 except ShellError:
-  for line in getCEx(ShellError).errstr.split("\n"):
+  let ex = getCEx(ShellError)
+  echo ex.outstr
+  for line in ex.errstr.split("\n"):
     if line.contains(["undefined reference"]):
       if line.contains("external"):
         once: err "Missing linking with external scanners"

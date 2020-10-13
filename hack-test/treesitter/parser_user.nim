@@ -6,3 +6,4 @@ let tree = parser.parseString("test = 12")
 
 echo tree.tsNodeType()
 echo tree.kind
+echo tree.treeRepr()
