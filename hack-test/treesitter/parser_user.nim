@@ -2,8 +2,16 @@ import toml_parser, macros, htreesitter
 
 var parser = newTomlParser()
 
-let tree = parser.parseString("test = 12")
+let str = """
+# This is a TOML document.
 
-echo tree.tsNodeType()
-echo tree.kind
-echo tree.treeRepr()
+title = "TOML Example"
+
+[owner]
+name = "Tom Preston-Werner"
+dob = 1979-05-27T07:32:00-08:00 # First class dates
+"""
+
+let tree = parser.parseString(str)
+
+echo tree.treeRepr(str)

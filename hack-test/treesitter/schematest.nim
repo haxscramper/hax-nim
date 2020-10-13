@@ -10,8 +10,6 @@ import htreesitter
 
 {.experimental: "caseStmtMacros".}
 
-let data = "src/node-types.json".parseFile
-
 type
   TreeChildren = object
     multiple: bool
@@ -24,6 +22,75 @@ type
     children: Option[TreeChildren]
 
   NodeSpec = seq[Tree]
+
+
+func newPTree(kind: NimNodeKind, val: string): PNode =
+  result = PNode(kind: kind.toNk())
+  result.strVal = val
+
+func newPTree(kind: NimNodeKind, val: SomeInteger): PNode =
+  result = PNode(kind: kind.toNK())
+  result.intVal = BiggestInt(val)
+
+
+
+
+func newPProcDecl(
+  name: string,
+  args: openarray[(string, NType[PNode])] = @[],
+  rtyp: Option[NType[PNode]] = none(NType[PNode]),
+  impl: PNode = nil,
+  exported: bool = true,
+  pragma: PPragma = PPRagma()
+     ): ProcDecl[PNode] =
+  result.name = name
+  result.exported = exported
+  result.signature = NType[PNode](
+    kind: ntkProc,
+    arguments: toNIdentDefs(args)
+  )
+
+  result.signature.pragma = pragma
+  if rtyp.isSome():
+    result.signature.setRtype rtyp.get()
+
+  result.impl = impl
+
+
+
+func id(str: string): PNode = newPident(str)
+proc lit(arg: string | int): PNode = newPLit(arg)
+
+macro pquote*(mainBody: untyped): untyped =
+  ## `quote` macro to generate `PNode` builder
+  func aux(body: NimNode): NimNode =
+    result = newCall("newPTree", ident $body.kind)
+    case body.kind:
+      of nnkAccQuoted:
+        if body[0].kind == nnkIdent and
+           not body[0].strVal().validIdentifier(): # Special case
+           # operators `[]` - most of the time you would want to
+           # declare `` proc `[]` `` rather than interpolate `[]`
+           # (which is not valid variable name even)
+          let bodyLit = newLit body[0].strVal()
+          return quote do:
+            newPTree(nnkAccQuoted, newPIdent(`bodyLit`))
+        else:
+          return body[0]
+      of nnkStrKinds:
+        result.add newLit body.strVal
+      of nnkFloatKinds:
+        result.add newLit body.floatVal
+      of nnkIntKinds:
+        result.add newLit body.intVal
+      of nnkIdent, nnkSym:
+        result = newCall("newPIdent", newLit(body.strVal))
+      else:
+        for subnode in body:
+          result.add aux(subnode)
+
+  result = aux(mainBody)
+
 
 func toTree(js: JsonNode): Tree =
   result = Tree(
@@ -62,27 +129,6 @@ func makeKindEnum(spec: NodeSpec, lang: string): PEnum =
     result.values.add makeEnumField[PNode](
       elem.ntermName(lang), comment = elem.ttype)
 
-func newPProcDecl(
-  name: string,
-  args: openarray[(string, NType[PNode])] = @[],
-  rtyp: Option[NType[PNode]] = none(NType[PNode]),
-  impl: PNode = nil,
-  exported: bool = true,
-  pragma: PPragma = PPRagma()
-     ): ProcDecl[PNode] =
-  result.name = name
-  result.exported = exported
-  result.signature = NType[PNode](
-    kind: ntkProc,
-    arguments: toNIdentDefs(args)
-  )
-
-  result.signature.pragma = pragma
-  if rtyp.isSome():
-    result.signature.setRtype rtyp.get()
-
-  result.impl = impl
-
 
 func makeGetKind(spec: NodeSpec, lang: string): ProcDecl[PNode] =
   result = newPProcDecl(
@@ -91,12 +137,9 @@ func makeGetKind(spec: NodeSpec, lang: string): ProcDecl[PNode] =
     some newPType(lang.makeNodeKindName())
   )
 
-  var impl = makeTree[PNode]:
-    CaseStmt[
-      DotExpr[
-        == newPIdent("node"),
-        == newPIdent("tsNodeType")
-      ]]
+  let nameGet = makeTree[PNode](
+    DotExpr[== id("node"), == id("tsNodeType")])
+  var impl = makeTree[PNode](CaseStmt[== nameGet])
 
   for elem in spec:
     impl.add makeTree[PNode](OfBranch[
@@ -104,12 +147,10 @@ func makeGetKind(spec: NodeSpec, lang: string): ProcDecl[PNode] =
         == newPIdent(elem.ntermName(lang))
     ])
 
-  impl.add makeTree[PNode](Else[
-    Call[
-      == newPIdent("raiseAssert"),
-      == newPLit("Invalid element name")
-    ]
-  ])
+  let assrt = pquote do:
+    raiseAssert("Invalid element name '" & `nameGet` & "'")
+
+  impl.add makeTree[PNode](Else[== assrt])
 
   result.impl = impl
 
@@ -124,66 +165,22 @@ func makeLangParserName(lang: string): string =
   pascalCase(lang, "parser")
 
 
-func newPTree(kind: NimNodeKind, val: string): PNode =
-  result = PNode(kind: kind.toNk())
-  result.strVal = val
-
-func newPTree(kind: NimNodeKind, val: SomeInteger): PNode =
-  result = PNode(kind: kind.toNK())
-  result.intVal = BiggestInt(val)
-
-
-macro pquote*(mainBody: untyped): untyped =
-  ## `quote` macro to generate `PNode` builder
-  func aux(body: NimNode): NimNode =
-    result = newCall("newPTree", ident $body.kind)
-    case body.kind:
-      of nnkAccQuoted:
-        if body[0].kind == nnkIdent and
-           not body[0].strVal().validIdentifier(): # Special case
-           # operators `[]` - most of the time you would want to
-           # declare `` proc `[]` `` rather than interpolate `[]`
-           # (which is not valid variable name even)
-          let bodyLit = newLit body[0].strVal()
-          return quote do:
-            newPTree(nnkAccQuoted, newPIdent(`bodyLit`))
-        else:
-          return body[0]
-      of nnkStrKinds:
-        result.add newLit body.strVal
-      of nnkFloatKinds:
-        result.add newLit body.floatVal
-      of nnkIntKinds:
-        result.add newLit body.intVal
-      of nnkIdent, nnkSym:
-        result = newCall("newPIdent", newLit(body.strVal))
-      else:
-        for subnode in body:
-          result.add aux(subnode)
-
-  result = aux(mainBody)
-  # echov result
-
-
-func id(str: string): PNode = newPident(str)
-proc lit(arg: string | int): PNode = newPLit(arg)
-
 func makeImplTsFor(lang: string): PNode =
   result = nnkStmtList.newPTree()
   let
     parser: PNode = lang.makeLangParserName().newPType().toNNode()
     nodeType: PNode = lang.makeNodeName().newPType().toNNode()
     langLen: PNode = newPLit(lang.len)
+    langImpl: PNode = newPIdent("tree_sitter_" & lang)
 
   result.add pquote do:
-    proc tree_sitter_toml(): PtsLanguage {.importc, cdecl.}
+    proc `langImpl`(): PtsLanguage {.importc, cdecl.}
     proc tsNodeType*(node: `nodeType`): string =
-      echo "nil? ", TsNode(node).tree.isNil()
       $ts_node_type(TSNode(node))
 
     proc newTomlParser*(): `parser` =
       result = `parser`(ts_parser_new())
-      ts_parser_set_language(PtsParser(result), tree_sitter_toml())
+      discard ts_parser_set_language(PtsParser(result), `langImpl`())
 
     proc parseString*(parser: `parser`; str: string): `nodeType` =
       `nodeType`(
@@ -206,23 +203,40 @@ func makeImplTsFor(lang: string): PNode =
       else:
         int(ts_node_named_child_count(TSNode(node)))
 
-    iterator items(node: `nodeType`,
+    proc isNil*(node: `nodeType`): bool =
+      ts_node_is_null(TsNode(node))
+
+    iterator items*(node: `nodeType`,
                    withUnnamed: bool = false): `nodeType` =
       for i in 0 .. node.len(withUnnamed):
         yield node[i, withUnnamed]
 
+    proc slice*(node: `nodeType`): Slice[int] =
+      ts_node_start_byte(TsNode(node)).int ..<
+      ts_node_end_byte(TsNode(node)).int
+
     proc treeRepr*(mainNode: `nodeType`,
+                   instr: string,
                    withUnnamed: bool = false): string =
       proc aux(node: `nodeType`, level: int): seq[string] =
-        result = @["  ".repeat(level) & ($node.kind())[`langLen`..^1]]
-        echo result
-        echo node.len
-        for subn in items(node, withUnnamed):
-          result.add subn.aux(level + 1)
+        if not(node.isNil()):
+          result = @["  ".repeat(level) & ($node.kind())[`langLen`..^1]]
+          if node.len(withUnnamed) == 0:
+            result[0] &= " " & instr[node.slice()]
+
+          for subn in items(node, withUnnamed):
+            result.add subn.aux(level + 1)
 
       return aux(mainNode, 0).join("\n")
 
-let spec = data.getElems().mapIt(it.toTree())
+
+var spec = "src/node-types.json".parseFile().getElems().mapIt(it.toTree())
+let grammar = "src/grammar.json".parseFile()
+
+for extra in grammar["extras"]:
+  if extra.matches({"name": @name}):
+    spec.add Tree(ttype: name.asStr(), named: true)
+
 
 const inputLang = "toml"
 
