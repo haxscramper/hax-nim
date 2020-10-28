@@ -1,15 +1,16 @@
 import std/[os, strformat]
 import Nim / compiler /
   [ idents, options, modulegraphs, passes, lineinfos, sem, pathutils, ast,
-    astalgo, modules, condsyms, passaux
+    astalgo, modules, condsyms, passaux, semdata, msgs, rod, renderer
   ]
 
 let file = "/tmp/ee.nim"
 
 file.writeFile("""
-proc test*(arg: int) = echo arg
-type A* = int
-macro nice() = echo "test"
+template templ1() = echo "test"
+template templ2() = templ1()
+templ2()
+proc proc1 = templ2()
 """)
 
 
@@ -27,23 +28,23 @@ var graph: ModuleGraph = block:
 
   newModuleGraph(cache, config)
 
+proc sempassHack(context: PPassContext, n: PNode): PNode {.nosinks.} =
+  var c = PContext(context)
+  if sfMainModule in c.module.flags:
+    echo "\e[41m*====\e[49m  sempass start  \e[41m=====*\e[49m"
+    echo n
 
-type
-  CustomContext = ref object of PPassContext
-    module: PSym
+  result = sem.myProcess(context, n)
 
-proc passOpen(graph: ModuleGraph; module: PSym): PPassContext =
-  CustomContext(module: module)
+  if sfMainModule in c.module.flags:
+    echo result
 
-proc passNode(c: PPassContext, n: PNode): PNode =
-  result = n
-  if sfMainModule in CustomContext(c).module.flags:
-    echo n.kind
+registerPass(graph, makePass(
+  sem.myOpen,
+  sempassHack,
+  sem.myClose,
+  isFrontend = true
+))
 
-proc passClose(graph: ModuleGraph; p: PPassContext, n: PNode): PNode =
-  discard
-
-
-registerPass(graph, semPass)
-registerPass(graph, makePass(passOpen, passNode, passClose))
 compileProject(graph)
+echo "Done"
