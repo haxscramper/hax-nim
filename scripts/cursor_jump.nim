@@ -1,4 +1,5 @@
-import x11/[xlib, xutil, x], std/[os, sequtils]
+import x11/[xlib, xutil, x],
+       std/[os, sequtils, segfaults, strutils, strformat]
 
 proc createWindowAt(
   display: PDisplay, screen: cint,
@@ -17,6 +18,44 @@ proc createWindowAt(
       CWOverrideRedirect,
       addr window_attr
   )
+
+proc enumWindows(d: PDisplay, topw: Window, level: int = 0) =
+  var
+    nchild: cuint
+    children: PWindow
+    parent: Window
+    root: Window
+
+  var text: XTextProperty
+  discard XGetWMName(d, topw, addr text)
+  var name: cstring
+  discard XFetchName(d, topw, addr name)
+  let r = ("  ".repeat(level), &"id={topw:x}, XFetchName=\"$2\", XGetWMName=\"$3\"" % [
+    $topw, (if name == nil: "(no name)" else: $name), $text.value
+  ])
+
+  discard XQueryTree(d, topw,
+    addr root,
+    addr parent,
+    addr children,
+    addr nchild
+  )
+
+  var arr = cast[ptr UncheckedArray[Window]](addr children)
+
+  var attrs: XWindowAttributes
+  for ch in 0 ..< nchild:
+    if arr[ch] != 0 and arr[ch] != topw:
+      echo &"0x{arr[ch]:x}"
+      try:
+        enumWindows(d, arr[ch], level + 1)
+      except NilAccessDefect:
+        discard
+      finally:
+        discard
+        # discard XFree(children)
+
+
 
 var
   size: cint = 200
@@ -114,6 +153,29 @@ for i in range(0.cint, size, step):
 
     discard XSync(display, cint(0))
     sleep(speed)
+
+
+# IDEA set global variable for all exceptions and write `xcall` proc
+# that will execute X code and then check for exception. If there is a
+# stored exception - reset counter and raise it. Otherwise ignore.
+
+proc errHandler(d: PDisplay, ev: ptr XErrorEvent): cint {.cdecl.} =
+  var str = " ".repeat(80)
+  discard XGetErrorText(d, ev.theType, str.cstring, str.len.cint)
+  str = str.strip()
+  raiseAssert fmt("""
+
+X Error of failed request:  BadWindow (invalid Window parameter)
+  Major opcode of failed request:  {ev.requestCode} ({str})
+  Resource id in failed request:  {ev.resourceId:x}
+  Serial number of failed request:  {ev.serial}
+  Current serial number in output stream:  {ev.serial}
+""")
+
+# discard XSetErrorHandler(errHandler)
+
+
+# enumWindows(display, XDefaultRootWindow(display))
 
 discard XFreeGC(display, gc)
 discard XCloseDisplay(display)
