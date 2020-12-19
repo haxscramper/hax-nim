@@ -6,9 +6,10 @@
 struct CppBaseDerived : public CppBase {
   void (*baseMethodImpl)(CppBaseDerived*, void*, int, void*);
 
-  void baseMethod(
+  void baseMethodOverride(
     void* userData,  /// Custom user data
     int arg,  /// Original argument to method
     void* closureEnv /// Pointer to nim closure environment
   );
 };
+
