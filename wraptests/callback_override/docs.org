@@ -1,0 +1,54 @@
+#+setupfile: ~/.config/hax-config/emacs/latex-export-header.org
+
+Base C++ class
+
+#+include: cppbase.hpp src cpp
+
+Automatically derived generated file - generated for every class definition
+during wrapping process.
+
+*Generated derived class definition*
+#+include: cppderived.hpp src cpp
+
+Generated implementation for method *implementations*
+#+include: cppderived.cpp src cpp
+
+Wrappers
+#+include: callbacks.nim src nim
+
+To override *behavior* of the class you can set implementation callback to
+a new functions:
+
+#+include: main.nim src nim
+
+I couldn't find a way to generate *standalone* files that can be injected
+in nim object hierarchy (at least without some ugly hacks). In
+order to derive from C++ class I would generate actual C++ class via nim
+macros, similarly to nim by example [[https://nim-by-example.github.io/macros/][macros]].
+
+#+begin_src nim
+  cxxClass NewCxx of CppDerived:
+    field: int
+    proc newMethod(): NI
+#+end_src
+
+Will generate following C++ code:
+
+#+begin_src cpp
+  class NewCxx : public CppDerived {
+    NI field;
+    NI newMethod(){
+      return newMethod_nimImpl(); // Actual implementation of nim method is
+                                  // declared in nim code.
+    }
+  }
+#+end_src
+
+Actually generating C++ code also helps with Qt - I no longer need to
+reimplement MOC, and instead can just use it as-is.
+
+
+-------------
+
+Unsolved issues - If ~NewCxx~ uses non-trivial nim type - how to make it
+available in generated header?

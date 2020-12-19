@@ -1,92 +1,71 @@
-{.emit: """/*INCLUDESECTION*/
-#include <stdio.h>
-""".}
+const derivedHeader* = "cppderived.hpp"
 
-{.emit: """/*TYPESECTION*/
-struct CppBase {
-  virtual void baseMethod(int arg) {
-    printf("arg from nim - %d -\n", arg);
-  }
-};
-
-struct CppInterface {
-  TNimType* m_type;
-};
-
-struct CppBaseDerived : public CppBase, public CppInterface {
-  void (*baseMethodImpl)(CppBaseDerived*, int);
-
-  void baseMethod(int arg) override {
-    if (this->baseMethodImpl == 0) {
-      puts("--- No override used, fallback to default implementation\n");
-      CppBase::baseMethod(arg);
-
-    } else {
-      puts("--- Using nim implementation\n");
-      this->baseMethodImpl(this, arg);
-
-    }
-  }
-};
-""".}
-
-
-
-
-
-
+{.compile: "cppderived.cpp".}
 
 type
-  CppBaseDerived {.importcpp: "CppBaseDerived".} = object of RootObj
-    baseMethodImpl {.
-      importcpp: "baseMethodImpl"
-    .}: proc(ni: ptr CppBaseDerived, arg: cint) {.cdecl.}
+  CppBaseDerivedRaw* {.
+    importcpp: "CppBaseDerived",
+    header: derivedHeader
+  .} = object
 
-proc newCppBaseDerived():
-  ptr CppBaseDerived
-  {.importcpp: "new CppBaseDerived(@)", constructor.}
+    baseMethodImplProc* {.importcpp: "baseMethodImpl".}:
+      proc(ni: ptr CppBaseDerivedRaw,
+           userData: pointer,
+           arg: cint,
+           closureEnv: pointer
+           ) {.cdecl.}
 
-
-proc baseMethod(derived: ptr CppBaseDerived, arg: int):
-  void {.importcpp: "#.baseMethod(@)".}
-
-var derived = newCppBaseDerived()
-
-derived.baseMethod(12)
-
-derived.baseMethodImpl =
-  proc(ni: ptr CppBaseDerived, arg: cint) {.cdecl.} =
-    echo "Override callback with nim implementation", arg
-
-derived.baseMethod(12)
+  CppBaseDerived*[T] = object
+    d*: ptr CppBaseDerivedRaw
+    userData*: T
+    baseMethodImplEnv*: pointer
 
 
+proc newCppBaseDerivedRaw(): ptr CppBaseDerivedRaw
+  {.
+    importcpp: "new CppBaseDerived(@)",
+    constructor,
+    header: derivedHeader
+  .}
+
+proc baseMethod(
+    derived: ptr CppBaseDerivedRaw,
+    userData: pointer,
+    arg: int,
+    closureEnv: pointer
+  ): void {.importcpp: "#.baseMethod(@)", header: derivedHeader.}
 
 
 
+proc newCppBaseDerived*[T](): CppBaseDerived[T] =
+  CppBaseDerived[T](d: newCppBaseDerivedRaw())
+
+proc setBaseMethod*[T](
+    self: var CppBaseDerived[T],
+    cb: proc(this: var CppBaseDerived[T], arg: cint)
+  ) =
+
+  self.baseMethodImplEnv = cb.rawEnv()
+
+  let implCallback = proc(
+    derived: ptr CppBaseDerivedRaw,
+    userData: pointer,
+    arg: cint,
+    closureEnv: pointer
+  ): void {.cdecl.} =
+    discard
 
 
-type
-  FullyNimDerived = object of CppBaseDerived
-    fld1: int
+  self.d.baseMethodImplProc = implCallback
 
-proc baseMethod(derived: FullyNimDerived, arg: int):
-  void {.importcpp: "#.baseMethod(@)".}
 
-proc toFullyNimDerived(base: ptr CppBaseDerived):
-  ptr FullyNimDerived {.noinit.} =
-  {.emit:"return (`FullyNimDerived`*)(`base`);".}
 
-var nimder = FullyNimDerived()
+proc baseMethod*[T](derived: var CppBaseDerived[T], arg: int): void =
+  baseMethod(
+    derived.d,
+    cast[pointer](addr derived.userData),
+    arg,
+    cast[pointer](addr derived.baseMethodImplEnv)
+  )
 
-nimder.baseMethod(222)
 
-nimder.baseMethodImpl =
-  proc(ni: ptr CppBaseDerived, arg: cint) {.cdecl.} =
-    echo toFullyNimDerived(ni).fld1
-    echo "Fully derived in nim, ", arg
-
-nimder.baseMethod(333)
-nimder.baseMethod(444)
-
-echo "Finished"
