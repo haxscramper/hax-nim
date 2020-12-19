@@ -4,12 +4,12 @@
 #include "cppbase.hpp"
 
 struct CppBaseDerived : public CppBase {
-  void (*baseMethodImpl)(CppBaseDerived*, void*, int, void*);
+  // Callback for nim implementation.
+  void (*baseMethodImpl)(void*, int);
 
   void baseMethodOverride(
     void* userData,  /// Custom user data
-    int arg,  /// Original argument to method
-    void* closureEnv /// Pointer to nim closure environment
+    int arg  /// Original argument to method
   );
 };
 
