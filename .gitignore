@@ -17,6 +17,7 @@ nimcache/
 **/*.out
 **/*.txt.c
 **/secret.*
+**/cache*
 
 /scripts/.circuit
 /scripts/.latex

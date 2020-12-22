@@ -62,7 +62,28 @@ proc setBaseMethod*[T](
     cb: proc(this: var CppBaseDerived[T], arg: cint) {.closure.}
   ) =
 
-  setMethodImpl(self, cb, baseMethod)
+  static: assert cb is proc
+  type
+    ClosImplType = typeof(closureToCdecl(cb))
+    SelfType = typeof(self)
+
+  # `{.cdecl.}` implementation callback that will be passed back to
+  # raw derived class
+  let wrap = proc(
+    derivedImpl: pointer, arg: cint,
+    cbEnv, cbImpl: pointer): void {.cdecl.} =
+
+    # Uncast pointer to derived class
+    var derived = cast[ptr SelfType](derivedImpl)
+
+    # Call closure implementation, arguments and closure environment.
+    cast[ClosImplType](cbImpl)(derived[], arg, cbEnv)
+
+
+  self.d.baseMethodWrap = wrap
+  self.d.derivedImpl = addr self
+  self.d.baseMethodEnv = cb.rawEnv()
+  self.d.baseMethodProc = cb.rawProc()
 
 
 proc newCppBaseDerivedRaw(): ptr CppBaseDerivedRaw
