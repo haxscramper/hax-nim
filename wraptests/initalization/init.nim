@@ -22,6 +22,18 @@ proc initAggregate(): Aggregate
 proc initAggregate(fld1: cint, fld2: cchar = '2'): Aggregate
  {.importcpp: "Aggregate({@})", header: cxheader.}
 
+#==========================  Initializer list  ===========================#
+
+type
+  StdInitializerList*[T] {.
+    importcpp: "std::initializer_list",
+    header: "<initializer_list>"
+  .} = object
+
+proc cxxInitList*[T](args: T): StdInitializerList[T]
+  {.importcpp: "{@}", varargs, constructor.}
+
+
 #================================  List  =================================#
 
 type
@@ -29,6 +41,9 @@ type
 
 proc initList(args: cint): List
   {.importcpp: "List({@})", varargs, header: cxheader.}
+
+proc initList(args: StdInitializerList[cint]): List
+  {.importcpp: "List(@)", header: cxheader.}
 
 #===============================  Functor  ===============================#
 
@@ -91,6 +106,9 @@ proc mainFunc*() {.nimcall.} =
 
     // "Use default initalization values"
     initListParam()
+
+    // "Create C++ initializer list literal"
+    let list = initList(cxxInitList(1.cint))
 
 
   block:
