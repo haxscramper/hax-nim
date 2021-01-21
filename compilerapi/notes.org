@@ -1,0 +1,4 @@
+- In order for @see{selectUniqueSymbol} to return anything script must be
+  evaluated, and symbol must be exported.
+- @see{implementRoutine().module} must match with
+  @see{createInterpreter().scriptname} for =file basename=

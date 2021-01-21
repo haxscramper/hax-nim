@@ -15,10 +15,10 @@ proc inc[T](it: var InputIterator[T]): void {.importcpp: "(++#)".}
 proc `==`[T](it1, it2: InputIterator[T]): bool {.importcpp: "(# == #)".}
   ## Equality comparison
 
-iterator cxxItems[T](obj: T): auto =
-  mixin cxxBegin, cxxEnd
-  var start = obj.cxxBegin()
-  var finish = obj.cxxEnd()
+iterator cxItems[T](obj: T): auto =
+  mixin cxBegin, cxEnd
+  var start = obj.cxBegin()
+  var finish = obj.cxEnd()
   while start != finish:
     yield start[]
     inc start
@@ -38,10 +38,10 @@ proc initStdUnorderedSet[T](): StdUnorderedSet[T]
 
 #===========  Implementation-specific overloads for iterators  ===========#
 
-proc cxxBegin[T](sset: StdUnorderedSet[T]): InputIteratorImpl[StdUnorderedSet[T]]
+proc cxBegin[T](sset: StdUnorderedSet[T]): InputIteratorImpl[StdUnorderedSet[T]]
   {.importcpp: "(#.begin())", header: "<unordered_set>".}
 
-proc cxxEnd[T](sset: StdUnorderedSet[T]): InputIteratorImpl[StdUnorderedSet[T]]
+proc cxEnd[T](sset: StdUnorderedSet[T]): InputIteratorImpl[StdUnorderedSet[T]]
   {.importcpp: "(#.end())", header: "<unordered_set>".}
 
 proc insert[T](sset: var StdUnorderedSet[T], item: T): void
@@ -52,7 +52,7 @@ proc `[]`[T](it: InputIterator[StdUnorderedSet[T]]): T {.importcpp: "(*#)"}
 
 
 iterator items[T](sset: StdUnorderedSet[T]): T =
-  for item in cxxItems(sset):
+  for item in cxItems(sset):
     yield item
 
 #*************************************************************************#
@@ -66,15 +66,15 @@ type
   StdTuple = StdTuple2
 
 
-proc get0[T0, T1](cxxTuple: StdTuple2[T0, T1]): T0 {.importcpp: "std::get<0>(@)".}
-proc get1[T0, T1](cxxTuple: StdTuple2[T0, T1]): T1 {.importcpp: "std::get<1>(@)".}
+proc get0[T0, T1](cxTuple: StdTuple2[T0, T1]): T0 {.importcpp: "std::get<0>(@)".}
+proc get1[T0, T1](cxTuple: StdTuple2[T0, T1]): T1 {.importcpp: "std::get<1>(@)".}
 
-proc get(cxxTuple: StdTuple, idx: static[int]): auto =
+proc get(cxTuple: StdTuple, idx: static[int]): auto =
   when idx == 0:
-    return get0(cxxTuple)
+    return get0(cxTuple)
 
   elif idx == 1:
-    return get1(cxxTuple)
+    return get1(cxTuple)
 
 #*************************************************************************#
 #****************************  Unordered map  ****************************#
@@ -90,10 +90,10 @@ proc initStdUnorderedMap[K, V](): StdUnorderedMap[K, V]
   {.importcpp: "std::unordered_map<'0, '1>()", constructor.}
 
 #=============  Implementation-specific iterator overrides  ==============#
-proc cxxBegin[K, V](sset: StdUnorderedMap[K, V]): InputIteratorImpl[StdUnorderedMap[K, V]]
+proc cxBegin[K, V](sset: StdUnorderedMap[K, V]): InputIteratorImpl[StdUnorderedMap[K, V]]
   {.importcpp: "(#.begin())", header: "<unordered_set>".}
 
-proc cxxEnd[K, V](sset: StdUnorderedMap[K, V]): InputIteratorImpl[StdUnorderedMap[K, V]]
+proc cxEnd[K, V](sset: StdUnorderedMap[K, V]): InputIteratorImpl[StdUnorderedMap[K, V]]
   {.importcpp: "(#.end())", header: "<unordered_set>".}
 
 proc `[]=`[K, V](sset: var StdUnorderedMap[K, V], key: K, val: V): void
@@ -103,11 +103,11 @@ proc `[]`[K, V](it: InputIterator[StdUnorderedMap[K, V]]): StdTuple2[K, V] {.imp
   ## Dereference operator with correct mapping for unordered iterators
 
 iterator items[K, V](smap: StdUnorderedMap[K, V]): StdTuple2[K, V] =
-  for val in cxxItems(smap):
+  for val in cxItems(smap):
     yield val
 
 iterator pairs[K, V](smap: StdUnorderedMap[K, V]): (K, V) =
-  for val in cxxItems(smap):
+  for val in cxItems(smap):
     yield (val.get(0), val.get(1))
 
 proc main() =
