@@ -1,4 +1,5 @@
 import hmisc/other/oswrap
+import std/deques
 import compiler/[
   ast, astalgo, modules, passes, condsyms,
   options, sem, semdata, llstream, vm, vmdef,
@@ -42,8 +43,36 @@ graph.vm = setupVM(m, cache, "stdin", graph)
 graph.compileSystemModule()
 
 
+var lineQue = initDeque[string]()
+lineQue.addLast "echo 12"
+lineQue.addLast "echo 90-" # Malformed AST
+lineQue.addLast "echo 90"
+lineQue.addLast "proc userProc() = discard"
+lineQue.addLast "proc userProc() = discard"
+lineQue.addLast "echo 100"
+
 proc llStreamReader(s: PLLStream, buf: pointer, bufLen: int): int =
-  echo "Reading stream ", bufLen
-  result = 0
+  # `compiler/passes/processModule()` has two nested `while true` loops -
+  # outermost one repeatedly calls `openParser()` on input text, and
+  # internal one processes all toplevel statements. After inner loop
+  # finishes, input stream is checked for `if s.kind != llsStdIn: break`,
+  # meaning it is not possible to break out of the loop freely. It might be
+  # possible to implement in async manner though, I'm not entirely sure.
+  if lineQue.len == 0:
+    return 0
+
+
+  s.s = ""
+  s.rd = 0
+  var line = lineQue.popFirst()
+
+  add(s.s, line)
+
+  inc(s.lineOffset)
+  result = min(bufLen, len(s.s) - s.rd)
+
+  if result > 0:
+    copyMem(buf, addr(s.s[s.rd]), result)
+    inc(s.rd, result)
 
 processModule(graph, m, llStreamOpenStdIn(llStreamReader))
