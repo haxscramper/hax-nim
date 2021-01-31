@@ -29,7 +29,6 @@ proc id(usr: UsrPNode): int =
 var usrPool: Table[int, UsrImpl]
 
 macro exportVM*(procDecl: untyped): untyped =
-  # I can't believe this shit is working, but it really does
   procDecl.assertMatch(
     ProcDef[
       # Match proc name in full form
@@ -46,7 +45,7 @@ macro exportVM*(procDecl: untyped): untyped =
         # separately
         @firstArg is IdentDefs[@firstArgName, _, _],
 
-        # Match all remaiming arguments. Collect both `IdentDefs` into
+        # Match all remaining arguments. Collect both `IdentDefs` into
         # sequence, and extract each argument separately
         all @trailArgs is IdentDefs[@trailArgsName, _, _]
       ],

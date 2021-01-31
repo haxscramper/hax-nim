@@ -47,8 +47,10 @@ var lineQue = initDeque[string]()
 lineQue.addLast "echo 12"
 lineQue.addLast "echo 90-" # Malformed AST
 lineQue.addLast "echo 90"
-lineQue.addLast "proc userProc() = discard"
-lineQue.addLast "proc userProc() = discard"
+lineQue.addLast "proc userProc() = echo 1"
+lineQue.addLast "userProc()"
+lineQue.addLast "proc userProc() = echo 2"
+lineQue.addLast "userProc()"
 lineQue.addLast "echo 100"
 
 proc llStreamReader(s: PLLStream, buf: pointer, bufLen: int): int =
@@ -58,6 +60,8 @@ proc llStreamReader(s: PLLStream, buf: pointer, bufLen: int): int =
   # finishes, input stream is checked for `if s.kind != llsStdIn: break`,
   # meaning it is not possible to break out of the loop freely. It might be
   # possible to implement in async manner though, I'm not entirely sure.
+  # other option would be to just copy body of the outer for loop and run
+  # it manually.
   if lineQue.len == 0:
     return 0
 
