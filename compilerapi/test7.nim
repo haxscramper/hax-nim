@@ -191,11 +191,16 @@ let cachefile = RelFile("test7_cache.json")
 if fileExists(cacheFile):
   cache = cacheFile.parseJson().to(Table[string, string])
 
+const flushEach = false
+
 proc getContent(url: string, web: string): string =
   if web notin cache:
+    echo "non-cached `getContent()`"
     cache[web] = client.getContent(url)
 
-  cachefile.writeFile(cache.toJson().toPretty())
+  if flushEach:
+    cachefile.writeFile(cache.toJson().toPretty())
+
   return cache[web]
 
 
@@ -203,9 +208,9 @@ var cnt = 0
 var reqTable: Table[string, seq[string]]
 var stats: tuple[
   downTime, evalTime, totalTime: float,
-  okList, whenList, noGhList, errCannotParse: seq[string],
+  okList, noGhList, errCannotParse: seq[string],
   totalPack: int,
-  httpErrList: seq[tuple[name, url: string]]
+  whenList, httpErrList: seq[tuple[name, url: string]]
 ]
 
 proc pad(str: string): string = alignLeft(str, 20)
@@ -251,7 +256,7 @@ proc getParseContent(name: string, raw: URI, web: string) =
 
     proc toMs(s: float): int = int(s * 1000)
     if usesWhen:
-      stats.whenList.add name
+      stats.whenList.add (name, web)
 
     if requires.len == 0 and ("requires" in content):
       echo "No requirements"
@@ -264,7 +269,8 @@ proc getParseContent(name: string, raw: URI, web: string) =
 
   except HttpRequestError as e:
     errUrls.incl $raw
-    errUrlsFile.writeFile(errUrls.toJson().toPretty())
+    if flushEach:
+      errUrlsFile.writeFile(errUrls.toJson().toPretty())
 
     stats.httpErrList.add (name, web)
     echo toRed(name.pad), " failed http request"
@@ -298,7 +304,7 @@ proc nimbleUrlForWeb(name, web: string): Option[URI] =
     echo toYellow(name.pad), " does not use github code hosting (", web, ")"
     stats.noGhList.add name
 
-    raiseImplementError("")
+    # raiseImplementError("")
 
   else:
     raw.hostname = "raw.githubusercontent.com"
@@ -361,6 +367,7 @@ for pack in parseJson(file):
 var graph = makeDotGraph()
 graph.styleNode = makeRectConsolasNode()
 graph.rankdir = grdLeftRight
+graph.attrs["dpi"] = "300"
 
 proc getName(pack: string): string =
   pack[0 ..< pack.skipWhile(IdentChars)]
@@ -401,3 +408,10 @@ configuration parse fail: {stats.errCannotParse.len}
 """
 
 echo "Finished"
+
+if not flushEach:
+  cachefile.writeFile(cache.toJson().toPretty())
+  errUrlsFile.writeFile(errUrls.toJson().toPretty())
+
+for wh in stats.whenList:
+  echo wh.url
