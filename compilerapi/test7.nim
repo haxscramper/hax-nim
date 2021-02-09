@@ -1,17 +1,31 @@
 import common
 
-import std/[httpclient, strformat, uri, strutils, deques, times]
+import std/[
+  httpclient, strformat, uri, strutils, sets, hashes, tables,
+  deques, times, macros, tables, parseutils, parsecfg, streams,
+  sequtils
+]
+
 import compiler/[
-  nimeval, llstream, ast, renderer, modulegraphs, vmdef, vm,
+  nimeval, llstream, ast, modulegraphs, vmdef, vm,
   passes, idents, options, lineinfos
 ]
 
-import hnimast/hast_common
+import compiler/renderer except `$`
+
+import hnimast/[hast_common, pnode_parse]
+import hasts/graphviz_ast
 
 import hmisc/other/[oswrap, hjson]
+import hmisc/types/[colorstring]
+import hmisc/helpers
 import fusion/matching
 import hpprint
 import test6
+
+{.experimental: "caseStmtMacros".}
+
+startHax()
 
 let url = "https://raw.githubusercontent.com/nim-lang/packages/master/packages.json"
 let file = RelFile("packages.json")
@@ -33,115 +47,357 @@ proc implementRoutine*(
 
 var requires: seq[string]
 
-var (graph, m) = newGraphStdin(withEval = false)
+const evalNims = false
 
-graph.config.structuredErrorHook =
-  proc(config: ConfigRef; info: TLineInfo; msg: string; level: Severity) =
-    echo msg
-    echo info
+when evalNims:
+  var (graph, m) = newGraphStdin(withEval = false)
 
-type
-  CutoutContext = ref object of PPassContext
-    module: PSym
+  graph.config.structuredErrorHook =
+    proc(config: ConfigRef; info: TLineInfo; msg: string; level: Severity) =
+      echo msg
+      echo info
 
-# graph.registerPass(makePass(
-#   (
-#     proc(graph: ModuleGraph, module: PSym): PPassContext {.nimcall.} =
-#       return CutoutContext(module: module)
-#   ),
-#   (
-#     proc(c: PPassContext, n: PNode): PNode {.nimcall.} =
+  type
+    CutoutContext = ref object of PPassContext
+      module: PSym
 
-#       var ctx = CutoutContext(c)
+  # graph.registerPass(makePass(
+  #   (
+  #     proc(graph: ModuleGraph, module: PSym): PPassContext {.nimcall.} =
+  #       return CutoutContext(module: module)
+  #   ),
+  #   (
+  #     proc(c: PPassContext, n: PNode): PNode {.nimcall.} =
 
-#       if sfMainModule in ctx.module.flags:
-#         result = n
+  #       var ctx = CutoutContext(c)
 
-#       else:
-#         result = nnkDiscardStmt.newPTree()
-#   ),
-#   (
-#     proc(graph: ModuleGraph; p: PPassContext, n: PNode): PNode {.nimcall.} =
-#       discard
-#   )
-# ))
+  #       if sfMainModule in ctx.module.flags:
+  #         result = n
 
-graph.registerPass(evalPass)
+  #       else:
+  #         result = nnkDiscardStmt.newPTree()
+  #   ),
+  #   (
+  #     proc(graph: ModuleGraph; p: PPassContext, n: PNode): PNode {.nimcall.} =
+  #       discard
+  #   )
+  # ))
 
-graph.implementRoutine("*", "stdin", "requires",
-  proc(args: VmArgs) {.nimcall, gcsafe.} =
-    # echo "\e[32m###################\e[39m"
-    for idx in 0 ..< args.rc - 1:
-      # echo treeRepr(args.getNode(idx))
-      for node in args.getNode(idx):
-        requires.add node.getStrVal()
-)
+  graph.registerPass(evalPass)
+
+  graph.implementRoutine("*", "stdin", "requires",
+    proc(args: VmArgs) {.nimcall, gcsafe.} =
+      # echo "\e[32m###################\e[39m"
+      for idx in 0 ..< args.rc - 1:
+        # echo treeRepr(args.getNode(idx))
+        for node in args.getNode(idx):
+          requires.add node.getStrVal()
+  )
 
 
 
-proc processCode(graph: ModuleGraph, m: PSym, str: string) =
-  var lineQue = initDeque[string]()
-  for line in split(str, '\n'):
-    lineQue.addLast line
+  proc processCode(graph: ModuleGraph, m: PSym, str: string) =
+    var lineQue = initDeque[string]()
+    for line in split(str, '\n'):
+      lineQue.addLast line
 
-  proc scriptReader(s: PLLStream, buf: pointer, bufLen: int): int =
-    return readLine(lineQue, s, buf, bufLen)
+    proc scriptReader(s: PLLStream, buf: pointer, bufLen: int): int =
+      return readLine(lineQue, s, buf, bufLen)
 
-  processModule(graph, m, llStreamOpenStdIn(scriptReader))
+    processModule(graph, m, llStreamOpenStdIn(scriptReader))
 
-graph.processCode(
-  m,
-  """
+  graph.processCode(
+    m,
+    """
 proc requires*(args: varargs[string]) = discard
 """)
 
-var cnt = 0
-var stats: tuple[downTime, evalTime, totalTime: float]
-for pack in parseJson(file):
-  if { "name" : (asStr: @name), "web" : (asStr: @web) } ?= pack:
-    stats.totalTime = cpuTime()
-    let nimble = &"{web}/{name}.nimble"
-    var raw = parseUri(nimble)
+else:
+  proc parseCfg(str: string): bool =
+    var fs = newStringStream(str)
+    var p: CfgParser
+    open(p, fs, "???")
+    defer: close(p)
+    var currentSection = ""
+    while true:
+      var ev = next(p)
+      case ev.kind
+        of cfgEof:
+          return true
 
-    if raw.hostname != "github.com": continue
+        of cfgSectionStart:
+          currentSection = ev.section
 
-    inc cnt; if cnt > 20: break
+        of cfgKeyValuePair:
+          case currentSection.normalize
+            of "package": discard
+            of "deps", "dependencies":
+              case ev.key.normalize
+                of "requires":
+                  requires.add ev.value
 
-    raw.hostname = "raw.githubusercontent.com"
-    let spl = split(raw.path, "/")
-    raw.path = join(spl[0 .. 2] & @["master"] & spl[3 ..^ 1], "/")
+            else:
+              return false
 
+        of cfgOption:
+          return false
+
+        of cfgError:
+          return false
+
+    return true
+
+  proc processCode(code: string): bool =
+    if parseCfg(code):
+      return
+
+    let node = parsePNodeStr(code)
     try:
-      stats.downTime = cpuTime()
-      var content = client.getContent($raw)
-      stats.downTime = cpuTime() - stats.downTime
+      for subnode in node:
+        proc parseStmts(subnode: PNode) =
+          case subnode:
+            of (
+              kind: in {nkCommand, nkCall},
+              [Ident(getStrVal: "requires"), StmtList[all @args] | @args, all @args]
+            ):
+              for arg in args:
+                requires.add arg.getStrVal()
 
-      stats.evalTime = cpuTime()
+
+
+        # echo treeRepr(subnode)
+        # echo subnode
+
+        if subnode.kind == nkWhenStmt:
+          result = true
+          for branch in subnode:
+            case branch:
+              of ElifBranch[@cond, @body] | ElseExpr[@body]:
+                for node in body:
+                  parseStmts(node)
+
+        else:
+          parseStmts(subnode)
+
+    except:
+      raise
+
+
+
+var cache: Table[string, string]
+
+let cachefile = RelFile("test7_cache.json")
+
+if fileExists(cacheFile):
+  cache = cacheFile.parseJson().to(Table[string, string])
+
+proc getContent(url: string, web: string): string =
+  if web notin cache:
+    cache[web] = client.getContent(url)
+
+  cachefile.writeFile(cache.toJson().toPretty())
+  return cache[web]
+
+
+var cnt = 0
+var reqTable: Table[string, seq[string]]
+var stats: tuple[
+  downTime, evalTime, totalTime: float,
+  okList, whenList, noGhList, errCannotParse: seq[string],
+  totalPack: int,
+  httpErrList: seq[tuple[name, url: string]]
+]
+
+proc pad(str: string): string = alignLeft(str, 20)
+
+var errUrls: HashSet[string]
+let errUrlsFile = RelFile("test7_error_urls.json")
+if fileExists(errUrlsFile):
+  for entry in errUrlsFile.parseJson():
+    errUrls.incl entry.asStr()
+
+proc toJson*[T](s: HashSet[T]): JsonNode =
+  result = newJArray()
+  mixin toJson
+  for item in s:
+    result.add toJson(item)
+
+
+proc getParseContent(name: string, raw: URI, web: string) =
+  try:
+    stats.downTime = cpuTime()
+    var content = getContent($raw, web)
+    stats.downTime = cpuTime() - stats.downTime
+
+    stats.evalTime = cpuTime()
+
+    var usesWhen = false
+
+    when evalNims:
       content = "proc requires*(args: varargs[string]) = discard\n" &
         content
 
       try:
         graph.processCode(m, content)
-        stats.evalTime = cpuTime() - stats.evalTime
-        stats.totalTime = cpuTime() - stats.totalTime
-
-        proc toMs(s: float): int = int(s * 1000)
-        echo &"""
-name          : {name}
-requires      : {requires}
-download time : {stats.downTime.toMS()} ms
-eval time     : {stats.evalTime.toMS()} ms
-total time    : {stats.totalTime.toMS()} ms
-"""
-
       except:
         discard
-        # echo getCurrentExceptionMsg()
-        # echo content
 
-      requires = @[]
 
-    except HttpRequestError as e:
-      discard
+    else:
+      usesWhen = processCode(content)
+
+    stats.evalTime = cpuTime() - stats.evalTime
+    stats.totalTime = cpuTime() - stats.totalTime
+
+    proc toMs(s: float): int = int(s * 1000)
+    if usesWhen:
+      stats.whenList.add name
+
+    if requires.len == 0 and ("requires" in content):
+      echo "No requirements"
+      raiseImplementError("")
+
+    reqTable[name] = requires
+    requires = @[]
+    stats.okList.add name
+
+
+  except HttpRequestError as e:
+    errUrls.incl $raw
+    errUrlsFile.writeFile(errUrls.toJson().toPretty())
+
+    stats.httpErrList.add (name, web)
+    echo toRed(name.pad), " failed http request"
+
+  except ArgumentError as e:
+    echo toRed(name.pad), " cannot parse"
+    echo e.msg.indent(2)
+    stats.errCannotParse.add name
+
+proc joinPath*(T: typedesc, args: varargs[string]): T =
+  when result is AbsFile: result = AbsFile joinPath(args)
+  elif result is AbsDir: result = AbsDir joinPath(args)
+  elif result is RelFile: result = RelFile joinPath(args)
+  elif result is RelDir: result = RelFile joinPath(args)
+
+  else:
+    static:
+      {.error: "zzz".}
+
+proc `==`*(j: JsonNode, str: string): bool =
+  j.kind == JString and j.getStr() == str
+
+proc endsWith*(j: JsonNode, strs: openarray[string]): bool =
+  j.kind == JString and anyIt(strs, j.getStr().endsWith(it))
+
+proc nimbleUrlForWeb(name, web: string): Option[URI] =
+  let nimble = &"{web}/{name}.nimble"
+  var raw = parseUri(nimble)
+
+  if raw.hostname != "github.com":
+    echo toYellow(name.pad), " does not use github code hosting (", web, ")"
+    stats.noGhList.add name
+
+    raiseImplementError("")
+
+  else:
+    raw.hostname = "raw.githubusercontent.com"
+    let spl = split(raw.path, "/")
+    raw.path = join(spl[0 .. 2] & @["master"] & spl[3 ..^ 1], "/")
+    result = some(raw)
+
+    if $raw in cache:
+      return
+
+    else:
+      raw = parseUri(web)
+      let (dir, base, _) = AbsFile(raw.path).splitFile()
+      raw.path = $joinPath(AbsDir, "repos", dir.string, base, "contents")
+      raw.hostname = "api.github.com"
+
+      try:
+        let contentList = getContent($raw, $raw).parseJson()
+
+        for entry in contentList:
+          if entry.matches({
+            "type" : "file",
+            "name" : it.endsWith([".nimble", ".babel"]),
+            "download_url": (asStr: @download)
+          }):
+            result = some(parseURI(download))
+            echo "download URL from github API: ", result.get()
+            return
+
+
+        echo "Could not find .nimble for web ", web
+        raiseImplementError("")
+
+      except HttpRequestError as e:
+        echov toRed(web)
+        echo e.msg.indent(2)
+
+
+
+for pack in parseJson(file):
+  inc stats.totalPack
+  if { "name" : (asStr: @name), "url" : (asStr: @web) } ?= pack:
+    stats.totalTime = cpuTime()
+    let raw = nimbleUrlForWeb(name, web)
+    if raw.isSome():
+      if $get(raw) notin errUrls:
+        getParseContent(name, raw.get, web)
+
+        echo toGreen(name.pad), " ok"
+
+      else:
+        stats.httpErrList.add (name, web)
+        echo toMagenta(name.pad), " is known to cause http error"
+      # echo "  " & web
+      # echo e.msg.indent(2)
+
+    # sleep(100)
+
+
+var graph = makeDotGraph()
+graph.styleNode = makeRectConsolasNode()
+graph.rankdir = grdLeftRight
+
+proc getName(pack: string): string =
+  pack[0 ..< pack.skipWhile(IdentChars)]
+
+var known: HashSet[string]
+
+proc optAddPackage(package: string) =
+  let package = getName(package)
+  if package in known:
+    discard
+
+  else:
+    known.incl package
+    graph.addNode(makeDotNode(hash(package), package))
+
+
+for package, deps in reqTable:
+  optAddPackage(package)
+  for dep in deps:
+    if dep.getName() notin ["nim"]:
+      optAddPackage(dep)
+      graph.addEdge makeDotEdge(
+        hash(package.getName()),
+        hash(dep.getName()),
+        dep
+      )
+
+
+graph.toPng("/tmp/deps.png")
+
+echo &"""
+total package count:      {stats.totalPack}
+processing ok:            {stats.okList.len}
+with `when` rews:         {stats.whenList.len}
+not using github:         {stats.noGhList.len}
+http error when getting:  {stats.httpErrList.len}
+configuration parse fail: {stats.errCannotParse.len}
+"""
 
 echo "Finished"
