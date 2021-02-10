@@ -1,5 +1,5 @@
-import compiler/[passes, ast]
-import std/[tables]
+import compiler/[passes, ast, modulegraphs]
+import std/[tables, options, hashes]
 
 type
   SemLogEntry = object
@@ -8,6 +8,8 @@ type
 
   SemLogContext = ref object of PPassContext
     expansionPairs: Table[PNode, SemLogEntry]
+
+proc hash*(node: PNode): Hash = hash(node.id)
 
 proc recordSemAction*(
     ctx: PPassContext,

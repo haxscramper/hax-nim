@@ -1,22 +1,12 @@
 import hnimast
 import hmisc/other/[oswrap]
-import std/[tables]
+import std/[tables, strutils]
 import nimblepkg/[version, packageinfo, cli]
 import nimblepkg/options as nimble_options
 import hpprint
 import haxdoc
 
-setVerbosity(SilentPriority)
 
-var options = initDefaultOptions()
-let compilerPkg = findPackage("compiler", newVRany(), options).get()
-let compilerSrcDir = AbsDir(compilerPkg.getRealDir())
-
-echo compilerSrcDir
-
-echo "Generating semhack"
-
-var rewriteTable: Table[string, PNode]
 
 const nkWithSubnodeKinds*: set[TNodeKind] = {
   nkStmtList, nkWhenStmt, nkElifBranch,
@@ -46,7 +36,6 @@ const nkWithSubnodeKinds*: set[TNodeKind] = {
   nkConstTy, nkMutableTy, nkDistinctTy, nkProcTy, nkIteratorTy, nkSharedTy,
   nkEnumTy, nkEnumFieldDef, nkArgList, nkPattern, nkHiddenTryStmt,
   nkClosure, nkGotoState, nkState, nkBreakState, nkTupleConstr
-
 }
 
 
@@ -55,9 +44,13 @@ const ignoreKinds = nkLiteralKinds + {
   nkIdent, nkEmpty, nkTypeSection
 }
 
+var rewriteTable: Table[string, PNode]
 proc rewriteSemcheck(node: PNode): PNode =
   case node.kind:
-    of nkWithSubnodeKinds - (nkProcDeclKinds + ignoreKinds + {nkCall, nkCommand}):
+    of nkWithSubnodeKinds - (ignoreKinds + {nkCall, nkCommand, nkProcDef}),
+       (nkProcDeclKinds - {nkProcDef})
+      :
+
       result = node
       for idx in 0 ..< node.len:
         result[idx] = rewriteSemcheck(node[idx])
@@ -65,20 +58,33 @@ proc rewriteSemcheck(node: PNode): PNode =
     of ignoreKinds:
       result = node
 
-    of nkProcDeclKinds:
+    # of nkImportStmt:
+    #   result = node
+    #   # for idx in 0 ..< node.len:
+    #   #   result[idx] = nnkInfix.newPTree(
+    #   #     newPIdent("/"),
+    #   #     newPIdent("compiler"),
+    #   #     result[idx]
+    #   # )
+
+    of nkProcDef:
       result = node
 
       if result[6].kind != nnkEmpty:
         result[6] = rewriteSemcheck(result[6])
 
         let (exported, name) = parseIdentName(result[0])
-        result[6].add newPCall(
-          "recordSemAction",
-          newPIdent("c"),
-          newPLit(name.getStrVal()),
-          newPIdent("n"),
-          newPIdent("result")
-        )
+        let name2 = name.getStrVal()
+        if name2.startsWith("sem") and
+           name2 notin ["semAfterMacroCall"]
+          :
+          result[6].add newPCall(
+            "recordSemAction",
+            newPIdent("c"),
+            newPLit(name2),
+            newPIdent("n"),
+            newPIdent("result")
+          )
 
 
 
@@ -91,10 +97,20 @@ proc rewriteSemcheck(node: PNode): PNode =
 
 var targetFiles: Table[string, AbsFile]
 let targetNames = [
-  "sem", "semtypes", "semtempl", "semgnrc", "semstmts", "semexprs"
+  "sem", "semtypes", "semtempl", "semgnrc", "semstmts", "semexprs",
+  "seminst", "semcall"
 ]
 
-for file in listFiles(compilerSrcDir / "compiler"):
+setVerbosity(SilentPriority)
+
+var options = initDefaultOptions()
+let compilerPkg = findPackage("compiler", newVRany(), options).get()
+let compilerSrcDir = AbsDir(compilerPkg.getRealDir()) / "compiler"
+
+echo compilerSrcDir
+import std/[strformat]
+
+for file in listFiles(compilerSrcDir):
   if file.name in targetNames:
     targetFiles[file.name] = file
 
@@ -104,4 +120,7 @@ for name in targetNames:
   rewriteTable[name] = rewriteSemcheck(
     parsePNodeStr(targetFiles[name].readFile()))
 
-writeFile("semhack.nim", $rewriteTable["sem"])
+writeFile(
+  "semhack.nim",
+  "import semhack_logging\n" & $rewriteTable["sem"]
+)
