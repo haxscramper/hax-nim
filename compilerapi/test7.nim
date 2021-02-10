@@ -49,6 +49,11 @@ var requires: seq[string]
 
 const evalNims = false
 
+import nimblepkg/common as nimble_common
+
+import nimblepkg/[version]
+import haxdoc/[compiler_aux]
+
 when evalNims:
   var (graph, m) = newGraphStdin(withEval = false)
 
@@ -113,74 +118,8 @@ proc requires*(args: varargs[string]) = discard
 """)
 
 else:
-  proc parseCfg(str: string): bool =
-    var fs = newStringStream(str)
-    var p: CfgParser
-    open(p, fs, "???")
-    defer: close(p)
-    var currentSection = ""
-    while true:
-      var ev = next(p)
-      case ev.kind
-        of cfgEof:
-          return true
-
-        of cfgSectionStart:
-          currentSection = ev.section
-
-        of cfgKeyValuePair:
-          case currentSection.normalize
-            of "package": discard
-            of "deps", "dependencies":
-              case ev.key.normalize
-                of "requires":
-                  requires.add ev.value
-
-            else:
-              return false
-
-        of cfgOption:
-          return false
-
-        of cfgError:
-          return false
-
-    return true
-
   proc processCode(code: string): bool =
-    if parseCfg(code):
-      return
-
-    let node = parsePNodeStr(code)
-    try:
-      for subnode in node:
-        proc parseStmts(subnode: PNode) =
-          case subnode:
-            of (
-              kind: in {nkCommand, nkCall},
-              [Ident(getStrVal: "requires"), StmtList[all @args] | @args, all @args]
-            ):
-              for arg in args:
-                requires.add arg.getStrVal()
-
-
-
-        # echo treeRepr(subnode)
-        # echo subnode
-
-        if subnode.kind == nkWhenStmt:
-          result = true
-          for branch in subnode:
-            case branch:
-              of ElifBranch[@cond, @body] | ElseExpr[@body]:
-                for node in body:
-                  parseStmts(node)
-
-        else:
-          parseStmts(subnode)
-
-    except:
-      raise
+    discard
 
 
 
@@ -210,7 +149,8 @@ var stats: tuple[
   downTime, evalTime, totalTime: float,
   okList, noGhList, errCannotParse: seq[string],
   totalPack: int,
-  whenList, httpErrList: seq[tuple[name, url: string]]
+  whenList, httpErrList: seq[tuple[name, url: string]],
+  depStats: array[VersionRangeEnum, int]
 ]
 
 proc pad(str: string): string = alignLeft(str, 20)
@@ -249,15 +189,21 @@ proc getParseContent(name: string, raw: URI, web: string) =
 
 
     else:
-      usesWhen = processCode(content)
+      try:
+        let info = parsePackageInfo(content)
+
+        for dep in info.requires:
+          requires.add dep.name
+          inc stats.depStats[dep.ver.kind]
+
+      except NimbleError:
+        stats.errCannotParse.add name
+        return
 
     stats.evalTime = cpuTime() - stats.evalTime
     stats.totalTime = cpuTime() - stats.totalTime
 
     proc toMs(s: float): int = int(s * 1000)
-    if usesWhen:
-      stats.whenList.add (name, web)
-
     if requires.len == 0 and ("requires" in content):
       echo "No requirements"
       raiseImplementError("")
@@ -336,7 +282,7 @@ proc nimbleUrlForWeb(name, web: string): Option[URI] =
 
 
         echo "Could not find .nimble for web ", web
-        raiseImplementError("")
+        # raiseImplementError("")
 
       except HttpRequestError as e:
         echov toRed(web)
@@ -401,11 +347,24 @@ graph.toPng("/tmp/deps.png")
 echo &"""
 total package count:      {stats.totalPack}
 processing ok:            {stats.okList.len}
-with `when` rews:         {stats.whenList.len}
 not using github:         {stats.noGhList.len}
 http error when getting:  {stats.httpErrList.len}
 configuration parse fail: {stats.errCannotParse.len}
 """
+
+proc toStr(rangeKind: VersionRangeEnum): string =
+  case rangeKind:
+    of verLater: "> V"
+    of verEarlier: "< V"
+    of verEqLater: ">= V"
+    of verEqEarlier: "<= V"
+    of verIntersect: "> V & < V"
+    of verEq: "V"
+    of verAny: "*"
+    of verSpecial: "#head"
+
+for rangeKind in VersionRangeEnum:
+  echo &"{rangeKind:<15} ({rangeKind.toStr():^10}): {stats.depStats[rangeKind]}"
 
 echo "Finished"
 
