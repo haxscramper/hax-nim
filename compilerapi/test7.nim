@@ -18,6 +18,7 @@ import hasts/graphviz_ast
 
 import hmisc/other/[oswrap, hjson]
 import hmisc/types/[colorstring]
+import hmisc/hexceptions
 import hmisc/helpers
 import fusion/matching
 import hpprint
@@ -197,7 +198,17 @@ proc getParseContent(name: string, raw: URI, web: string) =
           inc stats.depStats[dep.ver.kind]
 
       except NimbleError:
+        echo content
         stats.errCannotParse.add name
+        return
+
+      except:
+        printSeparator(name)
+        echo content.indent(4)
+        echo getCurrentExceptionMsg()
+        stats.errCannotParse.add name
+        pprintStackTrace()
+        printSeparator("--")
         return
 
     stats.evalTime = cpuTime() - stats.evalTime
