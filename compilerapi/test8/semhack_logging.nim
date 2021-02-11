@@ -1,5 +1,8 @@
-import compiler/[passes, ast, modulegraphs, semdata, renderer]
-import std/[tables, options, hashes]
+import compiler/[passes, ast, modulegraphs, semdata]
+import hmisc/hexceptions
+import hmisc/types/[colortext]
+import hnimast
+import std/[tables, options, hashes, strutils]
 
 type
   SemLogEntry* = object
@@ -16,12 +19,14 @@ proc recordSemExpansion*(
     actionName: string,
     originalNode, resultNode: PNode) =
 
-  echo "-->"
-  echo originalNode
-  echo "<--"
-  echo resultNode
-  echo "---"
+  printSeparator("IN")
+  echo ($originalNode).colorizeToStr("nim").indent(8)
   echo ""
+  echo treeRepr(originalNode)
+  printSeparator("  vvvvv  ")
+  echo ($resultNode).colorizeToStr("nim").indent(8)
+  printSeparator("OUT")
+  echo "\n\n\n"
 
 
   SemLogContext(ctx).expansionPairs[originalNode] = SemLogEntry(
